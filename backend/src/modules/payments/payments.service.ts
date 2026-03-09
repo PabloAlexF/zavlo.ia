@@ -295,11 +295,11 @@ export class PaymentsService {
               const billingCycle = amount >= 100 ? 'yearly' : 'monthly';
               
               if (planName === 'basic') {
-                creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês * 12 = 180
+                creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês
               } else if (planName === 'pro') {
-                creditsToAdd = billingCycle === 'yearly' ? 576 : 48; // 48/mês * 12 = 576
+                creditsToAdd = billingCycle === 'yearly' ? 576 : 48; // 48/mês
               } else if (planName === 'business') {
-                creditsToAdd = billingCycle === 'yearly' ? 2400 : 200; // 200/mês * 12 = 2400
+                creditsToAdd = billingCycle === 'yearly' ? 2400 : 200; // 200/mês
               }
               
               await this.usersService.addCredits(userId, creditsToAdd);
@@ -392,14 +392,14 @@ export class PaymentsService {
         
         // 1. Determine credits based on plan and cycle
         let creditsToAdd = 15; // default basic monthly
-        const billingCycle = amount >= 100 ? 'yearly' : 'monthly';
+        const billingCycle = amount >= 200 ? 'yearly' : 'monthly';
         
         if (planName === 'basic') {
-          creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês * 12 = 180
+          creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês
         } else if (planName === 'pro') {
-          creditsToAdd = billingCycle === 'yearly' ? 576 : 48; // 48/mês * 12 = 576
+          creditsToAdd = billingCycle === 'yearly' ? 576 : 48; // 48/mês
         } else if (planName === 'business') {
-          creditsToAdd = billingCycle === 'yearly' ? 2400 : 200; // 200/mês * 12 = 2400
+          creditsToAdd = billingCycle === 'yearly' ? 2400 : 200; // 200/mês
         }
         
         await this.usersService.addCredits(userId, creditsToAdd);

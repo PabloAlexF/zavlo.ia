@@ -128,18 +128,18 @@ export const PLAN_PRICING: Record<PlanType, PlanPricing> = {
     currency: 'BRL',
   },
   [PlanType.BASIC]: {
-    monthly: 19.90,
-    yearly: 199.00,
+    monthly: 27.00,
+    yearly: 270.00,
     currency: 'BRL',
   },
   [PlanType.PRO]: {
-    monthly: 49.90,
-    yearly: 499.00,
+    monthly: 77.00,
+    yearly: 770.00,
     currency: 'BRL',
   },
   [PlanType.BUSINESS]: {
-    monthly: 149.90,
-    yearly: 1499.00,
+    monthly: 197.00,
+    yearly: 1970.00,
     currency: 'BRL',
   },
 };
@@ -187,20 +187,20 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
   {
     credits: 10,
     bonus: 0,
-    price: 2.90,
+    price: 15.90,
     description: 'Ideal para testes',
   },
   {
-    credits: 30,
+    credits: 25,
     bonus: 0,
-    price: 7.90,
+    price: 32.90,
     description: 'Uso moderado',
     popular: true,
   },
   {
     credits: 60,
     bonus: 0,
-    price: 14.90,
+    price: 69.90,
     description: 'Melhor custo-benefício',
   },
 ];

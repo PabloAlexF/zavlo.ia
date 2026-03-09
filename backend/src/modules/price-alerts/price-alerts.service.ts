@@ -116,16 +116,8 @@ export class PriceAlertsService {
 
   private async checkSingleAlert(alert: PriceAlert) {
     try {
-      // Usar searchQuery se disponível, caso contrário extrair da URL
-      const searchQuery = alert.searchQuery || await this.extractSearchQuery(alert.productUrl);
-      
-      if (!searchQuery) {
-        this.logger.warn(`Could not extract search query for alert ${alert.id}`);
-        return;
-      }
-      
-      // Buscar preço atual
-      const newPrice = await this.fetchCurrentPrice(searchQuery);
+      // Buscar preço atual (usa scraping direto primeiro, Apify como fallback)
+      const newPrice = await this.fetchCurrentPrice(alert);
 
       if (!newPrice) return;
 
@@ -182,28 +174,164 @@ export class PriceAlertsService {
   }
 
   /**
-   * Busca preço atual do produto usando Google Shopping
-   * Usa cache para evitar custos excessivos de API
+   * Busca preço atual do produto
+   * OTIMIZAÇÃO: Usa scraping direto da URL original quando possível
+   * Só usa Apify/Google Shopping como fallback
    */
-  private async fetchCurrentPrice(searchQuery: string): Promise<number | null> {
+  private async fetchCurrentPrice(alert: PriceAlert): Promise<number | null> {
     try {
-      this.logger.log(`Fetching price for: ${searchQuery}`);
+      // 1. TENTAR SCRAPING DIRETO DA URL ORIGINAL (GRÁTIS)
+      if (alert.productUrl) {
+        const directPrice = await this.scrapePriceFromUrl(alert.productUrl);
+        if (directPrice) {
+          this.logger.log(`✅ Preço obtido via scraping direto (GRÁTIS): R$ ${directPrice}`);
+          return directPrice;
+        }
+      }
+      
+      // 2. FALLBACK: Usar Google Shopping apenas se scraping direto falhar
+      this.logger.warn(`⚠️ Scraping direto falhou, usando Google Shopping (PAGO)`);
+      const searchQuery = alert.searchQuery || await this.extractSearchQuery(alert.productUrl);
+      
+      if (!searchQuery) {
+        this.logger.warn(`Could not extract search query for alert ${alert.id}`);
+        return null;
+      }
       
       const products = await this.googleShoppingService.search(searchQuery, 5);
       
       if (products && products.length > 0) {
-        // Pegar o menor preço encontrado
         const lowestPrice = Math.min(...products.map(p => p.price || p.price));
-        this.logger.log(`Found price: R$ ${lowestPrice}`);
+        this.logger.log(`Found price via Google Shopping: R$ ${lowestPrice}`);
         return lowestPrice;
       }
       
-      this.logger.warn(`No products found for: ${searchQuery}`);
       return null;
     } catch (error) {
       this.logger.error(`Error fetching price: ${error.message}`);
       return null;
     }
+  }
+
+  /**
+   * Scraping direto da URL do produto (GRÁTIS - sem usar Apify)
+   * Suporta: OLX, Mercado Livre, Amazon, etc.
+   */
+  private async scrapePriceFromUrl(url: string): Promise<number | null> {
+    try {
+      const axios = require('axios');
+      const cheerio = require('cheerio');
+      
+      // Headers para simular navegador
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+      };
+      
+      const response = await axios.get(url, { headers, timeout: 10000 });
+      const $ = cheerio.load(response.data);
+      
+      // Detectar marketplace e extrair preço
+      if (url.includes('olx.com.br')) {
+        return this.extractOlxPrice($);
+      } else if (url.includes('mercadolivre.com.br') || url.includes('mercadolibre.com')) {
+        return this.extractMercadoLivrePrice($);
+      } else if (url.includes('amazon.com.br')) {
+        return this.extractAmazonPrice($);
+      } else if (url.includes('enjoei.com.br')) {
+        return this.extractEnjoeiPrice($);
+      } else if (url.includes('shopee.com.br')) {
+        return this.extractShopeePrice($);
+      }
+      
+      // Fallback: tentar seletores genéricos
+      return this.extractGenericPrice($);
+      
+    } catch (error) {
+      this.logger.debug(`Scraping direto falhou para ${url}: ${error.message}`);
+      return null;
+    }
+  }
+
+  private extractOlxPrice($: any): number | null {
+    try {
+      const priceText = $('h2[data-testid="ad-price"]').text() ||
+                       $('.price-tag').text() ||
+                       $('[data-ds-component="DS-Text"]').first().text();
+      return this.parsePrice(priceText);
+    } catch { return null; }
+  }
+
+  private extractMercadoLivrePrice($: any): number | null {
+    try {
+      const priceText = $('.price-tag-fraction').text() ||
+                       $('[class*="price"]').first().text() ||
+                       $('meta[property="product:price:amount"]').attr('content');
+      return this.parsePrice(priceText);
+    } catch { return null; }
+  }
+
+  private extractAmazonPrice($: any): number | null {
+    try {
+      const priceText = $('.a-price-whole').first().text() ||
+                       $('#priceblock_ourprice').text() ||
+                       $('#priceblock_dealprice').text();
+      return this.parsePrice(priceText);
+    } catch { return null; }
+  }
+
+  private extractEnjoeiPrice($: any): number | null {
+    try {
+      const priceText = $('[data-testid="product-price"]').text() ||
+                       $('.product-price').text();
+      return this.parsePrice(priceText);
+    } catch { return null; }
+  }
+
+  private extractShopeePrice($: any): number | null {
+    try {
+      const priceText = $('[class*="price"]').first().text();
+      return this.parsePrice(priceText);
+    } catch { return null; }
+  }
+
+  private extractGenericPrice($: any): number | null {
+    try {
+      // Tentar meta tags
+      const metaPrice = $('meta[property="product:price:amount"]').attr('content') ||
+                       $('meta[property="og:price:amount"]').attr('content');
+      if (metaPrice) return this.parsePrice(metaPrice);
+      
+      // Tentar seletores comuns
+      const selectors = [
+        '[class*="price"]',
+        '[id*="price"]',
+        '[data-testid*="price"]',
+        '.product-price',
+        '.price-tag',
+      ];
+      
+      for (const selector of selectors) {
+        const text = $(selector).first().text();
+        const price = this.parsePrice(text);
+        if (price) return price;
+      }
+      
+      return null;
+    } catch { return null; }
+  }
+
+  private parsePrice(text: string): number | null {
+    if (!text) return null;
+    
+    // Remove tudo exceto números, vírgula e ponto
+    const cleaned = text.replace(/[^0-9,.]/g, '');
+    
+    // Converte para número
+    const price = parseFloat(cleaned.replace(',', '.'));
+    
+    return isNaN(price) ? null : price;
   }
 
   async getAlertStats(userId: string) {
