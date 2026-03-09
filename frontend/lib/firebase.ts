@@ -3,13 +3,13 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDju2eSo1peLa-8ayzrFCvh8ZKru4PHBwo",
-  authDomain: "zavloia.firebaseapp.com",
-  projectId: "zavloia",
-  storageBucket: "zavloia.firebasestorage.app",
-  messagingSenderId: "1002126921456",
-  appId: "1:1002126921456:web:557da6f61c1af3c5b33c35",
-  measurementId: "G-JCF2SR1NFC"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ""
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
