@@ -5,6 +5,9 @@ export interface UserIntent {
   extractedPrice?: number;
 }
 
+// Alias para compatibilidade
+export type Intent = UserIntent;
+
 // Patterns de intenção
 const INTENT_PATTERNS = {
   greeting: /\b(oi|ola|olá|bom dia|boa tarde|boa noite|hey|hello|opa|e ai|eai)\b/i,

@@ -45,7 +45,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setLoading(false);
 
     // Escutar mudanças no localStorage (mesmo na mesma aba)
-    const handleStorageChange = (e?: StorageEvent) => {
+    const handleStorageChange = (e?: Event) => {
       const updatedUser = localStorage.getItem('zavlo_user');
       if (updatedUser) {
         try {
@@ -59,14 +59,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
 
     // Listener para mudanças entre abas
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('storage', handleStorageChange as EventListener);
     
     // Listener customizado para mudanças na mesma aba
-    window.addEventListener('userChanged', handleStorageChange);
+    window.addEventListener('userChanged', handleStorageChange as EventListener);
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('userChanged', handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange as EventListener);
+      window.removeEventListener('userChanged', handleStorageChange as EventListener);
     };
   }, []);
 

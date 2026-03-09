@@ -6,6 +6,7 @@
     "dev": "next dev",
     "dev:webpack": "next dev --turbopack=false",
     "build": "next build",
+    "build:prod": "cross-env TURBOPACK=0 next build",
     "start": "next start",
     "lint": "eslint"
   },

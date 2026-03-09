@@ -2,7 +2,7 @@ import { GENERIC_PRODUCTS } from './constants';
 
 export function handleGenericProduct(product: string): string {
   const normalized = product.toLowerCase();
-  const suggestions = GENERIC_PRODUCTS[normalized];
+  const suggestions = GENERIC_PRODUCTS[normalized as keyof typeof GENERIC_PRODUCTS];
   
   if (!suggestions) {
     return `Sua busca por "${product}" é muito genérica. Pode ser mais específico? Por exemplo, mencione uma marca ou modelo.`;

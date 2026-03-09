@@ -2205,7 +2205,7 @@ export default function ChatPage() {
                 </motion.button>
               ) : (
                 <motion.button
-                  onClick={handleSend}
+                  onClick={() => handleSend()}
                   disabled={loading || !input.trim()}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}

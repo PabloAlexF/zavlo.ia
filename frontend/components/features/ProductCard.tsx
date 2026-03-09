@@ -43,7 +43,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   
   // Normalizar images para sempre ser array
-  const images = product.images || (product.image ? [product.image] : []);
+  const images = product.images || [];
   const hasImage = images.length > 0;
   const hasMultipleImages = images.length > 1;
   const location = typeof product.location === 'string' ? product.location : `${product.location?.city || ''}, ${product.location?.state || ''}`;
@@ -108,7 +108,7 @@ export function ProductCard({ product }: ProductCardProps) {
             title: product.title,
             price: product.price,
             image: images[0] || '',
-            url: product.url,
+            url: product.sourceUrl,
             source: product.source,
           }),
         });
@@ -152,7 +152,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
               {/* Image */}
               <img
-                src={currentImageUrl}
+                src={currentImageUrl || ''}
                 alt={product.title}
                 style={{ 
                   width: '100%', 
@@ -291,7 +291,7 @@ export function ProductCard({ product }: ProductCardProps) {
           <button
             onClick={(e) => {
               e.preventDefault();
-              window.open(product.url, '_blank');
+              window.open(product.sourceUrl, '_blank');
             }}
             className="w-full mt-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-lg text-white text-sm font-medium flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-blue-500/20"
           >

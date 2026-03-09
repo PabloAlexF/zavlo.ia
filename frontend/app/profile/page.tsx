@@ -22,8 +22,8 @@ export default function Profile() {
   const [transactions, setTransactions] = useState<(Transaction & { id: string })[]>([]);
 
   useEffect(() => {
-    if (user) {
-      transactionService.getHistory(user.id, 10).then(setTransactions);
+    if (user?.userId) {
+      transactionService.getHistory(user.userId, 10).then(setTransactions);
       
       const loadProfile = async () => {
         try {
@@ -60,7 +60,7 @@ export default function Profile() {
       const interval = setInterval(loadProfile, 5000);
       return () => clearInterval(interval);
     }
-  }, [user?.id]);
+  }, [user?.userId]);
 
   const handleLogout = async () => {
     await signOut(auth);

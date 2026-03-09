@@ -323,7 +323,7 @@ export default function ProductDetails() {
 
                 {/* Image */}
                 <img
-                  src={currentImageUrl}
+                  src={currentImageUrl || ''}
                   alt={product.title}
                   className="w-full h-full object-cover"
                   style={{ opacity: isLoading ? 0.5 : 1 }}

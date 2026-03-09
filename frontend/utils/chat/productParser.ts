@@ -1,6 +1,6 @@
 import { BRAND_SET, GENERIC_PRODUCTS, NON_PRODUCT_WORDS } from './constants';
 import { cleanProductQuery, extractProductInfo } from './queryProcessor';
-import { detectBrandFromModel, enrichProductQuery, optimizeQueryOrder } from './brandDetector';
+import { enrichProductQuery, optimizeQueryOrder } from './brandDetector';
 import { buildGoogleSearchQuery } from './googleQueryBuilder';
 
 export interface ParsedProduct {
@@ -113,7 +113,7 @@ export function parseProductQuery(query: string): ParsedProduct {
   }
   
   // Verifica se é genérico
-  const isGeneric = product && GENERIC_PRODUCTS[product] && !brand && !model && attributes.length === 0;
+  const isGeneric = !!(product && GENERIC_PRODUCTS[product as keyof typeof GENERIC_PRODUCTS] && !brand && !model && attributes.length === 0);
   
   // Determina se precisa de localização
   const needsLocation = !isGeneric && !info.hasSpecificModel && !model && !brand;

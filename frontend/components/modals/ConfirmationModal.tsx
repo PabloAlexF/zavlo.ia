@@ -31,7 +31,7 @@ export default function ConfirmationModal({
 
   const modalVariants = {
     hidden: { y: "-50%", x: "-50%", opacity: 0, scale: 0.95 },
-    visible: { y: "-50%", x: "-50%", opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 300, damping: 30 } },
+    visible: { y: "-50%", x: "-50%", opacity: 1, scale: 1, transition: { type: 'spring' as const, stiffness: 300, damping: 30 } },
     exit: { opacity: 0, scale: 0.95 },
   };
 
