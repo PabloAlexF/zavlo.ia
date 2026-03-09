@@ -3,77 +3,46 @@ node_modules/
 .pnp
 .pnp.js
 
-# Environment variables
-.env
-.env.local
-.env.*.local
-*.env
+# Testing
+coverage/
+*.log
 
-# Build outputs
+# Production
 dist/
 build/
 .next/
 out/
 
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-*~
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # IDE
 .vscode/
 .idea/
-*.sublime-*
-*.code-workspace
+*.swp
+*.swo
+*~
 
-# Testing
-coverage/
-.nyc_output/
+# OS
+.DS_Store
+Thumbs.db
 
-# Temporary files
-tmp/
+# Misc
+*.tsbuildinfo
+.cache/
 temp/
-*.tmp
-
-# Firebase
-.firebase/
-firebase-debug.log
-firestore-debug.log
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-ENV/
+tmp/
 
 # Executables
 *.exe
 *.zip
-ngrok.exe
-ngrok.zip
 
 # Test files
 test_*.js
 test_*.py
 test_*.json
 test_*.txt
-
-# Batch files (optional - remova se quiser versionar)
-*.bat
-
-# Cache
-.cache/
-.parcel-cache/

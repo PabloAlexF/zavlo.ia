@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Package, Store, MapPin, Zap, Bot, Search, DollarSign, Sparkles, Check, Shield, Clock, Bell, TrendingDown, Image as ImageIcon, Star, MousePointer, ArrowRight, Rocket } from 'lucide-react';
 import { motion, useMotionValue, useTransform } from 'framer-motion';
 import LimitedOfferSection from '@/components/sections/LimitedOfferSection';
@@ -471,9 +472,13 @@ export default function Home() {
         <footer className="container mx-auto px-4 py-12 border-t border-white/10">
           <div className="max-w-6xl mx-auto text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white text-xl font-black">Z</span>
-              </div>
+              <Image 
+                src="/assets/icons/logo.ico" 
+                alt="Zavlo.ia Logo" 
+                width={40} 
+                height={40}
+                className="rounded-xl"
+              />
               <span className="text-2xl font-black text-white">Zavlo.ia</span>
             </div>
             <p className="text-gray-500">

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useUser } from '@/contexts/UserContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
@@ -76,9 +77,13 @@ export function Header() {
     <header className="fixed top-0 left-0 right-0 z-[100] bg-[#0B0B0F]/95 backdrop-blur-xl border-b border-white/10">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-7 sm:w-8 h-7 sm:h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
-            <span className="text-white font-bold text-sm sm:text-base">Z</span>
-          </div>
+          <Image 
+            src="/assets/icons/logo.ico" 
+            alt="Zavlo.ia" 
+            width={32} 
+            height={32}
+            className="rounded-xl group-hover:scale-105 transition-transform"
+          />
           <span className="text-lg sm:text-xl font-bold text-white tracking-tight">Zavlo.ia</span>
         </Link>
         

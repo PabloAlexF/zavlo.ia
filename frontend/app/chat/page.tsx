@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Send, Sparkles, Loader2, X, Check, Coins, Menu, Plus, MessageSquare, Trash2, ChevronLeft, MapPin, Trophy, Flag, Bot, HelpCircle, Hash, Search, Globe, Zap, CheckCircle2, CreditCard, ArrowRight, Image, Upload, ChevronDown, Smartphone, Headphones, Laptop, Tv, Shirt, Car, Home, Book } from 'lucide-react';
+import { Send, Sparkles, Loader2, X, Check, Coins, Menu, Plus, MessageSquare, Trash2, ChevronLeft, MapPin, Trophy, Flag, Bot, HelpCircle, Hash, Search, Globe, Zap, CheckCircle2, CreditCard, ArrowRight, Image as ImageIcon, Upload, ChevronDown, Smartphone, Headphones, Laptop, Tv, Shirt, Car, Home, Book } from 'lucide-react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProductCard } from '@/components/features/ProductCard';
 import { detectIntent } from '@/utils/chat/intentDetector';
@@ -1412,9 +1413,13 @@ export default function ChatPage() {
               <Menu className="w-5 h-5 text-gray-400" />
             </motion.button>
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/20">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
+              <Image 
+                src="/assets/icons/logo.ico" 
+                alt="Zavlo AI" 
+                width={36} 
+                height={36}
+                className="rounded-2xl flex-shrink-0 shadow-lg shadow-purple-500/20"
+              />
               <div className="min-w-0">
                 <h1 className="text-sm font-semibold text-white truncate">Zavlo AI</h1>
                 <p className="text-xs text-gray-500 hidden sm:block">Assistente de Compras</p>
@@ -2168,7 +2173,7 @@ export default function ChatPage() {
                 className="px-4 py-3.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl text-white disabled:opacity-50 transition-all flex-shrink-0 shadow-lg"
                 title="Buscar por imagem"
               >
-                <Image className="w-5 h-5" />
+                <ImageIcon className="w-5 h-5" />
               </motion.button>
               
               <input
