@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X, Eye, MousePointerClick, ExternalLink, PackageOpen, SlidersHorizontal, Grid3x3, List, TrendingUp, Clock, DollarSign, Filter, ChevronDown, Star, MapPin, Tag } from 'lucide-react';
+import { Search, X, Eye, MousePointerClick, ExternalLink, PackageOpen, SlidersHorizontal, Grid3x3, List, TrendingUp, Clock, DollarSign, Filter, ChevronDown, Star, MapPin, Tag, Heart, ShoppingCart, Zap, Award, TrendingDown, Percent } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Listing {
@@ -10,12 +10,18 @@ interface Listing {
   title: string;
   description: string;
   price: number;
+  originalPrice?: number;
   images: string[];
   category: string;
   condition: 'new' | 'used';
   active: boolean;
   views: number;
   clicks: number;
+  rating?: number;
+  reviewCount?: number;
+  seller?: { name: string; rating: number };
+  shipping?: { free: boolean; days: number };
+  stock?: number;
   location?: string | { cep?: string; city?: string; state?: string };
   createdAt: string;
 }
@@ -41,9 +47,12 @@ export default function MarketplacePage() {
   const [sortBy, setSortBy] = useState<'recent' | 'price_asc' | 'price_desc' | 'popular'>('recent');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
+  const [wishlist, setWishlist] = useState<Set<string>>(new Set());
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   useEffect(() => {
     loadListings();
+    loadWishlist();
   }, []);
 
   useEffect(() => {
@@ -96,6 +105,24 @@ export default function MarketplacePage() {
     }
 
     setFilteredListings(filtered);
+  };
+
+  const loadWishlist = () => {
+    const saved = localStorage.getItem('zavlo_wishlist');
+    if (saved) {
+      setWishlist(new Set(JSON.parse(saved)));
+    }
+  };
+
+  const toggleWishlist = (listingId: string) => {
+    const newWishlist = new Set(wishlist);
+    if (newWishlist.has(listingId)) {
+      newWishlist.delete(listingId);
+    } else {
+      newWishlist.add(listingId);
+    }
+    setWishlist(newWishlist);
+    localStorage.setItem('zavlo_wishlist', JSON.stringify([...newWishlist]));
   };
 
   const loadListings = async () => {
@@ -430,12 +457,16 @@ export default function MarketplacePage() {
                 whileHover={{ y: -4, scale: 1.02 }}
               >
                 {/* Image */}
-                <div className={`relative bg-white/5 ${viewMode === 'list' ? 'w-48 h-48' : 'aspect-square'}`}>
+                <div 
+                  className={`relative bg-white/5 ${viewMode === 'list' ? 'w-48 h-48' : 'aspect-square'} overflow-hidden`}
+                  onMouseEnter={() => setHoveredCard(listing.id)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
                   {listing.images && listing.images.length > 0 ? (
                     <img 
                       src={listing.images[0]} 
                       alt={listing.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                       onError={(e) => {
                         e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%231a1a2e" width="400" height="400"/%3E%3Ctext fill="%23ffffff" font-family="sans-serif" font-size="20" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ESem Imagem%3C/text%3E%3C/svg%3E';
                       }}
@@ -445,19 +476,122 @@ export default function MarketplacePage() {
                       <PackageOpen className="w-12 h-12 text-gray-500" />
                     </div>
                   )}
-                  <span className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm bg-green-500/30 text-green-300 border border-green-500/50">
-                    {listing.condition === 'new' ? 'Novo' : 'Usado'}
-                  </span>
+                  
+                  {/* Badges */}
+                  <div className="absolute top-3 left-3 right-3 flex justify-between items-start">
+                    <div className="flex flex-col gap-2">
+                      <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm bg-green-500/30 text-green-300 border border-green-500/50">
+                        {listing.condition === 'new' ? 'Novo' : 'Usado'}
+                      </span>
+                      {listing.originalPrice && listing.originalPrice > listing.price && (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm bg-red-500/30 text-red-300 border border-red-500/50 flex items-center gap-1">
+                          <Percent className="w-3 h-3" />
+                          {Math.round((1 - listing.price / listing.originalPrice) * 100)}% OFF
+                        </span>
+                      )}
+                      {listing.shipping?.free && (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm bg-blue-500/30 text-blue-300 border border-blue-500/50 flex items-center gap-1">
+                          <Zap className="w-3 h-3" />
+                          Frete Grátis
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Wishlist Button */}
+                    <motion.button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleWishlist(listing.id);
+                      }}
+                      className="p-2 rounded-full backdrop-blur-sm bg-black/50 border border-white/20 hover:bg-black/70 transition-all"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Heart 
+                        className={`w-5 h-5 transition-colors ${
+                          wishlist.has(listing.id) ? 'fill-red-500 text-red-500' : 'text-white'
+                        }`}
+                      />
+                    </motion.button>
+                  </div>
+
+                  {/* Quick Actions Overlay */}
+                  <AnimatePresence>
+                    {hoveredCard === listing.id && viewMode === 'grid' && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center gap-2"
+                      >
+                        <motion.button
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.1 }}
+                          className="p-3 bg-white/20 rounded-full hover:bg-white/30 transition-all"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/listing/${listing.id}`);
+                          }}
+                        >
+                          <Eye className="w-5 h-5 text-white" />
+                        </motion.button>
+                        <motion.button
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.15 }}
+                          className="p-3 bg-blue-600 rounded-full hover:bg-blue-700 transition-all"
+                        >
+                          <ShoppingCart className="w-5 h-5 text-white" />
+                        </motion.button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Content */}
                 <div className={`p-4 flex flex-col ${viewMode === 'list' ? 'flex-1' : ''}`}>
+                  {/* Rating */}
+                  {listing.rating && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-4 h-4 ${
+                              i < Math.floor(listing.rating!)
+                                ? 'fill-yellow-400 text-yellow-400'
+                                : 'text-gray-600'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-sm text-gray-400">
+                        {listing.rating.toFixed(1)} ({listing.reviewCount || 0})
+                      </span>
+                    </div>
+                  )}
+
                   <h3 className="font-bold text-white text-lg line-clamp-2 mb-2 group-hover:text-blue-400 transition-colors">
                     {listing.title}
                   </h3>
                   
                   {viewMode === 'list' && listing.description && (
                     <p className="text-gray-400 text-sm line-clamp-2 mb-3">{listing.description}</p>
+                  )}
+
+                  {/* Seller Info */}
+                  {listing.seller && (
+                    <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
+                      <Award className="w-4 h-4" />
+                      <span>{listing.seller.name}</span>
+                      {listing.seller.rating && (
+                        <span className="flex items-center gap-1 text-yellow-400">
+                          <Star className="w-3 h-3 fill-current" />
+                          {listing.seller.rating.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
@@ -472,6 +606,22 @@ export default function MarketplacePage() {
                     )}
                   </div>
 
+                  {/* Shipping Info */}
+                  {listing.shipping && (
+                    <div className="flex items-center gap-2 text-sm mb-3">
+                      {listing.shipping.free ? (
+                        <span className="text-green-400 font-semibold flex items-center gap-1">
+                          <Zap className="w-4 h-4" />
+                          Frete Grátis
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">
+                          Entrega em {listing.shipping.days} dias
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-4 text-xs text-gray-400 mb-4">
                     <span className="flex items-center gap-1">
                       <Eye className="w-4 h-4" />
@@ -481,16 +631,28 @@ export default function MarketplacePage() {
                       <MousePointerClick className="w-4 h-4" />
                       {listing.clicks || 0}
                     </span>
+                    {listing.stock !== undefined && (
+                      <span className={`flex items-center gap-1 ${
+                        listing.stock < 10 ? 'text-red-400' : 'text-green-400'
+                      }`}>
+                        <PackageOpen className="w-4 h-4" />
+                        {listing.stock} disponíveis
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-auto">
+                    {listing.originalPrice && listing.originalPrice > listing.price && (
+                      <p className="text-sm text-gray-400 line-through mb-1">
+                        R$ {listing.originalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    )}
                     <p className="text-2xl font-black text-green-400 mb-3">
                       R$ {listing.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
 
-                <button 
+                    <button 
                       onClick={async () => {
-                        // Increment clicks
                         try {
                           await fetch(`http://localhost:3001/api/v1/listings/${listing.id}/click`, {
                             method: 'POST',
