@@ -61,37 +61,40 @@ export default function Home() {
             transition={{ duration: 0.6 }}
           >
             <motion.div 
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-blue-500/20 px-4 py-2 rounded-full mb-8"
+              className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 px-4 py-2 rounded-full mb-6"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
             >
-              <Sparkles className="w-4 h-4 text-blue-400" />
-              <span className="text-sm font-medium text-gray-300">Powered by Artificial Intelligence</span>
+              <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+              <span className="text-sm font-medium text-gray-400">Powered by Artificial Intelligence</span>
             </motion.div>
 
             <motion.h1 
-              className="text-5xl sm:text-6xl lg:text-7xl font-black mb-6 leading-tight"
+              className="text-5xl sm:text-6xl lg:text-7xl font-black mb-6 leading-[1.1] tracking-tight"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
               <span className="text-white">
-                Encontre o menor preço da internet
+                Encontre o menor preço
               </span>
               <br />
+              <span className="text-white">
+                da internet{' '}
+              </span>
               <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
                 em segundos
               </span>
             </motion.h1>
 
             <motion.p 
-              className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed"
+              className="text-lg sm:text-xl text-gray-400 mb-10 max-w-2xl mx-auto"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
             >
-              Busque em <span className="text-blue-400 font-semibold">9+ marketplaces</span> ao mesmo tempo usando IA.
+              A IA busca em <span className="text-white font-semibold">todos os marketplaces do Brasil</span> automaticamente.
             </motion.p>
 
             <motion.div 
