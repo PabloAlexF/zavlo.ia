@@ -79,9 +79,11 @@ export default function ChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    // Foca no input após cada mensagem
+    // Foca no input apenas se nenhum outro input está focado
     setTimeout(() => {
-      inputRef.current?.focus();
+      if (document.activeElement?.tagName !== 'INPUT') {
+        inputRef.current?.focus();
+      }
     }, 100);
   }, [messages]);
 
@@ -572,12 +574,13 @@ export default function ChatPage() {
   };
 
   const sendMessage = (text: string) => {
-    handleSend(text);
+    setInput(text);
+    inputRef.current?.focus();
   };
 
   const handleSend = async (messageText?: string, isInternal = false) => {
     const currentInput = messageText || input;
-    if (!currentInput.trim() || loading) return;
+    if (!currentInput || !String(currentInput).trim() || loading) return;
 
     // Verificar se está no estado de confirmação de busca por imagem
     if (chatState === 'awaiting_image_confirmation') {
@@ -836,6 +839,19 @@ export default function ChatPage() {
           id: crypto.randomUUID(),
           type: 'ai',
           content: 'Olá! 👋\n\nSou especialista em encontrar os melhores preços!\n\nQue produto você procura hoje?',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        setLoading(false);
+        return;
+      }
+      
+      // Tratar conversas casuais (tudo bem, como vai, etc)
+      if (intent.type === 'question' && /^(tudo bem|como vai|e ai|beleza|oi tudo bem|tá tudo bem)/i.test(currentInput.toLowerCase().trim())) {
+        const aiMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'ai',
+          content: 'Tudo ótimo! 😊\n\nEstou aqui para te ajudar a encontrar os melhores preços.\n\nQue produto você está procurando?',
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, aiMessage]);
@@ -1288,7 +1304,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-screen bg-[#0B0B0F] flex">
+    <div className="h-screen bg-gradient-to-br from-[#0A0A0F] via-[#0F0F14] to-[#0A0A0F] flex">
       {/* Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -1296,52 +1312,57 @@ export default function ChatPage() {
             initial={{ x: -280, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -280, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="w-72 h-full border-r border-white/10 bg-[#0B0B0F] flex flex-col fixed md:relative z-50"
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            className="w-72 h-full border-r border-white/5 bg-black/40 backdrop-blur-2xl flex flex-col fixed md:relative z-50"
           >
             {/* New Chat Button */}
-            <div className="p-3 border-b border-white/10">
-              <button
-                onClick={() => {
-                  createNewChat();
-                }}
-                className="w-full flex items-center gap-3 px-3 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition text-sm"
+            <div className="p-4 border-b border-white/5">
+              <motion.button
+                onClick={createNewChat}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border border-white/10 rounded-2xl text-white transition-all text-sm font-medium shadow-lg shadow-blue-500/5"
               >
-                <Plus className="w-5 h-5" />
-                <span className="font-medium">Nova conversa</span>
-              </button>
+                <Plus className="w-4 h-4" />
+                <span>Nova conversa</span>
+              </motion.button>
             </div>
 
             {/* Chat History */}
-            <div className="flex-1 overflow-y-auto p-2">
+            <div className="flex-1 overflow-y-auto px-3 py-2">
               {chatHistory.length === 0 ? (
-                <div className="text-center py-12 px-4">
-                  <MessageSquare className="w-10 h-10 mx-auto mb-3 text-gray-600" />
-                  <p className="text-xs text-gray-500">Suas conversas aparecerão aqui</p>
+                <div className="text-center py-16 px-4">
+                  <div className="w-12 h-12 mx-auto mb-4 bg-white/5 rounded-2xl flex items-center justify-center">
+                    <MessageSquare className="w-6 h-6 text-gray-600" />
+                  </div>
+                  <p className="text-sm text-gray-500">Nenhuma conversa ainda</p>
                 </div>
               ) : (
                 <div className="space-y-1">
                   {chatHistory.map((chat) => (
                     <motion.div
                       key={chat.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`group relative p-3 rounded-lg transition-all cursor-pointer ${
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      whileHover={{ x: 2 }}
+                      className={`group relative p-3 rounded-xl transition-all cursor-pointer ${
                         currentChatId === chat.id
-                          ? 'bg-white/10'
-                          : 'hover:bg-white/5'
+                          ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20'
+                          : 'hover:bg-white/5 border border-transparent'
                       }`}
                       onClick={() => loadChat(chat.id)}
                     >
                       <div className="flex items-start gap-3">
-                        <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-white truncate flex-1 pr-8">{chat.title}</p>
+                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                          currentChatId === chat.id ? 'bg-blue-400' : 'bg-gray-600'
+                        }`} />
+                        <p className="text-sm text-gray-300 truncate flex-1 pr-8">{chat.title}</p>
                         <button
                           onClick={(e) => deleteChat(chat.id, e)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-red-500/20 rounded transition opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-red-500/20 rounded-lg transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                           aria-label="Deletar conversa"
                         >
-                          <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-400" />
+                          <Trash2 className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
                         </button>
                       </div>
                     </motion.div>
@@ -1351,10 +1372,10 @@ export default function ChatPage() {
             </div>
 
             {/* Close Sidebar Button (mobile) */}
-            <div className="p-3 border-t border-white/10 md:hidden">
+            <div className="p-4 border-t border-white/5 md:hidden">
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/5 rounded-lg text-gray-400 text-sm"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 text-sm transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Fechar
@@ -1365,42 +1386,57 @@ export default function ChatPage() {
       </AnimatePresence>
 
       {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full">
         {/* Header */}
-        <div className="border-b border-white/10 bg-[#0B0B0F]/80 backdrop-blur-xl px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button
+        <div className="border-b border-white/5 bg-black/20 backdrop-blur-2xl px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <motion.button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 sm:p-2 hover:bg-white/10 rounded-xl flex-shrink-0"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="p-2 hover:bg-white/10 rounded-xl flex-shrink-0 transition-colors"
             >
-              <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-gray-300" />
-            </button>
-            <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
-              <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+              <Menu className="w-5 h-5 text-gray-400" />
+            </motion.button>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/20">
+                <Sparkles className="w-5 h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xs sm:text-sm font-bold text-white truncate">Zavlo IA</h1>
-                <p className="text-[9px] sm:text-[10px] text-gray-500 hidden sm:block">Assistente Inteligente</p>
+                <h1 className="text-sm font-semibold text-white truncate">Zavlo AI</h1>
+                <p className="text-xs text-gray-500 hidden sm:block">Assistente de Compras</p>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-lg sm:rounded-xl">
-              <Coins className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400" />
-              <span className="text-xs sm:text-sm font-bold text-white">{userCredits}</span>
-            </div>
-            <button onClick={() => router.push('/')} className="p-1.5 sm:p-2 hover:bg-white/10 rounded-xl">
-              <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-            </button>
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl shadow-lg shadow-yellow-500/5"
+            >
+              <Coins className="w-4 h-4 text-yellow-400" />
+              <span className="text-sm font-semibold text-white">{userCredits}</span>
+            </motion.div>
+            <motion.button 
+              onClick={() => router.push('/')} 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </motion.button>
           </div>
         </div>
 
@@ -1428,7 +1464,8 @@ export default function ChatPage() {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => {
                         setShowMoreSuggestions(false);
-                        sendMessage(suggestion.text);
+                        setInput(suggestion.text);
+                        inputRef.current?.focus();
                       }}
                       className={`flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-3.5 bg-gradient-to-br ${suggestion.color} border rounded-xl text-white transition-all hover:shadow-lg`}
                     >
@@ -1480,7 +1517,7 @@ export default function ChatPage() {
                               ].map((item, i) => (
                                 <button
                                   key={i}
-                                  onClick={() => { sendMessage(item.text); setShowMoreSuggestions(false); }}
+                                  onClick={() => { setInput(item.text); setShowMoreSuggestions(false); inputRef.current?.focus(); }}
                                   className="flex items-center gap-2 px-2.5 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors text-left"
                                 >
                                   <div className="flex-shrink-0">{item.icon}</div>
@@ -1505,7 +1542,7 @@ export default function ChatPage() {
                               ].map((item, i) => (
                                 <button
                                   key={i}
-                                  onClick={() => { sendMessage(item.text); setShowMoreSuggestions(false); }}
+                                  onClick={() => { setInput(item.text); setShowMoreSuggestions(false); inputRef.current?.focus(); }}
                                   className="flex items-center gap-2 px-2.5 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors text-left"
                                 >
                                   <Shirt className="w-4 h-4 flex-shrink-0" />
@@ -1530,7 +1567,7 @@ export default function ChatPage() {
                               ].map((item, i) => (
                                 <button
                                   key={i}
-                                  onClick={() => { sendMessage(item.text); setShowMoreSuggestions(false); }}
+                                  onClick={() => { setInput(item.text); setShowMoreSuggestions(false); inputRef.current?.focus(); }}
                                   className="flex items-center gap-2 px-2.5 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors text-left"
                                 >
                                   <Car className="w-4 h-4 flex-shrink-0" />
@@ -1555,7 +1592,7 @@ export default function ChatPage() {
                               ].map((item, i) => (
                                 <button
                                   key={i}
-                                  onClick={() => { sendMessage(item.text); setShowMoreSuggestions(false); }}
+                                  onClick={() => { setInput(item.text); setShowMoreSuggestions(false); inputRef.current?.focus(); }}
                                   className="flex items-center gap-2 px-2.5 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors text-left"
                                 >
                                   <div className="flex-shrink-0">{item.icon}</div>
@@ -1580,19 +1617,27 @@ export default function ChatPage() {
                   animate={{ opacity: 1, y: 0 }}
                 >
                   {message.type === 'user' && (
-                    <div className="flex justify-end">
-                      <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-purple-600 rounded-2xl rounded-tr-sm px-3 sm:px-4 py-2 sm:py-3 max-w-[90%] sm:max-w-[85%] md:max-w-md">
-                        <p className="text-white whitespace-pre-wrap text-xs sm:text-sm break-words">{message.content}</p>
+                    <motion.div 
+                      className="flex justify-end"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                    >
+                      <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl rounded-tr-md px-5 py-3 max-w-[85%] shadow-lg shadow-blue-500/20">
+                        <p className="text-white whitespace-pre-wrap text-sm break-words">{message.content}</p>
                       </div>
-                    </div>
+                    </motion.div>
                   )}
 
                   {message.type === 'ai' && (
-                    <div className="flex justify-start gap-1.5 sm:gap-2">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                    <motion.div 
+                      className="flex justify-start gap-3"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                    >
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/20">
+                        <Sparkles className="w-4 h-4 text-white" />
                       </div>
-                      <div className="bg-white/10 border border-white/20 rounded-2xl rounded-tl-sm px-3 sm:px-4 py-2 sm:py-3 max-w-[90%] sm:max-w-[85%] md:max-w-md">
+                      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl rounded-tl-md px-5 py-3 max-w-[85%]">
                         {message.content === 'searching_animation' ? (
                           <div className="space-y-4">
                             <div className="flex items-center gap-3">
@@ -1669,10 +1714,10 @@ export default function ChatPage() {
                             </div>
                           </div>
                         ) : (
-                          <p className="text-white whitespace-pre-wrap text-sm">{message.content}</p>
+                          <p className="text-gray-200 whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   )}
 
                   {message.type === 'category_question' && (
@@ -1693,7 +1738,7 @@ export default function ChatPage() {
                             {message.categoryQuestion.options.map((option, i) => (
                               <button
                                 key={i}
-                                onClick={() => sendMessage(option)}
+                                onClick={() => handleSend(option)}
                                 className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-sm text-left transition-colors"
                               >
                                 <Hash className="w-3 h-3 text-gray-400" />
@@ -1744,7 +1789,9 @@ export default function ChatPage() {
                           <input
                             type="text"
                             defaultValue={message.detectedProduct}
+                            onClick={(e) => e.stopPropagation()}
                             onKeyDown={(e) => {
+                              e.stopPropagation();
                               if (e.key === 'Enter') {
                                 const newName = (e.target as HTMLInputElement).value;
                                 setDetectedProductName(newName);
@@ -1899,77 +1946,81 @@ export default function ChatPage() {
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ duration: 0.3, type: "spring" }}
-                        className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl rounded-tl-sm p-4 max-w-lg w-full"
+                        className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/30 rounded-3xl rounded-tl-md p-5 max-w-lg w-full shadow-lg"
                       >
                         <motion.div 
                           initial={{ x: -20, opacity: 0 }}
                           animate={{ x: 0, opacity: 1 }}
                           transition={{ delay: 0.1 }}
-                          className="flex items-center gap-2 mb-3"
+                          className="flex items-center gap-2 mb-4"
                         >
                           <motion.div
                             animate={{ rotate: [0, 10, -10, 0] }}
                             transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
                           >
-                            <Sparkles className="w-4 h-4 text-yellow-400" />
+                            <Sparkles className="w-5 h-5 text-yellow-400" />
                           </motion.div>
-                          <h3 className="text-white font-semibold text-sm">Confirmar Busca</h3>
-                        </motion.div>
-                        
-                        <motion.div 
-                          initial={{ y: -10, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          transition={{ delay: 0.2 }}
-                          className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-2"
-                        >
-                          <motion.p 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: [0.5, 1, 0.5] }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                            className="text-blue-300 text-xs mb-2 flex items-center gap-1"
-                          >
-                            <span className="animate-pulse">✏️</span>
-                            Clique no texto abaixo para editar a busca
-                          </motion.p>
+                          <h3 className="text-white font-semibold">Pronto para buscar!</h3>
                         </motion.div>
                         
                         <motion.div 
                           initial={{ scale: 0.95, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
-                          transition={{ delay: 0.3 }}
-                          whileHover={{ scale: 1.02 }}
-                          className="bg-black/20 rounded-lg p-3 mb-3 border border-white/10 hover:border-yellow-400/50 transition-colors"
+                          transition={{ delay: 0.2 }}
+                          className="bg-black/30 rounded-2xl p-4 mb-4 border border-white/10 cursor-pointer hover:border-blue-400/50 transition-colors group"
                         >
-                          <input
-                            type="text"
-                            defaultValue={message.content}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                const newQuery = (e.target as HTMLInputElement).value;
-                                setMessages(prev => {
-                                  const updated = [...prev];
-                                  const idx = updated.findIndex(m => m.id === message.id);
-                                  if (idx >= 0) updated[idx].content = newQuery;
-                                  return updated;
-                                });
-                              }
-                            }}
-                            className="w-full bg-transparent text-white text-sm outline-none border-b border-white/20 pb-1 focus:border-yellow-400 transition-colors"
-                            placeholder="Edite a busca..."
-                          />
+                          <div className="flex items-start gap-3 mb-3">
+                            <Search className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-xs text-gray-400 mb-1">Busca final:</p>
+                              <input
+                                type="text"
+                                defaultValue={message.content}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  setMessages(prev => {
+                                    const updated = [...prev];
+                                    const idx = updated.findIndex(m => m.id === message.id);
+                                    if (idx >= 0) updated[idx].content = e.target.value;
+                                    return updated;
+                                  });
+                                }}
+                                className="w-full bg-transparent text-white font-medium text-lg outline-none border-b border-transparent group-hover:border-blue-400/30 focus:border-blue-400 transition-colors pb-1"
+                                placeholder="Edite a busca..."
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 pt-3 border-t border-white/10">
+                            <CreditCard className="w-4 h-4 text-yellow-400" />
+                            <p className="text-sm text-gray-300">Custo: <span className="text-yellow-400 font-semibold">1 crédito</span></p>
+                          </div>
+                        </motion.div>
+                        
+                        <motion.div 
+                          initial={{ y: -10, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          transition={{ delay: 0.3 }}
+                          className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 mb-4"
+                        >
+                          <p className="text-blue-300 text-xs flex items-center gap-2">
+                            <span className="animate-pulse">✏️</span>
+                            Clique no texto acima para editar antes de confirmar
+                          </p>
                         </motion.div>
                         
                         <motion.div 
                           initial={{ y: 10, opacity: 0 }}
                           animate={{ y: 0, opacity: 1 }}
                           transition={{ delay: 0.4 }}
-                          className="flex gap-2"
+                          className="flex gap-3"
                         >
                           <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={handleCancelSearch}
-                            className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white text-sm hover:bg-white/20 transition-colors"
+                            className="flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm hover:bg-white/20 transition-colors font-medium"
                           >
                             Cancelar
                           </motion.button>
@@ -1978,13 +2029,15 @@ export default function ChatPage() {
                             whileTap={{ scale: 0.95 }}
                             onClick={handleConfirmSearch}
                             disabled={loading || chatState === 'searching'}
-                            className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white text-sm disabled:opacity-50 shadow-lg shadow-green-500/20"
+                            className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white text-sm disabled:opacity-50 shadow-lg shadow-green-500/30 font-semibold"
                           >
                             <motion.span
                               animate={{ opacity: [1, 0.7, 1] }}
                               transition={{ duration: 1.5, repeat: Infinity }}
+                              className="flex items-center justify-center gap-2"
                             >
-                              Confirmar
+                              <CheckCircle2 className="w-4 h-4" />
+                              Confirmar Busca
                             </motion.span>
                           </motion.button>
                         </motion.div>
@@ -2067,7 +2120,7 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-white/10 bg-black/50 backdrop-blur-xl p-3 sm:p-4 safe-area-bottom">
+        <div className="border-t border-white/5 bg-black/20 backdrop-blur-2xl p-4 sm:p-6 safe-area-bottom">
           <div className="max-w-4xl mx-auto">
             <AnimatePresence>
               {uploadedImage && (
@@ -2075,29 +2128,31 @@ export default function ChatPage() {
                   initial={{ opacity: 0, y: 10, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
-                  className="mb-2 sm:mb-3"
+                  className="mb-3"
                 >
                   <div className="relative inline-block">
                     <img 
                       src={uploadedImage} 
                       alt="Preview" 
-                      className="h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 object-cover rounded-lg border-2 border-blue-500"
+                      className="h-20 w-20 sm:h-24 sm:w-24 object-cover rounded-2xl border-2 border-blue-500/50 shadow-lg shadow-blue-500/20"
                     />
-                    <button
+                    <motion.button
                       onClick={() => {
                         setUploadedImage(null);
                         setImageFile(null);
                       }}
-                      className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 p-0.5 sm:p-1 bg-red-500 rounded-full hover:bg-red-600 transition"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      className="absolute -top-2 -right-2 p-1.5 bg-red-500 rounded-full hover:bg-red-600 transition shadow-lg"
                     >
-                      <X className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
-                    </button>
+                      <X className="w-3 h-3 text-white" />
+                    </motion.button>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
             
-            <div className="flex gap-2 sm:gap-3">
+            <div className="flex gap-3">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2105,14 +2160,16 @@ export default function ChatPage() {
                 onChange={handleImageUpload}
                 className="hidden"
               />
-              <button
+              <motion.button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
-                className="px-3 sm:px-4 py-2.5 sm:py-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg sm:rounded-xl text-white disabled:opacity-50 transition-colors flex-shrink-0"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-4 py-3.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl text-white disabled:opacity-50 transition-all flex-shrink-0 shadow-lg"
                 title="Buscar por imagem"
               >
                 <Image className="w-5 h-5" />
-              </button>
+              </motion.button>
               
               <input
                 ref={inputRef}
@@ -2126,28 +2183,32 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder={uploadedImage ? "Ou digite..." : "Digite um produto..."}
-                className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-white placeholder-gray-500 outline-none focus:border-blue-500 text-sm"
+                className="flex-1 px-5 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 outline-none focus:border-blue-500/50 focus:bg-white/10 text-sm transition-all backdrop-blur-xl"
                 disabled={loading}
               />
               
               {uploadedImage ? (
-                <button
+                <motion.button
                   onClick={handleImageSearch}
                   disabled={loading}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg sm:rounded-xl text-white disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 shadow-lg shadow-purple-500/20 flex-shrink-0"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-6 py-3.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl text-white disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-500/30 flex-shrink-0 font-medium"
                 >
                   <Search className="w-5 h-5" />
-                  <span className="text-sm hidden sm:inline">Buscar Imagem</span>
-                </button>
+                  <span className="text-sm hidden sm:inline">Buscar</span>
+                </motion.button>
               ) : (
-                <button
+                <motion.button
                   onClick={handleSend}
                   disabled={loading || !input.trim()}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg sm:rounded-xl text-white disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl text-white disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-500/30 flex-shrink-0 font-medium"
                 >
                   <Send className="w-5 h-5" />
-                  <span className="text-sm hidden sm:inline">Buscar</span>
-                </button>
+                  <span className="text-sm hidden sm:inline">Enviar</span>
+                </motion.button>
               )}
             </div>
           </div>

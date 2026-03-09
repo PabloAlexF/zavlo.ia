@@ -46,7 +46,13 @@ export function Header() {
     };
   }, [user]);
 
+  const handleNavigation = (href: string) => {
+    setIsDropdownOpen(false);
+    router.push(href);
+  };
+
   const handleLogout = async () => {
+    setIsDropdownOpen(false);
     await logout();
     router.push('/');
     setIsMobileMenuOpen(false);
@@ -129,6 +135,7 @@ export function Header() {
                     {/* Links principais */}
                     <Link 
                       href="/search" 
+                      onClick={(e) => { e.preventDefault(); handleNavigation('/search'); }}
                       onMouseEnter={() => setHoveredItem('search')}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-2xl transition-all group relative overflow-hidden"
@@ -148,6 +155,7 @@ export function Header() {
 
                     <Link 
                       href="/favorites" 
+                      onClick={(e) => { e.preventDefault(); handleNavigation('/favorites'); }}
                       onMouseEnter={() => setHoveredItem('favorites')}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-2xl transition-all group relative overflow-hidden"
@@ -167,6 +175,7 @@ export function Header() {
 
                     <Link 
                       href="/marketplace" 
+                      onClick={(e) => { e.preventDefault(); handleNavigation('/marketplace'); }}
                       onMouseEnter={() => setHoveredItem('marketplace')}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-2xl transition-all group relative overflow-hidden"
@@ -186,6 +195,7 @@ export function Header() {
 
                     <Link 
                       href="/plans" 
+                      onClick={(e) => { e.preventDefault(); handleNavigation('/plans'); }}
                       onMouseEnter={() => setHoveredItem('plans')}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-2xl transition-all group relative overflow-hidden"
@@ -208,6 +218,7 @@ export function Header() {
                     {/* Links secundários */}
                     <Link 
                       href="/dashboard" 
+                      onClick={(e) => { e.preventDefault(); handleNavigation('/dashboard'); }}
                       onMouseEnter={() => setHoveredItem('dashboard')}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-2xl transition-all group"
@@ -227,6 +238,7 @@ export function Header() {
 
                     <Link 
                       href="/profile" 
+                      onClick={(e) => { e.preventDefault(); handleNavigation('/profile'); }}
                       onMouseEnter={() => setHoveredItem('profile')}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-2xl transition-all group"
@@ -246,6 +258,7 @@ export function Header() {
 
                     <Link 
                       href="/my-listings" 
+                      onClick={(e) => { e.preventDefault(); handleNavigation('/my-listings'); }}
                       onMouseEnter={() => setHoveredItem('listings')}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-2xl transition-all group"
@@ -265,6 +278,7 @@ export function Header() {
 
                     <Link 
                       href="/sell" 
+                      onClick={(e) => { e.preventDefault(); handleNavigation('/sell'); }}
                       onMouseEnter={() => setHoveredItem('sell')}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-2xl transition-all group"

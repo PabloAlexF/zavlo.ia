@@ -39,15 +39,15 @@ export default function Home() {
   return (
     <>
       {/* Background Effects */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a2e12_1px,transparent_1px),linear-gradient(to_bottom,#1a1a2e12_1px,transparent_1px)] bg-[size:32px_32px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_1000px_at_50%_-200px,#3B82F618,transparent)]" />
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#1a1a2e12_1px,transparent_1px),linear-gradient(to_bottom,#1a1a2e12_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+      <div className="fixed inset-0 bg-[radial-gradient(circle_1000px_at_50%_-200px,#3B82F618,transparent)] pointer-events-none" />
       
       <motion.div 
-        className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-blue-500/15 to-purple-500/15 rounded-full blur-[120px] pointer-events-none"
+        className="fixed top-0 right-[10%] w-[40vw] h-[40vw] max-w-[600px] max-h-[600px] bg-gradient-to-br from-blue-500/15 to-purple-500/15 rounded-full blur-[120px] pointer-events-none"
         style={{ x: orb1X, y: orb1Y }}
       />
       <motion.div 
-        className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-gradient-to-tr from-purple-500/10 to-pink-500/10 rounded-full blur-[120px] pointer-events-none"
+        className="fixed bottom-0 left-[10%] w-[35vw] h-[35vw] max-w-[500px] max-h-[500px] bg-gradient-to-tr from-purple-500/10 to-pink-500/10 rounded-full blur-[120px] pointer-events-none"
         style={{ x: orb2X, y: orb2Y }}
       />
 
