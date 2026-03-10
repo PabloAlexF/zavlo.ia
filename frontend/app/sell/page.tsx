@@ -123,10 +123,11 @@ export default function SellPage() {
 
     try {
       const userData = JSON.parse(user);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
       
       let location = null;
       try {
-        const cepResponse = await fetch(`process.env.NEXT_PUBLIC_API_URL/locations/cep/${formData.cep.replace(/\D/g, '')}`);
+        const cepResponse = await fetch(`${API_URL}/locations/cep/${formData.cep.replace(/\D/g, '')}`);
         if (cepResponse.ok) {
           const cepText = await cepResponse.text();
           if (cepText) location = JSON.parse(cepText);
@@ -159,7 +160,7 @@ export default function SellPage() {
       
       console.log('Sending to API:', listingData);
       
-      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/products', {
+      const response = await fetch(`${API_URL}/products`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -25,13 +25,15 @@ export default function Profile() {
     if (user?.userId) {
       transactionService.getHistory(user.userId, 10).then(setTransactions);
       
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+      
       const loadProfile = async () => {
         try {
           const [profileRes, usageRes] = await Promise.all([
-            fetch('process.env.NEXT_PUBLIC_API_URL/users/profile', {
+            fetch(`${API_URL}/users/profile`, {
               headers: { 'Authorization': `Bearer ${user.token}` },
             }),
-            fetch('process.env.NEXT_PUBLIC_API_URL/users/usage', {
+            fetch(`${API_URL}/users/usage`, {
               headers: { 'Authorization': `Bearer ${user.token}` },
             })
           ]);

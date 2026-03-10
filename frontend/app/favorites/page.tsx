@@ -6,6 +6,8 @@ import { Header } from '@/components/layout/Header';
 import { Toast } from '@/components/ui/Toast';
 import Image from 'next/image';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+
 interface Favorite {
   id: string;
   productId: string;
@@ -48,7 +50,7 @@ export default function FavoritesPage() {
       const userData = JSON.parse(user);
       console.log('[FAVORITES] Buscando favoritos da API para usuário:', userData.email);
       
-      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/favorites', {
+      const response = await fetch(`${API_URL}/favorites`, {
         headers: {
           'Authorization': `Bearer ${userData.token}`,
         },
@@ -90,7 +92,7 @@ export default function FavoritesPage() {
       
       try {
         // Try products endpoint first
-        let response = await fetch(`process.env.NEXT_PUBLIC_API_URL/products/${id}`);
+        let response = await fetch(`${API_URL}/products/${id}`);
         console.log('[FAVORITES] Resposta products API:', response.status);
         
         if (response.ok) {
@@ -111,7 +113,7 @@ export default function FavoritesPage() {
           console.log('[FAVORITES] Produto não encontrado, tentando listings');
           
           // Try listings endpoint as fallback
-          response = await fetch(`process.env.NEXT_PUBLIC_API_URL/listings/${id}`);
+          response = await fetch(`${API_URL}/listings/${id}`);
           console.log('[FAVORITES] Resposta listings API:', response.status);
           
           if (response.ok) {
@@ -167,7 +169,7 @@ export default function FavoritesPage() {
       console.log('[FAVORITES] Usuário logado, removendo via API');
       
       const userData = JSON.parse(user);
-      const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/favorites/${favoriteId}`, {
+      const response = await fetch(`${API_URL}/favorites/${favoriteId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${userData.token}`,

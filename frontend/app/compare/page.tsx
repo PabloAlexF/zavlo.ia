@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+
 export default function ComparePage() {
   const [productName, setProductName] = useState('');
   const [comparison, setComparison] = useState<any>(null);
@@ -13,7 +15,7 @@ export default function ComparePage() {
     setLoading(true);
     try {
       const response = await fetch(
-        `process.env.NEXT_PUBLIC_API_URL/comparisons/compare?title=${productName}`
+        `${API_URL}/comparisons/compare?title=${productName}`
       );
       const data = await response.json();
       setComparison(data);

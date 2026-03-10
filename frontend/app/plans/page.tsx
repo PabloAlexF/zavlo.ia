@@ -80,7 +80,8 @@ export default function Plans() {
     if (planName === 'Gratuito') {
       try {
         const userData = JSON.parse(user);
-        const response = await fetch('process.env.NEXT_PUBLIC_API_URL/users/plan', {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+        const response = await fetch(`${API_URL}/users/plan`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

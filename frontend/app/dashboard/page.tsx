@@ -6,6 +6,8 @@ import { Toast } from '@/components/ui/Toast';
 import { Search, Heart, Tag, Coins, ChevronRight, Image as ImageIcon, Type, CheckCircle, XCircle, Star, TrendingUp, Activity, Calendar, Award, Zap, Target, BarChart3, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+
 interface UserStats {
   name: string;
   textSearchesToday: number;
@@ -130,7 +132,7 @@ export default function DashboardPage() {
     try {
       const userData = JSON.parse(user);
       
-      const statsResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/users/profile', {
+      const statsResponse = await fetch(`${API_URL}/users/profile`, {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 
@@ -138,7 +140,7 @@ export default function DashboardPage() {
         const userProfile = await statsResponse.json();
         
         // Buscar dados de uso
-        const usageResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/users/usage', {
+        const usageResponse = await fetch(`${API_URL}/users/usage`, {
           headers: { 'Authorization': `Bearer ${userData.token}` },
         });
         
@@ -164,7 +166,7 @@ export default function DashboardPage() {
         setUserName(userProfile.name || 'Usuário');
       }
 
-      const historyResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/analytics/history?limit=10', {
+      const historyResponse = await fetch(`${API_URL}/analytics/history?limit=10`, {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 
@@ -173,7 +175,7 @@ export default function DashboardPage() {
         setHistory(historyData);
       }
 
-      const favoritesResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/favorites', {
+      const favoritesResponse = await fetch(`${API_URL}/favorites`, {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 
@@ -182,7 +184,7 @@ export default function DashboardPage() {
         setStats(prev => prev ? { ...prev, favoritesCount: favorites.length } : null);
       }
 
-      const listingsResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/listings/my', {
+      const listingsResponse = await fetch(`${API_URL}/listings/my`, {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 

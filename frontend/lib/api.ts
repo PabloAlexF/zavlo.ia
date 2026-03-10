@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+// Fallback temporário para produção - configure NEXT_PUBLIC_API_URL no Hostinger
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
 
 export const api = {
   baseURL: API_URL,

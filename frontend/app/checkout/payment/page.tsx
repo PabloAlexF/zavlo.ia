@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { CreditCard, QrCode, FileText, Shield, Check, ArrowLeft, Sparkles, Lock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+
 type PaymentMethod = 'checkout' | 'pix';
 
 function PaymentContent() {
@@ -54,7 +56,7 @@ function PaymentContent() {
 
       // PIX Payment
       if (paymentMethod === 'pix') {
-        const response = await fetch('process.env.NEXT_PUBLIC_API_URL/payments/pix', {
+        const response = await fetch(`${API_URL}/payments/pix`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -90,7 +92,7 @@ function PaymentContent() {
       }
 
       // Credit Card / Debit / Boleto - Redirect to Mercado Pago
-      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/payments/create', {
+      const response = await fetch(`${API_URL}/payments/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -267,7 +269,7 @@ function PaymentContent() {
                               }
                               const userData = JSON.parse(user);
                               
-                              const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/payments/pix/${pixData.payment_id}/confirm`, {
+                              const response = await fetch(`${API_URL}/payments/pix/${pixData.payment_id}/confirm`, {
                                 method: 'POST',
                                 headers: {
                                   'Content-Type': 'application/json',

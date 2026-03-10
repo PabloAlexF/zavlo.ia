@@ -25,6 +25,7 @@ interface Listing {
 
 export default function MyListingsPage() {
   const router = useRouter();
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +75,7 @@ export default function MyListingsPage() {
 
     try {
       const userData = JSON.parse(user);
-      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/listings/my', {
+      const response = await fetch(`${API_URL}/listings/my`, {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 
@@ -95,7 +96,7 @@ export default function MyListingsPage() {
 
     try {
       const userData = JSON.parse(user);
-      const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/listings/${listingId}/toggle`, {
+      const response = await fetch(`${API_URL}/listings/${listingId}/toggle`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
@@ -117,7 +118,7 @@ export default function MyListingsPage() {
 
     try {
       const userData = JSON.parse(user);
-      const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/listings/${listingId}`, {
+      const response = await fetch(`${API_URL}/listings/${listingId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
