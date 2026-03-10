@@ -1,5 +1,5 @@
 build:
-  command: chmod -R 755 . && npm install && npm run build
+  command: npm install && npm run build
   output: .next
   
 runtime:
