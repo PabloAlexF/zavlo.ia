@@ -1,0 +1,12 @@
+# Configuração Hostinger - Forçar Frontend
+build:
+  command: cd frontend && npm install && npm run build
+  output: frontend/.next
+
+start:
+  command: cd frontend && npm start
+
+install:
+  command: cd frontend && npm install
+
+root: frontend
