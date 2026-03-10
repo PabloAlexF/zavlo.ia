@@ -43,6 +43,9 @@ tmp/
 *.exe
 *.zip
 
+# Render env files
+render-*.env
+
 # Test files
 test_*.js
 test_*.py
