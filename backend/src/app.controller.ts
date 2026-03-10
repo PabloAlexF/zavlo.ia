@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Head } from '@nestjs/common';
 import { FirebaseService } from './config/firebase.service';
 // import { RedisService } from './config/redis.service'; // Desabilitado
 
@@ -33,6 +33,8 @@ export class AppController {
     return checks;
   }
 
+  // Handle HEAD and GET requests to root path (for load balancer health checks and browser access)
+  @Head()
   @Get()
   root() {
     return {
@@ -40,7 +42,7 @@ export class AppController {
       version: '1.0.0',
       description: 'Sistema Localizador de Produtos com IA',
       documentation: '/api/v1',
-      health: '/health',
+      health: '/api/v1/health',
     };
   }
 }

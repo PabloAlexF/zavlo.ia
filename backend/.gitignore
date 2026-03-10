@@ -13,6 +13,7 @@ build/
 .env
 .env.local
 .env.*.local
+render-backend.env
 
 # Firebase
 firebase-adminsdk.json

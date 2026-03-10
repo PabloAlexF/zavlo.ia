@@ -16,14 +16,23 @@ async function bootstrap() {
   // Configurar filtro global de exceções
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Configurar CORS
+  // Configurar CORS - aceitar múltiplas origens para desenvolvimento e produção
+  const corsOrigin = configService.get('CORS_ORIGIN') || '*';
+  const allowedOrigins = corsOrigin === '*' 
+    ? true 
+    : corsOrigin.split(',').map(o => o.trim());
+  
   app.enableCors({
-    origin: configService.get('CORS_ORIGIN') || '*',
+    origin: allowedOrigins,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   });
 
-  // Configurar prefixo global da API
-  app.setGlobalPrefix(configService.get('API_PREFIX') || 'api/v1');
+  // Configurar prefixo global da API (excluir raiz para health checks do load balancer)
+  app.setGlobalPrefix(configService.get('API_PREFIX') || 'api/v1', {
+    exclude: ['/'],
+  });
 
   // Configurar validação global - allow extra fields
   app.useGlobalPipes(
