@@ -39,7 +39,7 @@ function CreditsCheckoutContent() {
       const userData = JSON.parse(user);
 
       if (paymentMethod === 'pix') {
-        const response = await fetch('http://localhost:3001/api/v1/payments/pix', {
+        const response = await fetch('process.env.NEXT_PUBLIC_API_URL/payments/pix', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ function CreditsCheckoutContent() {
         return;
       }
 
-      const response = await fetch('http://localhost:3001/api/v1/payments/create', {
+      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/payments/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -154,7 +154,7 @@ function CreditsCheckoutContent() {
                   setConfirmingPayment(true);
                   try {
                     const user = JSON.parse(localStorage.getItem('zavlo_user') || '{}');
-                    const response = await fetch(`http://localhost:3001/api/v1/payments/pix/${pixData.payment_id}/confirm`, {
+                    const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/payments/pix/${pixData.payment_id}/confirm`, {
                       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
                       body: JSON.stringify({ paymentId: pixData.payment_id }),
                     });

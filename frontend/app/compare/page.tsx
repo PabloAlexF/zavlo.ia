@@ -13,7 +13,7 @@ export default function ComparePage() {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:3001/api/v1/comparisons/compare?title=${productName}`
+        `process.env.NEXT_PUBLIC_API_URL/comparisons/compare?title=${productName}`
       );
       const data = await response.json();
       setComparison(data);

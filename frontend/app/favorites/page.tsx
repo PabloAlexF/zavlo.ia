@@ -48,7 +48,7 @@ export default function FavoritesPage() {
       const userData = JSON.parse(user);
       console.log('[FAVORITES] Buscando favoritos da API para usuário:', userData.email);
       
-      const response = await fetch('http://localhost:3001/api/v1/favorites', {
+      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/favorites', {
         headers: {
           'Authorization': `Bearer ${userData.token}`,
         },
@@ -90,7 +90,7 @@ export default function FavoritesPage() {
       
       try {
         // Try products endpoint first
-        let response = await fetch(`http://localhost:3001/api/v1/products/${id}`);
+        let response = await fetch(`process.env.NEXT_PUBLIC_API_URL/products/${id}`);
         console.log('[FAVORITES] Resposta products API:', response.status);
         
         if (response.ok) {
@@ -111,7 +111,7 @@ export default function FavoritesPage() {
           console.log('[FAVORITES] Produto não encontrado, tentando listings');
           
           // Try listings endpoint as fallback
-          response = await fetch(`http://localhost:3001/api/v1/listings/${id}`);
+          response = await fetch(`process.env.NEXT_PUBLIC_API_URL/listings/${id}`);
           console.log('[FAVORITES] Resposta listings API:', response.status);
           
           if (response.ok) {
@@ -167,7 +167,7 @@ export default function FavoritesPage() {
       console.log('[FAVORITES] Usuário logado, removendo via API');
       
       const userData = JSON.parse(user);
-      const response = await fetch(`http://localhost:3001/api/v1/favorites/${favoriteId}`, {
+      const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/favorites/${favoriteId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${userData.token}`,

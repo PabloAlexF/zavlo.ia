@@ -123,7 +123,8 @@ export default function ChatPage() {
       const user = localStorage.getItem('zavlo_user');
       if (!user) return;
       const userData = JSON.parse(user);
-      const response = await fetch('http://localhost:3001/api/v1/users/profile', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(`${API_URL}/users/profile`, {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
       if (response.ok) {
@@ -317,7 +318,8 @@ export default function ChatPage() {
       const userData = JSON.parse(user);
       
       // Usar imageData (base64) diretamente
-      const response = await fetch('http://localhost:3001/api/v1/search/image', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(`${API_URL}/search/image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
@@ -463,6 +465,7 @@ export default function ChatPage() {
       }
 
       const userData = JSON.parse(user);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
       
       // Buscar preços usando o nome do produto já detectado
       const params = new URLSearchParams({
@@ -471,7 +474,7 @@ export default function ChatPage() {
         sortBy: sortBy
       });
       
-      const response = await fetch(`http://localhost:3001/api/v1/search/text?${params.toString()}`, {
+      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
@@ -1178,6 +1181,7 @@ export default function ChatPage() {
       }
 
       const userData = JSON.parse(user);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
       
       // Construir URL com parâmetros
       const params = new URLSearchParams({
@@ -1189,7 +1193,7 @@ export default function ChatPage() {
       if (searchParams.minPrice) params.append('minPrice', searchParams.minPrice.toString());
       if (searchParams.maxPrice) params.append('maxPrice', searchParams.maxPrice.toString());
       
-      const response = await fetch(`http://localhost:3001/api/v1/search/text?${params.toString()}`, {
+      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${userData.token}`,

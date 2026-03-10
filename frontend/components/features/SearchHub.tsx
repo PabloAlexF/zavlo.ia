@@ -38,7 +38,9 @@ export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: Search
       if (!user) return;
       
       const userData = JSON.parse(user);
-      const response = await fetch('http://localhost:3001/api/v1/users/profile', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      
+      const response = await fetch(`${API_URL}/users/profile`, {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
       
@@ -132,7 +134,8 @@ export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: Search
         
         // Agora enviar a URL para a API de busca por imagem
         console.log('🔍 Enviando URL para API...');
-        const response = await fetch('http://localhost:3001/api/v1/search/image', {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
+        const response = await fetch(`${API_URL}/search/image`, {
           method: 'POST',
           headers: { 
             'Authorization': `Bearer ${userData.token}`,
@@ -156,7 +159,7 @@ export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: Search
           console.error('❌ Erro na resposta:', errorData);
           
           // Se falhar, tenta identificar apenas
-          const identifyResponse = await fetch('http://localhost:3001/api/v1/scraping/identify-product', {
+          const identifyResponse = await fetch(`${API_URL}/scraping/identify-product`, {
             method: 'POST',
             headers: { 
               'Authorization': `Bearer ${userData.token}`,

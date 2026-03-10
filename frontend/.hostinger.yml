@@ -1,6 +1,6 @@
 build:
-  command: npm install && npm run build
-  output: .next
+  command: echo "No build needed"
+  output: .
   
 runtime:
   node: 22.x

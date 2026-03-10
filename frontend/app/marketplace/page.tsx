@@ -128,7 +128,7 @@ export default function MarketplacePage() {
   const loadListings = async () => {
     try {
       // First try to fetch from the new public listings endpoint
-      let response = await fetch('http://localhost:3001/api/v1/listings/public');
+      let response = await fetch('process.env.NEXT_PUBLIC_API_URL/listings/public');
       
       if (response.ok) {
         const data = await response.json();
@@ -139,7 +139,7 @@ export default function MarketplacePage() {
         setListings(listings);
       } else {
         // Fallback to products endpoint if listings endpoint fails
-        response = await fetch('http://localhost:3001/api/v1/products');
+        response = await fetch('process.env.NEXT_PUBLIC_API_URL/products');
         
         if (response.ok) {
           const data = await response.json();
@@ -654,7 +654,7 @@ export default function MarketplacePage() {
                     <button 
                       onClick={async () => {
                         try {
-                          await fetch(`http://localhost:3001/api/v1/listings/${listing.id}/click`, {
+                          await fetch(`process.env.NEXT_PUBLIC_API_URL/listings/${listing.id}/click`, {
                             method: 'POST',
                           });
                         } catch (e) {}

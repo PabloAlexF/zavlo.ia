@@ -50,7 +50,8 @@ export default function Auth() {
         ? { email, password }
         : { email, password, name, location: { cep, city, state } };
 
-      const response = await fetch(`http://localhost:3001/api/v1${endpoint}`, {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

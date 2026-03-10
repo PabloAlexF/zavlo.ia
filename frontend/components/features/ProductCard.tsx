@@ -97,8 +97,8 @@ export function ProductCard({ product }: ProductCardProps) {
       const userData = JSON.parse(user);
       
       if (!isFavorite) {
-        const response = await fetch('http://localhost:3001/api/v1/favorites', {
-          method: 'POST',
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
+        const response = await fetch(`${API_URL}/favorites`, {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${userData.token}`,

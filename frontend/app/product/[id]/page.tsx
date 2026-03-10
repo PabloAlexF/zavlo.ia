@@ -40,8 +40,9 @@ export default function ProductDetails() {
       if (!params.id) return;
       
       try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
         console.log('[PRODUCT] Buscando produto ID:', params.id);
-        const response = await fetch(`http://localhost:3001/api/v1/products/${params.id}`);
+        const response = await fetch(`${API_URL}/products/${params.id}`);
         
         if (response.ok) {
           const data = await response.json();
@@ -173,11 +174,12 @@ export default function ProductDetails() {
     try {
       console.log('[PRODUCT] Usuário logado, usando API');
       const userData = JSON.parse(user);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
       
       if (!isFavorite) {
         console.log('[PRODUCT] Adicionando favorito via API');
         
-        const response = await fetch('http://localhost:3001/api/v1/favorites', {
+        const response = await fetch(`${API_URL}/favorites`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -205,7 +207,7 @@ export default function ProductDetails() {
         console.log('[PRODUCT] Removendo favorito via API');
         
         // Remove from favorites - need to find the favorite ID first
-        const favResponse = await fetch('http://localhost:3001/api/v1/favorites', {
+        const favResponse = await fetch(`${API_URL}/favorites`, {
           headers: {
             'Authorization': `Bearer ${userData.token}`,
           },
@@ -221,7 +223,7 @@ export default function ProductDetails() {
           console.log('[PRODUCT] Favorito encontrado para remoção:', !!favorite);
           
           if (favorite) {
-            const deleteResponse = await fetch(`http://localhost:3001/api/v1/favorites/${favorite.id}`, {
+            const deleteResponse = await fetch(`${API_URL}/favorites/${favorite.id}`, {
               method: 'DELETE',
               headers: {
                 'Authorization': `Bearer ${userData.token}`,
@@ -268,7 +270,9 @@ export default function ProductDetails() {
         console.log('[PRODUCT] Verificando favoritos via API');
         
         const userData = JSON.parse(user);
-        const response = await fetch('http://localhost:3001/api/v1/favorites', {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
+        
+        const response = await fetch(`${API_URL}/favorites`, {
           headers: {
             'Authorization': `Bearer ${userData.token}`,
           },

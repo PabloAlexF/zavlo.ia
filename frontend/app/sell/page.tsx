@@ -126,7 +126,7 @@ export default function SellPage() {
       
       let location = null;
       try {
-        const cepResponse = await fetch(`http://localhost:3001/api/v1/locations/cep/${formData.cep.replace(/\D/g, '')}`);
+        const cepResponse = await fetch(`process.env.NEXT_PUBLIC_API_URL/locations/cep/${formData.cep.replace(/\D/g, '')}`);
         if (cepResponse.ok) {
           const cepText = await cepResponse.text();
           if (cepText) location = JSON.parse(cepText);
@@ -159,7 +159,7 @@ export default function SellPage() {
       
       console.log('Sending to API:', listingData);
       
-      const response = await fetch('http://localhost:3001/api/v1/products', {
+      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/products', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -28,10 +28,10 @@ export default function Profile() {
       const loadProfile = async () => {
         try {
           const [profileRes, usageRes] = await Promise.all([
-            fetch('http://localhost:3001/api/v1/users/profile', {
+            fetch('process.env.NEXT_PUBLIC_API_URL/users/profile', {
               headers: { 'Authorization': `Bearer ${user.token}` },
             }),
-            fetch('http://localhost:3001/api/v1/users/usage', {
+            fetch('process.env.NEXT_PUBLIC_API_URL/users/usage', {
               headers: { 'Authorization': `Bearer ${user.token}` },
             })
           ]);

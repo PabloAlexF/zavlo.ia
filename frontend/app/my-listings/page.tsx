@@ -74,7 +74,7 @@ export default function MyListingsPage() {
 
     try {
       const userData = JSON.parse(user);
-      const response = await fetch('http://localhost:3001/api/v1/listings/my', {
+      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/listings/my', {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 
@@ -95,7 +95,7 @@ export default function MyListingsPage() {
 
     try {
       const userData = JSON.parse(user);
-      const response = await fetch(`http://localhost:3001/api/v1/listings/${listingId}/toggle`, {
+      const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/listings/${listingId}/toggle`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
@@ -117,7 +117,7 @@ export default function MyListingsPage() {
 
     try {
       const userData = JSON.parse(user);
-      const response = await fetch(`http://localhost:3001/api/v1/listings/${listingId}`, {
+      const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/listings/${listingId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });

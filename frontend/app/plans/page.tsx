@@ -80,7 +80,7 @@ export default function Plans() {
     if (planName === 'Gratuito') {
       try {
         const userData = JSON.parse(user);
-        const response = await fetch('http://localhost:3001/api/v1/users/plan', {
+        const response = await fetch('process.env.NEXT_PUBLIC_API_URL/users/plan', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

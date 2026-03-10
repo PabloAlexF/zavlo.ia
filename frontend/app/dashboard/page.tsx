@@ -130,7 +130,7 @@ export default function DashboardPage() {
     try {
       const userData = JSON.parse(user);
       
-      const statsResponse = await fetch('http://localhost:3001/api/v1/users/profile', {
+      const statsResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/users/profile', {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 
@@ -138,7 +138,7 @@ export default function DashboardPage() {
         const userProfile = await statsResponse.json();
         
         // Buscar dados de uso
-        const usageResponse = await fetch('http://localhost:3001/api/v1/users/usage', {
+        const usageResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/users/usage', {
           headers: { 'Authorization': `Bearer ${userData.token}` },
         });
         
@@ -164,7 +164,7 @@ export default function DashboardPage() {
         setUserName(userProfile.name || 'Usuário');
       }
 
-      const historyResponse = await fetch('http://localhost:3001/api/v1/analytics/history?limit=10', {
+      const historyResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/analytics/history?limit=10', {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 
@@ -173,7 +173,7 @@ export default function DashboardPage() {
         setHistory(historyData);
       }
 
-      const favoritesResponse = await fetch('http://localhost:3001/api/v1/favorites', {
+      const favoritesResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/favorites', {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 
@@ -182,7 +182,7 @@ export default function DashboardPage() {
         setStats(prev => prev ? { ...prev, favoritesCount: favorites.length } : null);
       }
 
-      const listingsResponse = await fetch('http://localhost:3001/api/v1/listings/my', {
+      const listingsResponse = await fetch('process.env.NEXT_PUBLIC_API_URL/listings/my', {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
 

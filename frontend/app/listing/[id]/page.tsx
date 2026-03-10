@@ -68,14 +68,15 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   const loadListing = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/v1/listings/${resolvedParams.id}`);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(`${API_URL}/listings/${resolvedParams.id}`);
       
       if (response.ok) {
         const data = await response.json();
         setListing(data);
         
         // Increment views
-        fetch(`http://localhost:3001/api/v1/listings/${resolvedParams.id}/view`, {
+        fetch(`${API_URL}/listings/${resolvedParams.id}/view`, {
           method: 'POST',
         }).catch(() => {});
         

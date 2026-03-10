@@ -54,7 +54,7 @@ function PaymentContent() {
 
       // PIX Payment
       if (paymentMethod === 'pix') {
-        const response = await fetch('http://localhost:3001/api/v1/payments/pix', {
+        const response = await fetch('process.env.NEXT_PUBLIC_API_URL/payments/pix', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -90,7 +90,7 @@ function PaymentContent() {
       }
 
       // Credit Card / Debit / Boleto - Redirect to Mercado Pago
-      const response = await fetch('http://localhost:3001/api/v1/payments/create', {
+      const response = await fetch('process.env.NEXT_PUBLIC_API_URL/payments/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -267,7 +267,7 @@ function PaymentContent() {
                               }
                               const userData = JSON.parse(user);
                               
-                              const response = await fetch(`http://localhost:3001/api/v1/payments/pix/${pixData.payment_id}/confirm`, {
+                              const response = await fetch(`process.env.NEXT_PUBLIC_API_URL/payments/pix/${pixData.payment_id}/confirm`, {
                                 method: 'POST',
                                 headers: {
                                   'Content-Type': 'application/json',
