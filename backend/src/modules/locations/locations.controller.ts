@@ -6,7 +6,7 @@ export class LocationsController {
   constructor(private locationsService: LocationsService) {}
 
   @Get('cep/:cep')
-  async getCepData(@Param('cep') cep: string) {
+  async getCepData(@Param('cep') cep: string): Promise<any> {
     return this.locationsService.getCepData(cep);
   }
 

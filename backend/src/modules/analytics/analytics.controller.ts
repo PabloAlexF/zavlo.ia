@@ -18,7 +18,7 @@ export class AnalyticsController {
   async getUserHistory(
     @CurrentUser() user: any,
     @Query('limit') limit?: string,
-  ) {
+  ): Promise<any> {
     const limitNum = limit ? parseInt(limit) : 20;
     return this.analyticsService.getUserSearchHistory(user.id, limitNum);
   }

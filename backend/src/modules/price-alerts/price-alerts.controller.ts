@@ -17,12 +17,12 @@ export class PriceAlertsController {
   constructor(private readonly priceAlertsService: PriceAlertsService) {}
 
   @Post()
-  async createAlert(@Request() req, @Body() body: any) {
+  async createAlert(@Request() req, @Body() body: any): Promise<any> {
     return this.priceAlertsService.createAlert(req.user.uid, body);
   }
 
   @Get()
-  async getUserAlerts(@Request() req) {
+  async getUserAlerts(@Request() req): Promise<any> {
     return this.priceAlertsService.getUserAlerts(req.user.uid);
   }
 

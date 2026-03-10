@@ -6,7 +6,7 @@ export class ComparisonsController {
   constructor(private comparisonsService: ComparisonsService) {}
 
   @Get('compare')
-  async compareProduct(@Query('title') title: string) {
+  async compareProduct(@Query('title') title: string): Promise<any> {
     return this.comparisonsService.compareProduct(title);
   }
 

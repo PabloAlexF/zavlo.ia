@@ -10,12 +10,12 @@ export class AIController {
   ) {}
 
   @Post('classify-image')
-  async classifyImage(@Body() body: { imageUrl: string }) {
+  async classifyImage(@Body() body: { imageUrl: string }): Promise<any> {
     return this.imageAIService.classifyImage(body.imageUrl);
   }
 
   @Post('classify-text')
-  async classifyText(@Body() body: { text: string }) {
+  async classifyText(@Body() body: { text: string }): Promise<any> {
     return this.textAIService.classifyText(body.text);
   }
 
