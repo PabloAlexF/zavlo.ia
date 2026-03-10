@@ -11,7 +11,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PriceAlertsService } from './price-alerts.service';
 
-@Controller('api/v1/price-alerts')
+@Controller('price-alerts')
 @UseGuards(JwtAuthGuard)
 export class PriceAlertsController {
   constructor(private readonly priceAlertsService: PriceAlertsService) {}
