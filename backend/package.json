@@ -6,7 +6,7 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "build": "nest build || tsc --skipLibCheck --noEmitOnError false",
+    "build": "tsc --skipLibCheck --noEmitOnError false",
     "format": "prettier --write \"src/**/*.ts\"",
     "dev": "npx nest start --watch",
     "start": "nest start",

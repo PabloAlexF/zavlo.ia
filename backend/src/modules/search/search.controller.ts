@@ -30,11 +30,11 @@ export class SearchController {
   @UseGuards(OptionalJwtAuthGuard)
   async searchByText(
     @Query() searchDto: SearchTextDto,
-    @Query('sortBy') sortBy?: 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE',
-    @Query('minPrice') minPrice?: number,
-    @Query('maxPrice') maxPrice?: number,
-    @CurrentUser() user: any,
+    @Query('sortBy') sortBy: 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | undefined,
+    @Query('minPrice') minPrice: number | undefined,
+    @Query('maxPrice') maxPrice: number | undefined,
     @Req() req: Request,
+    @CurrentUser() user?: any,
   ) {
     const { query, useRealScraping, limit, ...filters } = searchDto;
     const clientIp = this.getClientIp(req);
@@ -153,7 +153,7 @@ export class SearchController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   async uploadImage(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any,
     @CurrentUser() user: any,
   ) {
     if (!file) {
