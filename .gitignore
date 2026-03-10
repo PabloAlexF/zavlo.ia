@@ -1,53 +1,14 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
+# Ignorar backend completamente
+backend/
+backend/**
 
-# Testing
-coverage/
-*.log
-
-# Production
-dist/
-build/
-.next/
-out/
-
-# Environment
-.env
-.env.*
-.env.local
-.env.production
-.env.development.local
-.env.test.local
-.env.production.local
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
+# Ignorar outros arquivos desnecessários
+.git/
+.gitignore
+*.md
+README.md
+DEPLOY.md
+.env*
 .DS_Store
 Thumbs.db
-
-# Misc
-*.tsbuildinfo
-.cache/
-temp/
-tmp/
-
-# Executables
-*.exe
-*.zip
-
-# Render env files
-render-*.env
-
-# Test files
-test_*.js
-test_*.py
-test_*.json
-test_*.txt
+*.log

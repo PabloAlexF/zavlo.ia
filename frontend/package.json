@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:webpack": "next dev --turbopack=false",
-"build": "next build",
-    "build:prod": "cross-env TURBOPACK=0 next build",
+    "dev:turbo": "next dev --turbo",
+    "build": "next build",
+    "build:prod": "cross-env NODE_ENV=production next build",
     "start": "next start",
     "lint": "eslint"
   },
