@@ -7,7 +7,6 @@ runtime:
 
 start:
   command: npm run start
-  port: 3000
   
 permissions:
   directories: 755
