@@ -32,46 +32,50 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar ambos os formatos de localStorage
-    const storedUser = localStorage.getItem('zavlo_user') || localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-      } catch (error) {
-        console.error('Erro ao carregar usuário:', error);
+    // Verificar se estamos no cliente antes de acessar localStorage
+    if (typeof window !== 'undefined') {
+      const storedUser = localStorage.getItem('zavlo_user') || localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          setUser(userData);
+        } catch (error) {
+          console.error('Erro ao carregar usuário:', error);
+        }
       }
     }
     setLoading(false);
 
-    // Escutar mudanças no localStorage (mesmo na mesma aba)
-    const handleStorageChange = (e?: Event) => {
-      const updatedUser = localStorage.getItem('zavlo_user');
-      if (updatedUser) {
-        try {
-          setUser(JSON.parse(updatedUser));
-        } catch (error) {
-          console.error('Erro ao atualizar usuário:', error);
+    // Escutar mudanças no localStorage (mesmo na mesma aba) - apenas no cliente
+    if (typeof window !== 'undefined') {
+      const handleStorageChange = (e?: Event) => {
+        const updatedUser = localStorage.getItem('zavlo_user');
+        if (updatedUser) {
+          try {
+            setUser(JSON.parse(updatedUser));
+          } catch (error) {
+            console.error('Erro ao atualizar usuário:', error);
+          }
+        } else {
+          setUser(null);
         }
-      } else {
-        setUser(null);
-      }
-    };
+      };
 
-    // Listener para mudanças entre abas
-    window.addEventListener('storage', handleStorageChange as EventListener);
-    
-    // Listener customizado para mudanças na mesma aba
-    window.addEventListener('userChanged', handleStorageChange as EventListener);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange as EventListener);
-      window.removeEventListener('userChanged', handleStorageChange as EventListener);
-    };
+      // Listener para mudanças entre abas
+      window.addEventListener('storage', handleStorageChange as EventListener);
+      
+      // Listener customizado para mudanças na mesma aba
+      window.addEventListener('userChanged', handleStorageChange as EventListener);
+      
+      return () => {
+        window.removeEventListener('storage', handleStorageChange as EventListener);
+        window.removeEventListener('userChanged', handleStorageChange as EventListener);
+      };
+    }
   }, []);
 
   const updateUser = (userData: Partial<User>) => {
-    if (user) {
+    if (user && typeof window !== 'undefined') {
       const updatedUser = { ...user, ...userData };
       setUser(updatedUser);
       localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
@@ -79,14 +83,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('zavlo_user');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('zavlo_user');
+      
+      // Disparar evento para atualizar outras páginas e mesma aba
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('userChanged'));
+    }
     setUser(null);
-    
-    // Disparar evento para atualizar outras páginas e mesma aba
-    window.dispatchEvent(new Event('storage'));
-    window.dispatchEvent(new Event('userChanged'));
   };
 
   return (
