@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'export', // Exportar como site estático
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -7,6 +8,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
+    unoptimized: true, // Necessário para export estático
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
     ],
