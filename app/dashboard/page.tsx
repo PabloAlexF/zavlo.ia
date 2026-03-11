@@ -298,7 +298,12 @@ export default function DashboardPage() {
         {/* Dashboard Content */}
         <main className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
           {/* Stats Row - 6 cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6"
+          >
             <StatsCard
               icon={Search}
               title="Buscas Hoje"
