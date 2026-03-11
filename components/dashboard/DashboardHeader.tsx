@@ -1,1 +1,7 @@
-export default function DashboardHeader() { return null; }
+interface DashboardHeaderProps {
+  userName: string;
+}
+
+export default function DashboardHeader({ userName }: DashboardHeaderProps) { 
+  return null; 
+}
