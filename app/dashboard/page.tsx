@@ -68,8 +68,6 @@ interface SearchHistory {
   resultsCount: number;
 }
 
-
-
 export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -84,12 +82,10 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboardData();
     
-    // Escutar mudanças nos créditos
     const handleUpdate = () => loadDashboardData();
     window.addEventListener('userChanged', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     
-    // Recarregar dados a cada 5 segundos
     const interval = setInterval(loadDashboardData, 5000);
     
     return () => {
@@ -110,7 +106,6 @@ export default function DashboardPage() {
       const userData = JSON.parse(user);
       const headers = { 'Authorization': `Bearer ${userData.token}` };
 
-      // Helper function to fetch with retry for sleeping Render instances
       const fetchWithRetry = async (url: string, options: any, retries = 3) => {
         for (let i = 0; i < retries; i++) {
           try {
@@ -123,20 +118,17 @@ export default function DashboardPage() {
         }
       };
 
-      // 1. Buscar perfil do usuário
       const profileResponse = await fetchWithRetry(`${API_URL}/users/profile`, { headers });
       if (profileResponse.ok) {
         const userProfile = await profileResponse.json();
         setUserName(userProfile.name || 'Usuário');
         
-        // 2. Buscar dados de uso
         const usageResponse = await fetchWithRetry(`${API_URL}/users/usage`, { headers });
         let usageData = { textToday: 0, imageToday: 0, textMonth: 0, imageMonth: 0 };
         if (usageResponse.ok) {
           usageData = await usageResponse.json();
         }
 
-        // 3. Buscar favoritos
         const favoritesResponse = await fetchWithRetry(`${API_URL}/favorites`, { headers });
         let favoritesCount = 0;
         if (favoritesResponse.ok) {
@@ -144,7 +136,6 @@ export default function DashboardPage() {
           favoritesCount = favorites.length;
         }
 
-        // 4. Buscar anúncios
         const listingsResponse = await fetchWithRetry(`${API_URL}/listings/my`, { headers });
         let listingsCount = 0;
         if (listingsResponse.ok) {
@@ -153,7 +144,6 @@ export default function DashboardPage() {
           listingsCount = userListings.length;
         }
 
-        // 5. Buscar alertas de preço
         const alertsResponse = await fetchWithRetry(`${API_URL}/price-alerts/stats`, { headers });
         let alertsCount = 0;
         if (alertsResponse.ok) {
@@ -161,7 +151,6 @@ export default function DashboardPage() {
           alertsCount = alertsData.total || 0;
         }
 
-        // 6. Buscar notificações
         const notificationsResponse = await fetchWithRetry(`${API_URL}/notifications`, { headers });
         let notificationsCount = 0;
         if (notificationsResponse.ok) {
@@ -169,14 +158,12 @@ export default function DashboardPage() {
           notificationsCount = notifications.filter((n: any) => !n.read).length;
         }
 
-        // 7. Buscar status do plano
         const planStatusResponse = await fetchWithRetry(`${API_URL}/users/plan-status`, { headers });
         if (planStatusResponse.ok) {
           const planStatusData = await planStatusResponse.json();
           setPlanStatus(planStatusData);
         }
 
-        // Consolidar stats
         setStats({
           name: userProfile.name || 'Usuário',
           email: userProfile.email || '',
@@ -196,14 +183,12 @@ export default function DashboardPage() {
         });
       }
 
-      // 8. Buscar métricas de analytics (últimos 30 dias)
       const metricsResponse = await fetchWithRetry(`${API_URL}/analytics/metrics?days=30`, { headers });
       if (metricsResponse.ok) {
         const metricsData = await metricsResponse.json();
         setMetrics(metricsData);
       }
 
-      // 9. Buscar histórico de buscas
       const historyResponse = await fetchWithRetry(`${API_URL}/analytics/history?limit=10`, { headers });
       if (historyResponse.ok) {
         const historyData = await historyResponse.json();
@@ -241,32 +226,17 @@ export default function DashboardPage() {
     );
   }
 
-  const getPlanName = (plan: string) => {
-    const plans: Record<string, string> = {
-      free: 'Gratuito',
-      basic: 'Básico',
-      pro: 'Pro',
-      business: 'Business'
-    };
-    return plans[plan?.toLowerCase()] || 'Gratuito';
-  };
-
-  // Calcular dados reais para os gráficos
   const salesData = metrics?.dailyStats?.map(d => d.searches || 0).slice(-12) || [45, 52, 48, 65, 58, 72, 68, 75, 82, 78, 88, 95];
   const salesLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   
-  // Dados de usuários ativos (últimos 7 dias de buscas)
   const activeUsersData = metrics?.dailyStats?.slice(-7).map(d => d.searches || 0) || [120, 145, 132, 168, 155, 178, 165];
   const activeUsersLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  // Calcular taxa de satisfação baseada em success rate
   const satisfactionRate = metrics ? Math.round(metrics.successRate) : 87;
   
-  // Calcular referral tracking baseado em top sources
   const referralRate = metrics?.topSources ? 
     Math.round((Object.values(metrics.topSources).reduce((a, b) => a + b, 0) / metrics.totalSearches) * 100) : 62;
 
-  // Calcular trends baseados em dados reais
   const calculateTrend = (current: number, previous: number) => {
     if (previous === 0) return 0;
     return Math.round(((current - previous) / previous) * 100);
@@ -284,20 +254,13 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0B0B0F] via-[#0F0F14] to-[#0B0B0F] flex">
-      {/* Desktop Sidebar */}
       <DashboardSidebar />
-      
-      {/* Mobile Sidebar */}
       <MobileSidebar />
 
-      {/* Main Content */}
       <div className="flex-1 lg:ml-64 w-full">
-        {/* Header */}
         <DashboardHeader userName={userName} />
 
-        {/* Dashboard Content */}
         <main className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
-          {/* Stats Row - 6 cards */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -358,11 +321,9 @@ export default function DashboardPage() {
               color="from-pink-500 to-rose-500"
               delay={0.25}
             />
-          </div>
+          </motion.div>
 
-          {/* Credits & Plan Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-            {/* Credits Card */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -393,7 +354,6 @@ export default function DashboardPage() {
               </div>
             </motion.div>
 
-            {/* Plan Card */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -424,14 +384,11 @@ export default function DashboardPage() {
             </motion.div>
           </div>
 
-          {/* Main Row - Welcome + Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-            {/* Welcome Card */}
             <div className="lg:col-span-1">
               <WelcomeCard userName={userName} delay={0.4} />
             </div>
 
-            {/* Success Rate - baseado em analytics reais */}
             <CircularChart
               title="Taxa de Sucesso"
               percentage={satisfactionRate}
@@ -440,7 +397,6 @@ export default function DashboardPage() {
               delay={0.5}
             />
 
-            {/* Source Coverage - baseado em top sources */}
             <CircularChart
               title="Cobertura de Fontes"
               percentage={referralRate}
@@ -450,9 +406,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Charts Row - Dados reais de analytics */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {/* Sales Overview - Buscas ao longo do tempo */}
             <AreaChart
               title="Atividade de Buscas"
               data={salesData}
@@ -460,7 +414,6 @@ export default function DashboardPage() {
               delay={0.7}
             />
 
-            {/* Active Users - Buscas dos últimos 7 dias */}
             <BarChart
               title="Buscas Semanais"
               data={activeUsersData}
@@ -469,7 +422,6 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Additional Info Row */}
           {metrics && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -497,7 +449,6 @@ export default function DashboardPage() {
                 </div>
               </div>
               
-              {/* Top Sources */}
               {Object.keys(metrics.topSources).length > 0 && (
                 <div className="mt-6 pt-6 border-t border-white/10">
                   <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Fontes Mais Usadas</h4>
@@ -520,7 +471,6 @@ export default function DashboardPage() {
             </motion.div>
           )}
 
-          {/* Recent Activity */}
           {history.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
