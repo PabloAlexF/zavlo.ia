@@ -1,8 +1,9 @@
 'use client';
 
 import { Search, Image, MapPin, Zap, Bell } from 'lucide-react';
+import { ReactNode } from 'react';
 
-const AnimatedSection = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+const AnimatedSection = ({ children, className }: { children: ReactNode; className?: string }) => (
   <section className={className}>{children}</section>
 );
 

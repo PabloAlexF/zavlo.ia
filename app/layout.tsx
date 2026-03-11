@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ClientLayout } from "@/components/layout/ClientLayout";
+import { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
