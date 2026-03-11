@@ -1,6 +1,6 @@
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -12,7 +12,40 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ""
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export default app;
+let app: FirebaseApp | null = null;
+let authInstance: Auth | null = null;
+let dbInstance: Firestore | null = null;
+
+function getApp() {
+  if (typeof window === 'undefined') {
+    // No servidor, não inicializa Firebase
+    return null;
+  }
+  if (!app) {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  }
+  return app;
+}
+
+export function getAuthInstance() {
+  const firebaseApp = getApp();
+  if (!firebaseApp) return null;
+  if (!authInstance) {
+    authInstance = getAuth(firebaseApp);
+  }
+  return authInstance;
+}
+
+export function getDbInstance() {
+  const firebaseApp = getApp();
+  if (!firebaseApp) return null;
+  if (!dbInstance) {
+    dbInstance = getFirestore(firebaseApp);
+  }
+  return dbInstance;
+}
+
+// Exports legados para compatibilidade
+export const auth = getAuthInstance();
+export const db = getDbInstance();
+export default getApp();
