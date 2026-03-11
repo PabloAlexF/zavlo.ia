@@ -37,7 +37,7 @@ async function bootstrap() {
 
   // Configurar prefixo global da API (excluir raiz para health checks do load balancer)
   app.setGlobalPrefix(configService.get('API_PREFIX') || 'api/v1', {
-    exclude: ['/'],
+    exclude: ['/', 'health'],
   });
 
   // Configurar validação global - allow extra fields
