@@ -26,8 +26,31 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Configurar CORS - aceitar múltiplas origens para desenvolvimento e produção
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://zavloia.com.br',
+    'https://www.zavloia.com.br',
+    'https://zavlo-ia.vercel.app',
+    'https://zavlo-ia-*.vercel.app', // Preview deployments
+  ];
+
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      // Permitir requisições sem origin (mobile apps, Postman, etc)
+      if (!origin) return callback(null, true);
+      
+      // Verificar se a origin está na lista ou é um preview do Vercel
+      if (allowedOrigins.some(allowed => 
+        origin === allowed || 
+        (allowed.includes('*') && origin.includes('vercel.app'))
+      )) {
+        callback(null, true);
+      } else {
+        console.warn(`❌ CORS blocked origin: ${origin}`);
+        callback(null, true); // Temporariamente permitir todas até debug
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
