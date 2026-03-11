@@ -54,101 +54,363 @@ export default function Home() {
 
       <main className="relative z-10">
         {/* Hero Section */}
-        <section className="container mx-auto px-4 pt-20 pb-16 sm:pt-32 sm:pb-24">
-          <motion.div 
-            className="max-w-4xl mx-auto text-center"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <motion.div 
-              className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 px-4 py-2 rounded-full mb-6"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-              <span className="text-sm font-medium text-gray-400">Powered by Artificial Intelligence</span>
-            </motion.div>
-
-            <motion.h1 
-              className="text-5xl sm:text-6xl lg:text-7xl font-black mb-6 leading-[1.1] tracking-tight"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <span className="text-white">
-                Encontre o menor preço
-              </span>
-              <br />
-              <span className="text-white">
-                da internet{' '}
-              </span>
-              <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                em segundos
-              </span>
-            </motion.h1>
-
-            <motion.p 
-              className="text-lg sm:text-xl text-gray-400 mb-10 max-w-2xl mx-auto"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-            >
-              A IA busca em <span className="text-white font-semibold">todos os marketplaces do Brasil</span> automaticamente.
-            </motion.p>
-
-            <motion.div 
-              className="flex flex-col sm:flex-row gap-4 justify-center items-center"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Link href={user ? "/chat" : "/auth"}>
-                <motion.button 
-                  className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/25 overflow-hidden"
-                  whileHover={{ scale: 1.02, boxShadow: '0 20px 40px rgba(59, 130, 246, 0.3)' }}
-                  whileTap={{ scale: 0.98 }}
+        <section className="relative overflow-hidden">
+          <div className="container mx-auto px-4 pt-20 pb-16 sm:pt-32 sm:pb-24">
+            <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center max-w-7xl mx-auto">
+              {/* Left Column - Text Content */}
+              <motion.div
+                className="text-center lg:text-left"
+                initial={{ opacity: 0, x: -30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.7, ease: "easeOut" }}
+              >
+                <motion.div 
+                  className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full mb-4 sm:mb-6"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 }}
                 >
-                  <span className="relative z-10 flex items-center gap-2">
-                    {user ? (
-                      <>
-                        <Search className="w-5 h-5" />
-                        Começar Busca Agora
-                      </>
-                    ) : (
-                      <>
-                        <Rocket className="w-5 h-5" />
-                        Criar Conta Grátis
-                      </>
-                    )}
-                  </span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </motion.button>
-              </Link>
-            </motion.div>
+                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                  <span className="text-xs sm:text-sm font-medium text-gray-400">Powered by Artificial Intelligence</span>
+                </motion.div>
 
-            {/* Trust Indicators */}
-            <motion.div 
-              className="flex flex-wrap justify-center items-center gap-6 mt-12 text-sm text-gray-500"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-            >
-              <div className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-green-400" />
-                <span>Plano gratuito disponível</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-purple-400" />
-                <span>Cadastro em 30 segundos</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-blue-400" />
-                <span>Dados protegidos</span>
-              </div>
-            </motion.div>
-          </motion.div>
+                <motion.h1 
+                  className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black mb-4 sm:mb-6 leading-[1.05] tracking-tight"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <span className="text-white block mb-1 sm:mb-2">
+                    Encontre o
+                  </span>
+                  <span className="text-white block mb-1 sm:mb-2">
+                    menor preço
+                  </span>
+                  <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent block">
+                    em segundos
+                  </span>
+                </motion.h1>
+
+                <motion.p 
+                  className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-400 mb-6 sm:mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  A IA busca em <span className="text-white font-semibold">todos os marketplaces do Brasil</span> automaticamente.
+                </motion.p>
+
+                <motion.div 
+                  className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8 justify-center lg:justify-start"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <Link href={user ? "/chat" : "/auth"} className="w-full sm:w-auto">
+                    <motion.button 
+                      className="w-full sm:w-auto group relative px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold text-base sm:text-lg shadow-lg shadow-blue-500/25 overflow-hidden"
+                      whileHover={{ scale: 1.02, boxShadow: '0 20px 40px rgba(59, 130, 246, 0.3)' }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        {user ? (
+                          <>
+                            <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+                            Começar Busca Agora
+                          </>
+                        ) : (
+                          <>
+                            <Rocket className="w-4 h-4 sm:w-5 sm:h-5" />
+                            Criar Conta Grátis
+                          </>
+                        )}
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </motion.button>
+                  </Link>
+                  
+                  <Link href="#como-funciona" className="w-full sm:w-auto">
+                    <motion.button 
+                      className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl font-bold text-base sm:text-lg hover:bg-white/10 transition-all"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <span className="flex items-center justify-center gap-2 text-white">
+                        Ver Como Funciona
+                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </span>
+                    </motion.button>
+                  </Link>
+                </motion.div>
+
+                {/* Trust Indicators */}
+                <motion.div 
+                  className="flex flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 text-xs sm:text-sm text-gray-500"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.6 }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3 h-3 sm:w-4 sm:h-4 text-green-400" />
+                    <span>Plano gratuito</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-purple-400" />
+                    <span>30 segundos</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400" />
+                    <span>100% seguro</span>
+                  </div>
+                </motion.div>
+              </motion.div>
+
+              {/* Right Column - Overlapping Images Desktop */}
+              <motion.div
+                className="relative h-[600px] hidden lg:block"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
+              >
+                {/* Background decorative elements */}
+                <div className="absolute inset-0">
+                  <motion.div 
+                    className="absolute top-[10%] right-[5%] w-72 h-72 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-3xl blur-3xl"
+                    animate={{ 
+                      scale: [1, 1.1, 1],
+                      rotate: [0, 5, 0]
+                    }}
+                    transition={{ 
+                      duration: 8,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                  />
+                  <motion.div 
+                    className="absolute bottom-[15%] left-[10%] w-64 h-64 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-3xl blur-3xl"
+                    animate={{ 
+                      scale: [1, 1.15, 1],
+                      rotate: [0, -5, 0]
+                    }}
+                    transition={{ 
+                      duration: 10,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                      delay: 1
+                    }}
+                  />
+                </div>
+
+                {/* Card 1 - Search Results */}
+                <motion.div
+                  className="absolute top-[5%] right-[10%] w-80 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 shadow-2xl"
+                  initial={{ opacity: 0, y: 20, rotate: -5 }}
+                  animate={{ opacity: 1, y: 0, rotate: -3 }}
+                  transition={{ delay: 0.4, duration: 0.6 }}
+                  whileHover={{ rotate: 0, scale: 1.02 }}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                      <Search className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Busca Inteligente</p>
+                      <p className="text-sm font-bold text-white">iPhone 15 Pro</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg" />
+                          <div>
+                            <p className="text-xs text-gray-400">Loja {i}</p>
+                            <p className="text-sm font-bold text-white">R$ {(7000 - i * 200).toLocaleString()}</p>
+                          </div>
+                        </div>
+                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+
+                {/* Card 2 - Price Alert */}
+                <motion.div
+                  className="absolute top-[35%] left-[5%] w-72 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 shadow-2xl"
+                  initial={{ opacity: 0, y: 20, rotate: 5 }}
+                  animate={{ opacity: 1, y: 0, rotate: 3 }}
+                  transition={{ delay: 0.6, duration: 0.6 }}
+                  whileHover={{ rotate: 0, scale: 1.02 }}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
+                      <TrendingDown className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Economia Detectada</p>
+                      <p className="text-2xl font-black text-green-400">-40%</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-300 mb-3">Encontramos um preço melhor para você!</p>
+                  <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-xl border border-green-500/30">
+                    <div>
+                      <p className="text-xs text-gray-400 line-through">R$ 8.999</p>
+                      <p className="text-xl font-black text-white">R$ 5.399</p>
+                    </div>
+                    <Bell className="w-5 h-5 text-green-400" />
+                  </div>
+                </motion.div>
+
+                {/* Card 3 - AI Assistant */}
+                <motion.div
+                  className="absolute bottom-[8%] right-[15%] w-64 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-5 shadow-2xl"
+                  initial={{ opacity: 0, y: 20, rotate: -3 }}
+                  animate={{ opacity: 1, y: 0, rotate: -2 }}
+                  transition={{ delay: 0.8, duration: 0.6 }}
+                  whileHover={{ rotate: 0, scale: 1.02 }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                      <Bot className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Assistente IA</p>
+                      <p className="text-sm font-bold text-white">Zavlo</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="bg-white/5 rounded-lg p-2">
+                      <p className="text-xs text-gray-300">"Encontrei 127 ofertas em 9 marketplaces"</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-2 border border-blue-500/30">
+                        <p className="text-xs font-semibold text-blue-300">Ver Ofertas</p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Floating Stats */}
+                <motion.div
+                  className="absolute top-[20%] left-[0%] bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-xl px-4 py-3 shadow-xl"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 1, duration: 0.5 }}
+                  whileHover={{ scale: 1.05 }}
+                >
+                  <p className="text-xs text-gray-400 mb-1">Marketplaces</p>
+                  <p className="text-2xl font-black bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">9+</p>
+                </motion.div>
+
+                <motion.div
+                  className="absolute bottom-[35%] left-[8%] bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-xl px-4 py-3 shadow-xl"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 1.2, duration: 0.5 }}
+                  whileHover={{ scale: 1.05 }}
+                >
+                  <p className="text-xs text-gray-400 mb-1">Produtos</p>
+                  <p className="text-2xl font-black bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">1M+</p>
+                </motion.div>
+              </motion.div>
+
+              {/* Mobile Version - Compact Cards */}
+              <motion.div
+                className="lg:hidden space-y-4 mt-8"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+              >
+                {/* Mobile Card 1 - Search Results */}
+                <motion.div
+                  className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4 sm:p-5 shadow-xl"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Search className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-400">Busca Inteligente</p>
+                      <p className="text-sm sm:text-base font-bold text-white truncate">iPhone 15 Pro</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-gray-400">Loja {i}</p>
+                            <p className="text-sm font-bold text-white">R$ {(7000 - i * 200).toLocaleString()}</p>
+                          </div>
+                        </div>
+                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+
+                {/* Mobile Card 2 - Price Alert */}
+                <motion.div
+                  className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4 sm:p-5 shadow-xl"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Economia Detectada</p>
+                      <p className="text-xl sm:text-2xl font-black text-green-400">-40%</p>
+                    </div>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-300 mb-3">Encontramos um preço melhor para você!</p>
+                  <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-xl border border-green-500/30">
+                    <div>
+                      <p className="text-xs text-gray-400 line-through">R$ 8.999</p>
+                      <p className="text-lg sm:text-xl font-black text-white">R$ 5.399</p>
+                    </div>
+                    <Bell className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  </div>
+                </motion.div>
+
+                {/* Mobile Stats Row */}
+                <motion.div
+                  className="grid grid-cols-3 gap-3"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                >
+                  <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-xl p-3 text-center">
+                    <div className="w-8 h-8 mx-auto mb-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                      <Store className="w-4 h-4 text-white" />
+                    </div>
+                    <p className="text-lg sm:text-xl font-black bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">9+</p>
+                    <p className="text-[10px] sm:text-xs text-gray-400">Marketplaces</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-xl p-3 text-center">
+                    <div className="w-8 h-8 mx-auto mb-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
+                      <Package className="w-4 h-4 text-white" />
+                    </div>
+                    <p className="text-lg sm:text-xl font-black bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">1M+</p>
+                    <p className="text-[10px] sm:text-xs text-gray-400">Produtos</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-xl p-3 text-center">
+                    <div className="w-8 h-8 mx-auto mb-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                      <Bot className="w-4 h-4 text-white" />
+                    </div>
+                    <p className="text-lg sm:text-xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">IA</p>
+                    <p className="text-[10px] sm:text-xs text-gray-400">Assistente</p>
+                  </div>
+                </motion.div>
+              </motion.div>
+            </div>
+          </div>
         </section>
 
         {/* Combined Section: Comparison + Stats/Features */}
@@ -273,9 +535,9 @@ export default function Home() {
               </p>
             </motion.div>
 
-            {/* Right: Stats + Features - Compact */}
+            {/* Right: Stats + Features - Compact - Hidden on Mobile */}
             <motion.div 
-              className="space-y-4 sm:space-y-6"
+              className="hidden lg:block space-y-4 sm:space-y-6"
               initial={{ opacity: 0, x: 20 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
@@ -402,7 +664,7 @@ export default function Home() {
         </AnimatedSection>
 
         {/* How it Works */}
-        <AnimatedSection className="container mx-auto px-4 py-20">
+        <AnimatedSection id="como-funciona" className="container mx-auto px-4 py-20">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl sm:text-5xl font-black mb-4 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">

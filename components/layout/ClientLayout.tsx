@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const hideHeader = pathname === '/chat';
+  const hideHeader = pathname === '/chat' || pathname === '/dashboard';
 
   return (
     <UserProvider>
