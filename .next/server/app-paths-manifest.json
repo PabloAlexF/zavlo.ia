@@ -1,3 +1,10 @@
 {
-  "/page": "app/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/page": "app/page.js",
+  "/plans/page": "app/plans/page.js",
+  "/my-listings/page": "app/my-listings/page.js",
+  "/analytics/page": "app/analytics/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/profile/page": "app/profile/page.js"
 }

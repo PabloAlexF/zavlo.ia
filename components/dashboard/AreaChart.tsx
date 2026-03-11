@@ -21,6 +21,9 @@ export default function AreaChart({ title, data, labels, delay }: AreaChartProps
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Validar dados
+    if (!data || data.length === 0) return;
+
     // Set canvas size
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * 2;
@@ -39,6 +42,8 @@ export default function AreaChart({ title, data, labels, delay }: AreaChartProps
       x: padding + (chartWidth / (data.length - 1)) * index,
       y: padding + chartHeight - (value / max) * chartHeight,
     }));
+
+    if (points.length === 0) return;
 
     // Draw gradient fill
     const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
