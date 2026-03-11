@@ -4,6 +4,25 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
+<<<<<<< HEAD
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false,
+    "jsx": "preserve",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@modules/*": ["src/modules/*"],
+      "@common/*": ["src/common/*"],
+      "@config/*": ["src/config/*"],
+      "@shared/*": ["src/shared/*"],
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["src/**/*", "app/**/*", "components/**/*", "contexts/**/*", "hooks/**/*", "lib/**/*", "types/**/*", "utils/**/*"],
+  "exclude": ["node_modules", "dist", ".next"]
+=======
     "strict": false,
     "noEmit": true,
     "esModuleInterop": true,
@@ -20,4 +39,5 @@
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules", "dist", "src"]
+>>>>>>> 253edc38029c91d692abba71ffc00532d2f8d700
 }
