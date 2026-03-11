@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/contexts/UserContext';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
+  children: ReactNode;
   redirectTo?: string;
 }
 
