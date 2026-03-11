@@ -6,7 +6,7 @@ runtime:
   node: 22.x
 
 start:
-  command: npm run start
+  command: node server.js
   
 permissions:
   directories: 755
