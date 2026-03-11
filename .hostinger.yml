@@ -1,12 +1,9 @@
 build:
   command: npm install && npm run build:frontend
-  output: .next
+  output: out
   
 runtime:
   node: 22.x
-
-start:
-  command: npm run start
   
 permissions:
   directories: 755
