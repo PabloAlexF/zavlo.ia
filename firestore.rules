@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Regras para coleção users
+    match /users/{userId} {
+      // Usuário só pode ler/escrever seus próprios dados
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Subcoleção transactions
+      match /transactions/{transactionId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow update, delete: if false; // Transações não podem ser editadas/deletadas
+      }
+      
+      // Subcoleção searches
+      match /searches/{searchId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Regras para coleção subscriptions
+    match /subscriptions/{subscriptionId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow delete: if false; // Assinaturas não podem ser deletadas
+    }
+    
+    // Regras para coleção favorites
+    match /favorites/{favoriteId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Regras para coleção products (público para leitura)
+    match /products/{productId} {
+      allow read: if true; // Todos podem ler produtos
+      allow write: if false; // Apenas backend pode escrever
+    }
+  }
+}

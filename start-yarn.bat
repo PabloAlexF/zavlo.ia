@@ -1,0 +1,3 @@
+@echo off
+echo Iniciando Frontend Zavlo com Yarn...
+call yarn dev

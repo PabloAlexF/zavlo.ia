@@ -1,0 +1,21 @@
+# Ignorar backend no deploy
+backend/
+backend/**/*
+
+# Ignorar arquivos de desenvolvimento
+.git/
+.gitignore
+README.md
+*.md
+
+# Ignorar arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar logs
+*.log
+logs/
+
+# Ignorar arquivos temporários
+tmp/
+temp/
