@@ -1,0 +1,3 @@
+@echo off
+echo Iniciando Frontend Zavlo...
+call npm run dev
