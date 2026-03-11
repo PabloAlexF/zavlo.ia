@@ -4,10 +4,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Package, Store, MapPin, Zap, Bot, Search, DollarSign, Sparkles, Check, Shield, Clock, Bell, TrendingDown, Image as ImageIcon, Star, MousePointer, ArrowRight, Rocket } from 'lucide-react';
 import { motion, useMotionValue, useTransform } from 'framer-motion';
+import { MouseEvent, ReactNode } from 'react';
 import LimitedOfferSection from '@/components/sections/LimitedOfferSection';
 import { useUser } from '@/contexts/UserContext';
 
-const AnimatedSection = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+const AnimatedSection = ({ children, className }: { children: ReactNode; className?: string }) => (
   <motion.section
     className={className}
     initial={{ opacity: 0, y: 30 }}
@@ -29,7 +30,7 @@ export default function Home() {
   const orb2X = useTransform(motionX, [-1, 1], [20, -20]);
   const orb2Y = useTransform(motionY, [-1, 1], [20, -20]);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
     if (window.innerWidth < 768) return;
     const { clientX, clientY, currentTarget } = e;
     const { width, height } = currentTarget.getBoundingClientRect();
