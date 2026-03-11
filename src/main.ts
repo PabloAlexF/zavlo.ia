@@ -26,16 +26,13 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Configurar CORS - aceitar múltiplas origens para desenvolvimento e produção
-  const corsOrigin = configService.get('CORS_ORIGIN') || '*';
-  const allowedOrigins = corsOrigin === '*' 
-    ? true 
-    : corsOrigin.split(',').map(o => o.trim());
-  
   app.enableCors({
-    origin: allowedOrigins,
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    exposedHeaders: ['Content-Length', 'Content-Type'],
+    maxAge: 86400,
   });
 
   // Configurar prefixo global da API (excluir raiz para health checks do load balancer)
