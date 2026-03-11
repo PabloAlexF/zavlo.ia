@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "noEmit": false,
+    "module": "commonjs",
+    "target": "ES2021"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".next",
+    "app",
+    "components",
+    "contexts",
+    "hooks",
+    "lib",
+    "types",
+    "utils",
+    "public"
+  ]
+}
