@@ -6,3 +6,7 @@ export { default as WelcomeCard } from './WelcomeCard';
 export { default as CircularChart } from './CircularChart';
 export { default as AreaChart } from './AreaChart';
 export { default as BarChart } from './BarChart';
+export { default as PieChart } from './PieChart';
+export { default as PerformanceCard } from './PerformanceCard';
+export { default as RecentList } from './RecentList';
+export { default as SavingsCard } from './SavingsCard';

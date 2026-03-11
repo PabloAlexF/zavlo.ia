@@ -51,7 +51,7 @@ export default function StatsCard({ icon: Icon, title, value, trend, trendLabel,
 
           {/* Value */}
           <div className="mb-2">
-            <h3 className="text-3xl font-black text-white">{value.toLocaleString()}</h3>
+            <h3 className="text-3xl font-black text-white" suppressHydrationWarning>{value.toLocaleString()}</h3>
           </div>
 
           {/* Label */}

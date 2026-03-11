@@ -21,6 +21,9 @@ export default function BarChart({ title, data, labels, delay }: BarChartProps) 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Validar dados
+    if (!data || data.length === 0) return;
+
     // Set canvas size
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * 2;
@@ -36,6 +39,8 @@ export default function BarChart({ title, data, labels, delay }: BarChartProps) 
     // Calculate bars
     const max = Math.max(...data, 1);
     const barWidth = chartWidth / data.length - 10;
+
+    if (barWidth <= 0) return;
 
     // Draw bars with animation
     data.forEach((value, index) => {
