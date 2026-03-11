@@ -110,21 +110,34 @@ export default function DashboardPage() {
       const userData = JSON.parse(user);
       const headers = { 'Authorization': `Bearer ${userData.token}` };
 
+      // Helper function to fetch with retry for sleeping Render instances
+      const fetchWithRetry = async (url: string, options: any, retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            const response = await fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
+            return response;
+          } catch (error) {
+            if (i === retries - 1) throw error;
+            await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+          }
+        }
+      };
+
       // 1. Buscar perfil do usuário
-      const profileResponse = await fetch(`${API_URL}/users/profile`, { headers });
+      const profileResponse = await fetchWithRetry(`${API_URL}/users/profile`, { headers });
       if (profileResponse.ok) {
         const userProfile = await profileResponse.json();
         setUserName(userProfile.name || 'Usuário');
         
         // 2. Buscar dados de uso
-        const usageResponse = await fetch(`${API_URL}/users/usage`, { headers });
+        const usageResponse = await fetchWithRetry(`${API_URL}/users/usage`, { headers });
         let usageData = { textToday: 0, imageToday: 0, textMonth: 0, imageMonth: 0 };
         if (usageResponse.ok) {
           usageData = await usageResponse.json();
         }
 
         // 3. Buscar favoritos
-        const favoritesResponse = await fetch(`${API_URL}/favorites`, { headers });
+        const favoritesResponse = await fetchWithRetry(`${API_URL}/favorites`, { headers });
         let favoritesCount = 0;
         if (favoritesResponse.ok) {
           const favorites = await favoritesResponse.json();
@@ -132,7 +145,7 @@ export default function DashboardPage() {
         }
 
         // 4. Buscar anúncios
-        const listingsResponse = await fetch(`${API_URL}/listings/my`, { headers });
+        const listingsResponse = await fetchWithRetry(`${API_URL}/listings/my`, { headers });
         let listingsCount = 0;
         if (listingsResponse.ok) {
           const userListings = await listingsResponse.json();
@@ -141,7 +154,7 @@ export default function DashboardPage() {
         }
 
         // 5. Buscar alertas de preço
-        const alertsResponse = await fetch(`${API_URL}/price-alerts/stats`, { headers });
+        const alertsResponse = await fetchWithRetry(`${API_URL}/price-alerts/stats`, { headers });
         let alertsCount = 0;
         if (alertsResponse.ok) {
           const alertsData = await alertsResponse.json();
@@ -149,7 +162,7 @@ export default function DashboardPage() {
         }
 
         // 6. Buscar notificações
-        const notificationsResponse = await fetch(`${API_URL}/notifications`, { headers });
+        const notificationsResponse = await fetchWithRetry(`${API_URL}/notifications`, { headers });
         let notificationsCount = 0;
         if (notificationsResponse.ok) {
           const notifications = await notificationsResponse.json();
@@ -157,7 +170,7 @@ export default function DashboardPage() {
         }
 
         // 7. Buscar status do plano
-        const planStatusResponse = await fetch(`${API_URL}/users/plan-status`, { headers });
+        const planStatusResponse = await fetchWithRetry(`${API_URL}/users/plan-status`, { headers });
         if (planStatusResponse.ok) {
           const planStatusData = await planStatusResponse.json();
           setPlanStatus(planStatusData);
@@ -184,14 +197,14 @@ export default function DashboardPage() {
       }
 
       // 8. Buscar métricas de analytics (últimos 30 dias)
-      const metricsResponse = await fetch(`${API_URL}/analytics/metrics?days=30`, { headers });
+      const metricsResponse = await fetchWithRetry(`${API_URL}/analytics/metrics?days=30`, { headers });
       if (metricsResponse.ok) {
         const metricsData = await metricsResponse.json();
         setMetrics(metricsData);
       }
 
       // 9. Buscar histórico de buscas
-      const historyResponse = await fetch(`${API_URL}/analytics/history?limit=10`, { headers });
+      const historyResponse = await fetchWithRetry(`${API_URL}/analytics/history?limit=10`, { headers });
       if (historyResponse.ok) {
         const historyData = await historyResponse.json();
         setHistory(historyData);
@@ -199,7 +212,10 @@ export default function DashboardPage() {
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      setToast({ message: 'Erro ao carregar dados do dashboard', type: 'error' });
+      const errorMessage = error instanceof TypeError && error.message === 'Failed to fetch'
+        ? 'Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente.'
+        : 'Erro ao carregar dados do dashboard';
+      setToast({ message: errorMessage, type: 'error' });
     } finally {
       setLoading(false);
     }
