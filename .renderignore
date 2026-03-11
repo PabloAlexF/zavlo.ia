@@ -1,0 +1,21 @@
+# Ignorar frontend Next.js no Render
+app/
+components/
+contexts/
+hooks/
+lib/
+public/
+types/
+utils/
+.next/
+out/
+next.config.js
+next-env.d.ts
+postcss.config.js
+tailwind.config.js
+.hostinger.yml
+.hostingerignore
+.hostingerforce
+
+# Manter apenas backend
+!src/
