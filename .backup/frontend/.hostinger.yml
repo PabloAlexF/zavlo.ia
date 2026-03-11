@@ -1,0 +1,10 @@
+build:
+  command: echo "No build needed"
+  output: .
+  
+runtime:
+  node: 22.x
+  
+permissions:
+  directories: 755
+  files: 644

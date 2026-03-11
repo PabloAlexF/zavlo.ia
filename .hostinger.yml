@@ -1,0 +1,10 @@
+build:
+  command: npm install && npm run build
+  output: .next
+  
+runtime:
+  node: 22.x
+  
+permissions:
+  directories: 755
+  files: 644
