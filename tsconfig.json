@@ -17,11 +17,16 @@
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
+    "jsx": "preserve",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "paths": {
       "@modules/*": ["src/modules/*"],
       "@common/*": ["src/common/*"],
       "@config/*": ["src/config/*"],
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["src/shared/*"],
+      "@/*": ["./*"]
     }
-  }
+  },
+  "include": ["src/**/*", "app/**/*", "components/**/*", "contexts/**/*", "hooks/**/*", "lib/**/*", "types/**/*", "utils/**/*"],
+  "exclude": ["node_modules", "dist", ".next"]
 }
