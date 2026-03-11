@@ -9,6 +9,7 @@
     "build": "tsc --skipLibCheck --noEmitOnError false && tsc-alias && next build",
     "build:backend": "tsc --skipLibCheck --noEmitOnError false && tsc-alias",
     "build:frontend": "next build",
+    "build:prod": "npm run build:backend && npm run build:frontend",
     "format": "prettier --write \"src/**/*.ts\"",
     "dev": "npx nest start --watch",
     "dev:frontend": "next dev",
