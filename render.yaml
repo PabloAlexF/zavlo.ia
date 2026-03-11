@@ -6,7 +6,6 @@ services:
     plan: free
     buildCommand: npm install && npm run build:backend
     startCommand: node dist/src/main
-    healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_ENV
         value: production
