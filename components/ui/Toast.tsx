@@ -1,71 +1,52 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ToastProps {
   message: string;
   type: 'success' | 'error' | 'info';
   onClose: () => void;
+  duration?: number;
 }
 
-export function Toast({ message, type, onClose }: ToastProps) {
+export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
   useEffect(() => {
-    const timer = setTimeout(onClose, 4000);
+    const timer = setTimeout(onClose, duration);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [duration, onClose]);
 
   const icons = {
-    success: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-      </svg>
-    ),
-    error: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-      </svg>
-    ),
-    info: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
+    success: CheckCircle,
+    error: AlertCircle,
+    info: Info,
   };
 
   const colors = {
-    success: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800',
+    success: 'from-green-500/20 to-emerald-500/20 border-green-500/50',
+    error: 'from-red-500/20 to-rose-500/20 border-red-500/50',
+    info: 'from-blue-500/20 to-cyan-500/20 border-blue-500/50',
   };
 
+  const Icon = icons[type];
+
   return (
-    <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-lg max-w-sm animate-slide-in ${colors[type]}`}>
-      <div className="flex items-start gap-3">
-        <div className="flex-shrink-0">{icons[type]}</div>
-        <div className="flex-1">
-          <p className="text-sm font-medium">{message}</p>
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, y: -50 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -50 }}
+        className="fixed top-4 right-4 z-50 max-w-md"
+      >
+        <div className={`bg-gradient-to-r ${colors[type]} backdrop-blur-xl border rounded-xl p-4 shadow-2xl flex items-center gap-3`}>
+          <Icon className="w-5 h-5 text-white flex-shrink-0" />
+          <p className="text-white font-medium flex-1">{message}</p>
+          <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <button onClick={onClose} className="flex-shrink-0 opacity-70 hover:opacity-100">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <style jsx>{`
-        @keyframes slide-in {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-in {
-          animation: slide-in 0.3s ease-out;
-        }
-      `}</style>
-    </div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
