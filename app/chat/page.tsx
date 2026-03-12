@@ -15,6 +15,13 @@ import { detectProductCategory, PRODUCT_CATEGORIES, formatCategoryQuestion } fro
 import { detectProvidedInfo, filterQuestions } from '@/utils/chat/smartQuestions';
 import { parseAnswer } from '@/utils/chat/answerParser';
 import { detectContextChange } from '@/utils/chat/contextChangeDetector';
+import { 
+  detectRefinement, 
+  correctCommonTypos, 
+  generateSmartResponse, 
+  updateConversationContext,
+  detectNegotiationIntent 
+} from '@/utils/chat/smartBot';
 
 interface Message {
   id: string;
@@ -827,14 +834,55 @@ export default function ChatPage() {
 
     // Pipeline NLP
     setTimeout(() => {
-      // 1. Limpar query (remove "estou querendo", "preciso de", etc.)
-      const cleaned = cleanProductQuery(currentInput);
+      // 1. Corrigir erros comuns de digitação (marcas)
+      const typosCorrected = correctCommonTypos(currentInput);
       
-      // 2. Aplicar contexto
+      // 2. Limpar query (remove "estou querendo", "preciso de", etc.)
+      const cleaned = cleanProductQuery(typosCorrected);
+      
+      // 3. Detectar refinamento de busca anterior
+      const refinement = detectRefinement(cleaned);
+      if (refinement.isRefinement && refinement.refinedQuery) {
+        console.log('🔄 Refinamento detectado:', refinement);
+        // Usar query refinada
+        const withContext = contextManager.applyContext(refinement.refinedQuery);
+        const intent = detectIntent(withContext);
+        const parsed = parseProductQuery(withContext);
+        
+        // Atualizar contexto do smartBot
+        updateConversationContext(refinement.refinedQuery, parsed);
+        
+        // Continuar com o fluxo normal usando a query refinada
+        handleParsedQuery(withContext, intent, parsed);
+        return;
+      }
+      
+      // 4. Aplicar contexto
       const withContext = contextManager.applyContext(cleaned);
       
-      // 3. Detectar intenção
+      // 5. Detectar intenção
       const intent = detectIntent(withContext);
+      
+      // 6. Gerar resposta inteligente baseada no contexto (smartBot)
+      const smartResponse = generateSmartResponse(withContext, intent);
+      if (smartResponse.shouldRespond) {
+        const aiMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'ai',
+          content: smartResponse.response || '',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        setLoading(false);
+        return;
+      }
+      
+      // 7. Detectar intenção de negociação
+      const negotiation = detectNegotiationIntent(withContext);
+      if (negotiation.isNegotiation) {
+        console.log('💰 Intenção de negociação detectada:', negotiation.type);
+        // Continuar com o fluxo normal, mas logar para analytics
+      }
       
       // IMPORTANTE: Tratar comandos ANTES de processar como produto
       // Tratar saudações
@@ -954,19 +1002,32 @@ export default function ChatPage() {
         return;
       }
       
-      // 4. Parse do produto
+      // 8. Parse do produto
       const parsed = parseProductQuery(withContext);
+      
+      // 9. Atualizar contexto do smartBot
+      updateConversationContext(withContext, parsed);
       
       console.log('🔍 Pipeline NLP:', {
         original: currentInput,
+        typosCorrected,
         cleaned,
         withContext,
         intent,
-        parsed
+        parsed,
+        refinement,
+        negotiation
       });
       
-      // 5. Verificar se é genérico
-      if (parsed.isGeneric) {
+      // 10. Processar query parseada
+      handleParsedQuery(withContext, intent, parsed);
+    }, 500);
+  };
+
+  // Função auxiliar para processar query parseada (evita duplicação)
+  const handleParsedQuery = (withContext: string, intent: any, parsed: any) => {
+    // 1. Verificar se é genérico
+    if (parsed.isGeneric) {
         const genericMessage = handleGenericProduct(parsed.product);
         const aiMessage: Message = {
           id: crypto.randomUUID(),
@@ -979,7 +1040,7 @@ export default function ChatPage() {
         return;
       }
       
-      // 6. Detectar categoria e iniciar perguntas inteligentes
+      // 2. Detectar categoria e iniciar perguntas inteligentes
       const detectedCategory = detectProductCategory(withContext);
       
       // Debug crítico
@@ -1040,7 +1101,7 @@ export default function ChatPage() {
         return;
       }
       
-      // 6. Verificar se precisa de localização
+      // 3. Verificar se precisa de localização
       if (parsed.needsLocation) {
         setPendingSearch(prev => {
           if (!prev) return { query: cleaned };
@@ -1058,7 +1119,7 @@ export default function ChatPage() {
         return;
       }
       
-      // 7. Verificar se já tem condição ou pedir condição
+      // 4. Verificar se já tem condição ou pedir condição
       if (parsed.condition) {
         // Já tem condição, vai direto para confirmação
         setPendingSearch(prev => {
@@ -1080,7 +1141,7 @@ export default function ChatPage() {
         return;
       }
       
-      // 8. Pedir condição
+      // 5. Pedir condição
       setPendingSearch(prev => {
         if (!prev) return { query: cleaned };
         return { ...prev, query: cleaned };
@@ -1094,7 +1155,6 @@ export default function ChatPage() {
       setMessages(prev => [...prev, aiMessage]);
       setChatState('awaiting_condition');
       setLoading(false);
-    }, 500);
   };
 
   const buildFinalQuery = (): { query: string; sortBy: string; minPrice?: number; maxPrice?: number } => {
@@ -1310,6 +1370,9 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen bg-gradient-to-br from-[#0A0A0F] via-[#0F0F14] to-[#0A0A0F] flex overflow-hidden">
+      {/* Espaçador para o header global */}
+      <div className="h-16 w-full fixed top-0 left-0 right-0 z-0" />
+      
       {/* Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -1318,15 +1381,34 @@ export default function ChatPage() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -280, opacity: 0 }}
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-            className="w-72 h-full border-r border-white/5 bg-black/40 backdrop-blur-2xl flex flex-col fixed md:relative z-50"
+            className="w-72 border-r border-white/5 bg-black/40 backdrop-blur-2xl flex flex-col fixed md:relative z-[45]"
+            style={{ 
+              top: '4rem',
+              bottom: 0,
+              height: 'calc(100vh - 4rem)'
+            }}
           >
+            {/* Header da Sidebar */}
+            <div className="p-4 border-b border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-blue-400" />
+                <h2 className="text-sm font-semibold text-white">Conversas</h2>
+              </div>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="md:hidden p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
             {/* New Chat Button */}
-            <div className="p-4 border-b border-white/5">
+            <div className="p-3">
               <motion.button
                 onClick={createNewChat}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border border-white/10 rounded-2xl text-white transition-all text-sm font-medium shadow-lg shadow-blue-500/5"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border border-white/10 rounded-xl text-white transition-all text-sm font-medium shadow-lg shadow-blue-500/5"
               >
                 <Plus className="w-4 h-4" />
                 <span>Nova conversa</span>
@@ -1334,40 +1416,56 @@ export default function ChatPage() {
             </div>
 
             {/* Chat History */}
-            <div className="flex-1 overflow-y-auto px-3 py-2">
+            <div className="flex-1 overflow-y-auto px-3 py-2 custom-scrollbar">
               {chatHistory.length === 0 ? (
                 <div className="text-center py-16 px-4">
-                  <div className="w-12 h-12 mx-auto mb-4 bg-white/5 rounded-2xl flex items-center justify-center">
-                    <MessageSquare className="w-6 h-6 text-gray-600" />
-                  </div>
-                  <p className="text-sm text-gray-500">Nenhuma conversa ainda</p>
+                  <motion.div 
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-white/10"
+                  >
+                    <MessageSquare className="w-8 h-8 text-gray-500" />
+                  </motion.div>
+                  <p className="text-sm text-gray-500 font-medium mb-1">Nenhuma conversa</p>
+                  <p className="text-xs text-gray-600">Inicie uma nova busca!</p>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {chatHistory.map((chat) => (
+                <div className="space-y-1.5">
+                  {chatHistory.map((chat, index) => (
                     <motion.div
                       key={chat.id}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
                       whileHover={{ x: 2 }}
                       className={`group relative p-3 rounded-xl transition-all cursor-pointer ${
                         currentChatId === chat.id
-                          ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20'
-                          : 'hover:bg-white/5 border border-transparent'
+                          ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-lg shadow-blue-500/10'
+                          : 'hover:bg-white/5 border border-transparent hover:border-white/10'
                       }`}
                       onClick={() => loadChat(chat.id)}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                          currentChatId === chat.id ? 'bg-blue-400' : 'bg-gray-600'
+                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 transition-all ${
+                          currentChatId === chat.id 
+                            ? 'bg-blue-400 shadow-lg shadow-blue-400/50' 
+                            : 'bg-gray-600 group-hover:bg-gray-500'
                         }`} />
-                        <p className="text-sm text-gray-300 truncate flex-1 pr-8">{chat.title}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-300 group-hover:text-white truncate transition-colors font-medium">
+                            {chat.title}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            {chat.messages.length} mensagens
+                          </p>
+                        </div>
                         <button
                           onClick={(e) => deleteChat(chat.id, e)}
                           className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-red-500/20 rounded-lg transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                           aria-label="Deletar conversa"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+                          <Trash2 className="w-3.5 h-3.5 text-gray-500 hover:text-red-400 transition-colors" />
                         </button>
                       </div>
                     </motion.div>
@@ -1376,15 +1474,17 @@ export default function ChatPage() {
               )}
             </div>
 
-            {/* Close Sidebar Button (mobile) */}
-            <div className="p-4 border-t border-white/5 md:hidden">
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 text-sm transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Fechar
-              </button>
+            {/* Footer da Sidebar */}
+            <div className="p-3 border-t border-white/5 bg-black/20">
+              <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <Coins className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500">Créditos</p>
+                  <p className="text-sm font-semibold text-white">{userCredits}</p>
+                </div>
+              </div>
             </div>
           </motion.aside>
         )}
@@ -1397,24 +1497,40 @@ export default function ChatPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
+            className="fixed bg-black/80 backdrop-blur-sm z-[44] md:hidden"
+            style={{ 
+              top: '4rem',
+              left: 0,
+              right: 0,
+              bottom: 0
+            }}
             onClick={() => setSidebarOpen(false)}
           />
         )}
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header */}
-        <div className="border-b border-white/5 bg-black/20 backdrop-blur-2xl px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between flex-shrink-0">
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ marginTop: '4rem', height: 'calc(100vh - 4rem)' }}>
+        {/* Header com Hamburguer - Logo abaixo do header global */}
+        <div className="border-b border-white/5 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <motion.button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              className="p-2 hover:bg-white/10 rounded-xl flex-shrink-0 transition-colors"
+              className="p-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 rounded-xl flex-shrink-0 transition-all border-2 border-blue-500/30 hover:border-blue-500/50 shadow-xl shadow-blue-500/20"
+              aria-label="Toggle sidebar"
             >
-              <Menu className="w-5 h-5 text-gray-400" />
+              <motion.div
+                animate={{ rotate: sidebarOpen ? 180 : 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {sidebarOpen ? (
+                  <X className="w-6 h-6 text-blue-400" />
+                ) : (
+                  <Menu className="w-6 h-6 text-blue-400" />
+                )}
+              </motion.div>
             </motion.button>
             <div className="flex items-center gap-3 min-w-0">
               <Image 
@@ -1438,14 +1554,6 @@ export default function ChatPage() {
               <Coins className="w-4 h-4 text-yellow-400" />
               <span className="text-sm font-semibold text-white">{userCredits}</span>
             </motion.div>
-            <motion.button 
-              onClick={() => router.push('/')} 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="p-2 hover:bg-white/10 rounded-xl transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </motion.button>
           </div>
         </div>
 
