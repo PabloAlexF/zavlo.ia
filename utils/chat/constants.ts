@@ -27,7 +27,13 @@ export const NON_PRODUCT_WORDS = new Set([
   'como vai', 'e ai', 'eai', 'salve', 'fala', 'help', 'ajuda', 'socorro'
 ]);
 
-// Marcas conhecidas para fuzzy matching
+// Palavras comuns que não são produtos
+export const COMMON_NON_PRODUCTS = new Set([
+  'mesa', 'cadeira', 'sofa', 'sofá', 'cama', 'armario', 'armário', 'guarda', 'roupa',
+  'porta', 'janela', 'parede', 'teto', 'chao', 'chão'
+]);
+
+// Marcas conhecidas para fuzzy matching (normalizado)
 export const BRAND_SET = new Set([
   // Eletrônicos
   'samsung', 'apple', 'xiaomi', 'motorola', 'lg', 'sony', 'huawei', 'nokia',
@@ -51,9 +57,55 @@ export const BRAND_SET = new Set([
   'jeep', 'mitsubishi', 'kia', 'suzuki', 'volvo', 'land rover',
   
   // Casa/Móveis
-  'tok stok', 'casas bahia', 'magazine luiza', 'leroy merlin', 'telhanorte',
+  'tok stok', 'casas bahias', 'magazine luiza', 'leroy merlin', 'telhanorte',
   'madeira madeira', 'mobly', 'westwing', 'etna', 'deca', 'docol', 'tigre'
 ]);
+
+// Dicionário de modelos conhecidos (modelo → marca)
+export const MODEL_DICTIONARY: Record<string, string> = {
+  // Apple
+  'iphone': 'apple',
+  'ipad': 'apple',
+  'macbook': 'apple',
+  'airpods': 'apple',
+  'apple watch': 'apple',
+  
+  // Samsung
+  'galaxy': 'samsung',
+  'galaxy s': 'samsung',
+  'galaxy a': 'samsung',
+  'galaxy note': 'samsung',
+  'galaxy z': 'samsung',
+  
+  // Nike
+  'air max': 'nike',
+  'air force': 'nike',
+  'air jordan': 'nike',
+  'dunk': 'nike',
+  'blazer': 'nike',
+  
+  // Adidas
+  'ultraboost': 'adidas',
+  'superstar': 'adidas',
+  'stan smith': 'adidas',
+  'yeezy': 'adidas',
+  
+  // Xiaomi
+  'redmi': 'xiaomi',
+  'poco': 'xiaomi',
+  'mi': 'xiaomi',
+  
+  // Motorola
+  'moto g': 'motorola',
+  'moto e': 'motorola',
+  'edge': 'motorola',
+  
+  // PlayStation
+  'playstation': 'sony',
+  'ps5': 'sony',
+  'ps4': 'sony',
+  'ps3': 'sony'
+};
 
 // Produtos genéricos que precisam de refinamento
 export const GENERIC_PRODUCTS = {
@@ -77,7 +129,15 @@ export const GENERIC_PRODUCTS = {
   'tênis': ['Nike', 'Adidas', 'Puma', 'Vans', 'Converse'],
   'sapato': ['Nike', 'Adidas', 'Puma', 'Vans', 'Converse'],
   'bicicleta': ['Caloi', 'Oggi', 'Sense', 'Specialized', 'Trek'],
-  'bike': ['Caloi', 'Hoje', 'Sense', 'Specialized', 'Trek'],
+  'bike': ['Caloi', 'Oggi', 'Sense', 'Specialized', 'Trek'],
   'relogio': ['Apple Watch', 'Samsung Galaxy Watch', 'Garmin', 'Fossil', 'Casio'],
   'relógio': ['Apple Watch', 'Samsung Galaxy Watch', 'Garmin', 'Fossil', 'Casio']
 };
+
+// Tokens com posição (para ranking futuro)
+export interface TokenWithPosition {
+  token: string;
+  position: number;
+  isNumeric: boolean;
+  isAlpha: boolean;
+}

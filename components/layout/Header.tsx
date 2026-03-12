@@ -72,19 +72,19 @@ export function Header() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-40 bg-[#0B0B0F]/80 backdrop-blur-xl border-b border-white/10">
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-[#0B0B0F]/95 backdrop-blur-xl border-b border-white/10">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
           {/* Left Side: Logo + Main Nav */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 sm:gap-6 min-w-0">
             <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
               <Image 
                 src="/assets/icons/logo.ico" 
                 alt="Zavlo.ia" 
-                width={32} 
-                height={32}
-                className="rounded-lg group-hover:scale-105 transition-transform"
+                width={28} 
+                height={28}
+                className="rounded-lg group-hover:scale-105 transition-transform sm:w-8 sm:h-8"
               />
-              <span className="text-lg font-bold text-white tracking-tight hidden sm:inline">Zavlo.ia</span>
+              <span className="text-base sm:text-lg font-bold text-white tracking-tight hidden xs:inline">Zavlo.ia</span>
             </Link>
             <nav className="hidden md:flex items-center gap-5">
               {navLinks.map(link => (
@@ -96,18 +96,18 @@ export function Header() {
           </div>
           
           {/* Right Side: Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {user ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   ref={buttonRef}
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center gap-2 p-1.5 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1.5 sm:gap-2 p-1 sm:p-1.5 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs sm:text-sm font-semibold">
                     {user.name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
                   </div>
-                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 transition-transform hidden sm:block ${isDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 
                 <AnimatePresence>
@@ -151,18 +151,18 @@ export function Header() {
               </div>
             ) : (
               <>
-                <Link href="/auth" className="hidden sm:block text-sm font-medium text-gray-400 hover:text-white transition-colors">
+                <Link href="/auth" className="hidden sm:block text-sm font-medium text-gray-400 hover:text-white transition-colors px-2">
                   Entrar
                 </Link>
-                <Link href="/auth?register=true" className="text-sm font-medium bg-white text-black px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors">
+                <Link href="/auth?register=true" className="text-xs sm:text-sm font-medium bg-white text-black px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap">
                   Criar Conta
                 </Link>
               </>
             )}
 
             {/* Mobile Menu Button */}
-            <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -mr-2">
-              <Menu className="w-6 h-6 text-gray-300" />
+            <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-1.5 sm:p-2 -mr-1 sm:-mr-2">
+              <Menu className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300" />
             </button>
           </div>
         </div>

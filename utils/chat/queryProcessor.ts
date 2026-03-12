@@ -1,5 +1,12 @@
 import { STOP_WORDS, BRAND_SET } from './constants';
-import { normalizeAccents } from './textNormalizer';
+
+// ✅ Normalização centralizada (consistente com parser principal)
+function normalize(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
 // Padrões de intenção de compra que devem ser removidos
 const PURCHASE_INTENT_PATTERNS = [
@@ -14,58 +21,109 @@ const PRODUCT_ARTICLES = new Set([
   'um', 'uma', 'uns', 'umas', 'o', 'a', 'os', 'as'
 ]);
 
+// ✅ Regex de preço melhorado (detecta R$ 3k, r$2.5k, até 3000)
+const PRICE_REGEX = /(até|abaixo de|menor que|max(imo)?|ate)\s*(de\s*)?(r?\$?\s*)?(\d+(\.\d+)?[k]?)/i;
+
+// ✅ Regex de faixa de preço (entre 2.5k e 4k, entre 2000 e 3000)
+const PRICE_RANGE_REGEX = /entre\s*(r?\$?\s*)?(\d+(\.\d+)?[k]?)\s*(e|a)\s*(r?\$?\s*)?(\d+(\.\d+)?[k]?)/i;
+
+// ✅ Regex de storage (256gb, 128 GB, 1tb, 1 TB) - case insensitive
+const STORAGE_REGEX = /\b(\d+)\s?(gb|tb)\b/i;
+
+// ✅ Regex de RAM (16gb ram, 8 GB RAM)
+const RAM_REGEX = /\b(\d+)\s?gb\s?ram\b/i;
+
+// ✅ Regex de refresh rate (144hz, 120 Hz)
+const REFRESH_RATE_REGEX = /\b(\d+)\s?hz\b/i;
+
+// ✅ Regex de resolução (4k, 8k, 1080p, 1440p)
+const RESOLUTION_REGEX = /\b(4k|8k|1080p|1440p|2k|full\s?hd|hd)\b/i;
+
+// ✅ Regex de tamanho de tela (55", 15.6", 100 pol) - suporta decimal e 3 dígitos
+const SCREEN_SIZE_REGEX = /\b(\d{2,3}(\.\d+)?)\s?(pol|polegadas|"|')\b/i;
+
+// ✅ Intenção de preço baixo (normalizado)
+const CHEAP_INTENT_REGEX = /\b(barato|mais barato|economico|promocao|oferta)\b/i;
+
+// ✅ Condição do produto
+const CONDITION_REGEX = /\b(novo|nova|lacrado|lacrada|usado|usada|semi[\s-]?novo|semi[\s-]?nova|seminovo|seminova)\b/i;
+
+// ✅ Cores comuns (expandido com cores compostas)
+const COLORS = new Set([
+  'preto', 'branco', 'azul', 'vermelho', 'verde', 'amarelo', 'rosa',
+  'roxo', 'cinza', 'prata', 'dourado', 'laranja', 'marrom',
+  'grafite', 'spacegray', 'midnight', 'silver', 'gold', 'rose',
+  'coral', 'turquesa', 'violeta',
+  'verde agua', 'azul marinho', 'rosa gold', 'cinza espacial'
+]);
+
+// ✅ Gêneros
+const GENDER_REGEX = /\b(masculino|feminino|unissex|infantil)\b/i;
+
+// ✅ Categorias compostas (bigrams)
+const COMPOSITE_PRODUCTS = new Set([
+  'air fryer', 'smart tv', 'smart watch', 'video game',
+  'fone de ouvido', 'caixa de som', 'placa de video', 'placa mae',
+  'fonte de alimentacao', 'disco rigido', 'ssd nvme'
+]);
+
+// ✅ Marcas compostas (bigrams)
+const COMPOSITE_BRANDS = new Set([
+  'new balance', 'under armour', 'tommy hilfiger', 'calvin klein',
+  'ralph lauren', 'louis vuitton', 'michael kors'
+]);
+
+// ✅ Categorias implícitas (ps5 → videogame, macbook → notebook)
+const CATEGORY_MAP: Record<string, string> = {
+  'ps5': 'videogame',
+  'ps4': 'videogame',
+  'xbox': 'videogame',
+  'playstation': 'videogame',
+  'nintendo': 'videogame',
+  'switch': 'videogame',
+  'macbook': 'notebook',
+  'ipad': 'tablet',
+  'kindle': 'tablet'
+};
+
+// ✅ Tamanho de TV implícito (grande → >=55, pequena → <=43)
+const TV_SIZE_MAP: Record<string, { min?: number; max?: number }> = {
+  'grande': { min: 55 },
+  'media': { min: 43, max: 54 },
+  'pequena': { max: 43 }
+};
+
+// ✅ Atributo gamer (prioridade alta)
+const GAMER_REGEX = /\b(gamer|gaming)\b/i;
+
+// ✅ Palavras de intenção barata (normalizado)
+const CHEAP_WORDS = new Set(['barato', 'economico', 'promocao', 'oferta']);
+
 // Limpa a query removendo intenções de compra e mantendo só o produto
 export function cleanProductQuery(query: string): string {
   let cleaned = query.toLowerCase().trim();
   
-  // Remove padrões de intenção de compra
   for (const pattern of PURCHASE_INTENT_PATTERNS) {
     cleaned = cleaned.replace(pattern, '');
   }
   
-  // Remove artigos no início
   const words = cleaned.split(/\s+/);
   if (words.length > 1 && PRODUCT_ARTICLES.has(words[0])) {
     words.shift();
     cleaned = words.join(' ');
   }
   
-  // Remove pontuação e caracteres especiais (exceto números e letras)
-  cleaned = cleaned.replace(/[^a-z0-9\sáàâãéèêíïóôõöúçñ]/g, ' ');
-  
-  // Remove espaços múltiplos
+  cleaned = cleaned.replace(/[^\w\s+\-$áàâãéèêíïóôõöúçñ]/g, ' ');
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
   
-  // Se ficou vazio, retorna a query original
   const result = cleaned.trim();
   return result || query.toLowerCase().trim();
 }
 
-// Detecta se a query tem modelo específico (não precisa localização)
-export function hasSpecificModel(query: string): boolean {
-  const normalized = normalizeAccents(query.toLowerCase());
-  
-  // Padrões de modelos específicos
-  const modelPatterns = [
-    /iphone\s+(\d+|se|x|xs|xr|pro|max|mini|plus)/i,
-    /galaxy\s+(s\d+|note|a\d+|j\d+)/i,
-    /redmi\s+(note|\d+)/i,
-    /moto\s+(g\d+|e\d+|x\d+)/i,
-    /\b(i[357]|ryzen\s*[357])\b/i,
-    /\b\d+gb\b/i,
-    /\b\d+\\\"\b/i,
-    /\b\d+\s*(polegadas|pol)\b/i
-  ];
-  
-  return modelPatterns.some(pattern => pattern.test(normalized));
-}
-
-// Sugere melhorias para queries muito genéricas
 export function suggestQueryImprovements(query: string): string[] {
-  const normalized = normalizeAccents(query.toLowerCase());
+  const normalized = normalize(query);
   const suggestions: string[] = [];
   
-  // Sugestões baseadas no produto
   if (normalized.includes('iphone')) {
     suggestions.push('iPhone 15 Pro', 'iPhone 14', 'iPhone SE');
   } else if (normalized.includes('samsung') || normalized.includes('galaxy')) {
@@ -79,75 +137,237 @@ export function suggestQueryImprovements(query: string): string[] {
   return suggestions;
 }
 
-// Extrai informações estruturadas da query
 export function extractProductInfo(query: string) {
   const cleaned = cleanProductQuery(query);
-  const normalized = normalizeAccents(cleaned.toLowerCase());
+  const normalized = normalize(cleaned);
   const words = normalized.split(/\s+/).filter(word => word.length > 0);
   
   let brand = '';
   let product = '';
-  let model = '';
+  let priceMin: number | undefined;
   let priceMax: number | undefined;
+  let storage: string | undefined;
+  let ram: string | undefined;
+  let refreshRate: string | undefined;
+  let resolution: string | undefined;
+  let screenSize: string | undefined;
+  let color: string | undefined;
+  let gender: string | undefined;
+  let condition: string | undefined;
+  let sortByPrice = false;
+  let isGamer = false;
+  let implicitScreenSize: { min?: number; max?: number } | undefined;
   let attributes: string[] = [];
   
-  // Detecta filtro de preço
-  const priceMatch = query.match(/(até|abaixo de|menor que|máximo)\s*(de\s*)?r?\$?\s*(\d+)/i);
-  if (priceMatch) {
-    priceMax = Number(priceMatch[3]);
+  // ✅ Detecta faixa de preço (entre 2.5k e 4k)
+  const priceRangeMatch = query.match(PRICE_RANGE_REGEX);
+  if (priceRangeMatch) {
+    let min = priceRangeMatch[2];
+    let max = priceRangeMatch[6];
+    
+    if (min.endsWith('k')) {
+      priceMin = Number(min.slice(0, -1)) * 1000;
+    } else {
+      priceMin = Number(min);
+    }
+    
+    if (max.endsWith('k')) {
+      priceMax = Number(max.slice(0, -1)) * 1000;
+    } else {
+      priceMax = Number(max);
+    }
   }
   
-  // Detecta marca
-  for (const word of words) {
-    if (BRAND_SET.has(word)) {
-      brand = word;
+  // ✅ Detecta preço máximo (até 3k, R$ 2.5k)
+  if (!priceMax) {
+    const priceMatch = query.match(PRICE_REGEX);
+    if (priceMatch) {
+      let price = priceMatch[5];
+      if (price.endsWith('k')) {
+        priceMax = Number(price.slice(0, -1)) * 1000;
+      } else {
+        priceMax = Number(price);
+      }
+    }
+  }
+  
+  // ✅ Detecta intenção de preço baixo (normalizado)
+  const normalizedQuery = normalize(query);
+  if (CHEAP_INTENT_REGEX.test(normalizedQuery)) {
+    sortByPrice = true;
+  }
+  
+  // ✅ Detecta condição do produto
+  const conditionMatch = query.match(CONDITION_REGEX);
+  if (conditionMatch) {
+    const cond = conditionMatch[1].toLowerCase();
+    if (['novo', 'nova', 'lacrado', 'lacrada'].includes(cond)) {
+      condition = 'new';
+    } else if (['usado', 'usada'].includes(cond)) {
+      condition = 'used';
+    } else if (cond.includes('semi')) {
+      condition = 'refurbished';
+    }
+  }
+  
+  // ✅ Detecta atributo gamer
+  if (GAMER_REGEX.test(query)) {
+    isGamer = true;
+  }
+  
+  const storageMatch = query.match(STORAGE_REGEX);
+  if (storageMatch && !query.match(RAM_REGEX)) {
+    storage = storageMatch[0];
+  }
+  
+  const ramMatch = query.match(RAM_REGEX);
+  if (ramMatch) {
+    ram = ramMatch[0];
+  }
+  
+  const refreshMatch = query.match(REFRESH_RATE_REGEX);
+  if (refreshMatch) {
+    refreshRate = refreshMatch[0];
+  }
+  
+  const resolutionMatch = query.match(RESOLUTION_REGEX);
+  if (resolutionMatch) {
+    resolution = resolutionMatch[0];
+  }
+  
+  const screenMatch = query.match(SCREEN_SIZE_REGEX);
+  if (screenMatch) {
+    screenSize = screenMatch[0];
+  }
+  
+  // ✅ Detecta cor composta primeiro
+  for (let i = 0; i < words.length - 1; i++) {
+    const bigram = `${words[i]} ${words[i + 1]}`;
+    if (COLORS.has(bigram)) {
+      color = bigram;
       break;
     }
   }
   
-  // Detecta produto principal (primeira palavra não-stop)
-  for (const word of words) {
-    if (!STOP_WORDS.has(word) && word !== brand && word.length > 2) {
-      product = word;
+  if (!color) {
+    for (const word of words) {
+      if (COLORS.has(word)) {
+        color = word;
+        break;
+      }
+    }
+  }
+  
+  const genderMatch = query.match(GENDER_REGEX);
+  if (genderMatch) {
+    gender = genderMatch[1];
+  }
+  
+  // ✅ Detecta marca composta primeiro
+  for (let i = 0; i < words.length - 1; i++) {
+    const bigram = `${words[i]} ${words[i + 1]}`;
+    if (COMPOSITE_BRANDS.has(bigram)) {
+      brand = bigram;
       break;
     }
   }
   
-  // Se não encontrou produto, usa a primeira palavra
-  if (!product && words.length > 0) {
-    product = words[0];
+  if (!brand) {
+    for (const word of words) {
+      const normalizedWord = normalize(word);
+      if (BRAND_SET.has(normalizedWord)) {
+        brand = normalizedWord;
+        break;
+      }
+    }
   }
   
-  // Detecta modelo (números + letras)
-  const MODEL_BLACKLIST = new Set(['gamer', 'barato', 'novo', 'usado', 'seminovo', 'ultra', 'nova', 'novos', 'novas', 'usada', 'usados', 'usadas']);
-  const modelPattern = /\b(\d+[a-z]*|[a-z]+\d+|pro|max|mini|plus|se|note)\b/i;
-  for (const word of words) {
-    if (modelPattern.test(word) && word !== product && !MODEL_BLACKLIST.has(word)) {
-      model = word;
+  // ✅ Remove palavras da marca composta
+  let filteredWords = words;
+  if (brand && brand.includes(' ')) {
+    const brandWords = brand.split(' ');
+    filteredWords = words.filter(w => !brandWords.includes(w));
+  }
+  
+  // ✅ Detecta produto composto primeiro
+  for (let i = 0; i < filteredWords.length - 1; i++) {
+    const bigram = `${filteredWords[i]} ${filteredWords[i + 1]}`;
+    if (COMPOSITE_PRODUCTS.has(bigram)) {
+      product = bigram;
       break;
     }
   }
   
-  // Resto são atributos (remove condições)
-  const CONDITION_WORDS = new Set(['novo', 'nova', 'novos', 'novas', 'usado', 'usada', 'usados', 'usadas', 'seminovo', 'seminova']);
-  attributes = words.filter(word => 
-    !STOP_WORDS.has(word) && 
-    !CONDITION_WORDS.has(word) &&
-    word !== brand && 
-    word !== product && 
-    word !== model &&
-    !/\d+/.test(word) // Remove números de preço
-  );
+  if (!product) {
+    for (const word of filteredWords) {
+      if (!STOP_WORDS.has(word) && word !== brand && word.length > 2) {
+        product = word;
+        break;
+      }
+    }
+  }
+  
+  if (!product && filteredWords.length > 0) {
+    product = filteredWords[0];
+  }
+  
+  // ✅ Mapeia categoria implícita
+  const normalizedProduct = normalize(product);
+  if (CATEGORY_MAP[normalizedProduct]) {
+    product = CATEGORY_MAP[normalizedProduct];
+  }
+  
+  // ✅ Detecta tamanho de TV implícito
+  if (product === 'tv') {
+    for (const word of filteredWords) {
+      if (TV_SIZE_MAP[word]) {
+        implicitScreenSize = TV_SIZE_MAP[word];
+        break;
+      }
+    }
+  }
+  
+  // ✅ Filtra atributos (normalizado)
+  const CONDITION_WORDS = new Set(['novo', 'nova', 'novos', 'novas', 'usado', 'usada', 'usados', 'usadas', 'seminovo', 'seminova', 'lacrado', 'lacrada']);
+  
+  attributes = filteredWords.filter(word => {
+    const norm = normalize(word);
+    return !STOP_WORDS.has(norm) && 
+      !CONDITION_WORDS.has(norm) &&
+      !CHEAP_WORDS.has(norm) &&
+      norm !== normalize(brand) && 
+      norm !== normalize(product) &&
+      norm !== normalize(storage || '') &&
+      norm !== normalize(ram || '') &&
+      norm !== normalize(refreshRate || '') &&
+      norm !== normalize(resolution || '') &&
+      norm !== normalize(screenSize || '') &&
+      norm !== normalize(color || '') &&
+      !/^\d+$/.test(word) &&
+      !['grande', 'media', 'pequena', 'gamer', 'gaming'].includes(norm);
+  });
+  
+  attributes = [...new Set(attributes)];
   
   return {
     original: query,
     cleaned,
     brand,
     product,
-    model,
+    priceMin,
     priceMax,
+    storage,
+    ram,
+    refreshRate,
+    resolution,
+    screenSize,
+    implicitScreenSize,
+    color,
+    gender,
+    condition,
+    sortByPrice,
+    isGamer,
     attributes,
-    hasSpecificModel: hasSpecificModel(cleaned),
-    isGeneric: !brand && !model && attributes.length === 0 && !hasSpecificModel(cleaned)
+    isGeneric: !brand && !product && attributes.length === 0
   };
 }

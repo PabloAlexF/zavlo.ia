@@ -26,6 +26,10 @@ export const api = {
       compare: `${API_URL}/comparisons/compare`,
       bestDeals: `${API_URL}/comparisons/best-deals`,
     },
+    favorites: {
+      add: `${API_URL}/favorites`,
+      list: `${API_URL}/favorites`,
+    },
   },
 };
 

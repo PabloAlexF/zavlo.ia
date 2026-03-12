@@ -1653,7 +1653,7 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
   return (
     <div className="h-screen bg-gradient-to-br from-[#0A0A0F] via-[#0F0F14] to-[#0A0A0F] flex overflow-hidden">
       {/* Espaçador para o header global */}
-      <div className="h-16 w-full fixed top-0 left-0 right-0 z-0" />
+      <div className="h-14 sm:h-16 w-full fixed top-0 left-0 right-0 z-0" />
       
       {/* Sidebar */}
       <AnimatePresence>
@@ -1665,13 +1665,13 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
             className="w-72 border-r border-white/5 bg-black/40 backdrop-blur-2xl flex flex-col fixed md:relative z-[45]"
             style={{ 
-              top: '4rem',
+              top: '3.5rem',
               bottom: 0,
-              height: 'calc(100vh - 4rem)'
+              height: 'calc(100vh - 3.5rem)'
             }}
           >
             {/* Header da Sidebar */}
-            <div className="p-4 border-b border-white/5 flex items-center justify-between">
+            <div className="p-3 sm:p-4 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-blue-400" />
                 <h2 className="text-sm font-semibold text-white">Conversas</h2>
@@ -1696,7 +1696,7 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                   disabled={isCreatingNewChat}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 border border-white/10 rounded-xl text-white transition-all text-sm font-medium shadow-lg shadow-blue-500/5 ${isCreatingNewChat ? 'bg-gray-500/30 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20'}`}
+                  className={`w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border border-white/10 rounded-xl text-white transition-all text-xs sm:text-sm font-medium shadow-lg shadow-blue-500/5 ${isCreatingNewChat ? 'bg-gray-500/30 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20'}`}
                 >
 
                   {isCreatingNewChat ? (
@@ -1798,7 +1798,7 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
             exit={{ opacity: 0 }}
             className="fixed bg-black/80 backdrop-blur-sm z-[44] md:hidden"
             style={{ 
-              top: '4rem',
+              top: '3.5rem',
               left: 0,
               right: 0,
               bottom: 0
@@ -1809,15 +1809,15 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ marginTop: '4rem', height: 'calc(100dvh - 4rem)' }}>
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ marginTop: '3.5rem', height: 'calc(100dvh - 3.5rem)' }}>
         {/* Header com Hamburguer - Logo abaixo do header global */}
-        <div className="border-b border-white/5 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between flex-shrink-0 z-10">
+        <div className="border-b border-white/5 bg-black/95 backdrop-blur-2xl px-3 sm:px-4 md:px-6 h-14 sm:h-16 flex items-center justify-between flex-shrink-0 z-10">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <motion.button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              className="p-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 rounded-xl flex-shrink-0 transition-all border-2 border-blue-500/30 hover:border-blue-500/50 shadow-xl shadow-blue-500/20"
+              className="p-2 sm:p-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 rounded-lg sm:rounded-xl flex-shrink-0 transition-all border-2 border-blue-500/30 hover:border-blue-500/50 shadow-xl shadow-blue-500/20"
               aria-label="Toggle sidebar"
             >
               <motion.div
@@ -1825,33 +1825,33 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                 transition={{ duration: 0.3 }}
               >
                 {sidebarOpen ? (
-                  <X className="w-6 h-6 text-blue-400" />
+                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
                 ) : (
-                  <Menu className="w-6 h-6 text-blue-400" />
+                  <Menu className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
                 )}
               </motion.div>
             </motion.button>
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <Image 
                 src="/assets/icons/logo.ico" 
                 alt="Zavlo AI" 
-                width={36} 
-                height={36}
-                className="rounded-2xl flex-shrink-0 shadow-lg shadow-purple-500/20"
+                width={32} 
+                height={32}
+                className="rounded-xl sm:rounded-2xl flex-shrink-0 shadow-lg shadow-purple-500/20 w-7 h-7 sm:w-9 sm:h-9"
               />
               <div className="min-w-0">
-                <h1 className="text-sm font-semibold text-white truncate">Zavlo AI</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">Assistente de Compras</p>
+                <h1 className="text-xs sm:text-sm font-semibold text-white truncate">Zavlo AI</h1>
+                <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Assistente de Compras</p>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0">
             <motion.div 
               whileHover={{ scale: 1.05 }}
-              className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl shadow-lg shadow-yellow-500/5"
+              className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-lg sm:rounded-xl shadow-lg shadow-yellow-500/5"
             >
-              <Coins className="w-4 h-4 text-yellow-400" />
-              <span className="text-sm font-semibold text-white">{userCredits}</span>
+              <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400" />
+              <span className="text-xs sm:text-sm font-semibold text-white">{userCredits}</span>
             </motion.div>
           </div>
         </div>

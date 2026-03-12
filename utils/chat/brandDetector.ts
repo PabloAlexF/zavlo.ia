@@ -34,7 +34,14 @@ interface SearchIntent {
   priceSensitive?: boolean;
   premium?: boolean;
   feature?: string;
+  review?: boolean;
 }
+
+// Stopwords que devem ser removidos da query
+const STOPWORDS = new Set([
+  'quero', 'comprar', 'me', 'mostra', 'mostrar', 'buscar', 'procurar',
+  'um', 'uma', 'o', 'a', 'de', 'para', 'com', 'por', 'favor', 'ai', 'pra', 'tipo', 'algum'
+]);
 
 // Tokens conhecidos para split inteligente
 const KNOWN_TOKENS = ['nike', 'air', 'max', 'force', 'jordan', 'adidas', 'ultra', 'boost', 'new', 'balance', 'asics', 'gel', 'puma', 'tenis'];
@@ -62,47 +69,65 @@ const PRODUCT_ENTITIES: Record<string, ProductEntity> = {
   'switch': { category: 'console', brand: 'nintendo', aliases: ['nintendo switch'] }
 };
 
+// ✅ Categorias canônicas (consistência)
+type CanonicalCategory = 'running_shoe' | 'sneaker' | 'smartphone' | 'laptop' | 'tablet' | 'console' | 'tv' | 'appliance' | 'vehicle';
+
 // Product Knowledge Graph - Modelos específicos (ordenado por tamanho)
-const MODEL_KNOWLEDGE: Record<string, ModelInfo> = {
-  'cloudrunner 2': { brand: 'on running', category: 'running shoe', fullName: 'On Cloudrunner 2' },
-  'cloudrunner': { brand: 'on running', category: 'running shoe', fullName: 'On Cloudrunner' },
-  'cloudflow': { brand: 'on running', category: 'running shoe', fullName: 'On Cloudflow' },
-  'cloudswift': { brand: 'on running', category: 'running shoe', fullName: 'On Cloudswift' },
-  'air max 270': { brand: 'nike', category: 'running shoe', fullName: 'Nike Air Max 270' },
-  'air max 90': { brand: 'nike', category: 'running shoe', fullName: 'Nike Air Max 90' },
-  'air max': { brand: 'nike', category: 'running shoe', fullName: 'Nike Air Max' },
-  'air force 1': { brand: 'nike', category: 'sneaker', fullName: 'Nike Air Force 1' },
-  'air force': { brand: 'nike', category: 'sneaker', fullName: 'Nike Air Force' },
-  'jordan 1': { brand: 'nike', category: 'sneaker', fullName: 'Air Jordan 1' },
-  'jordan': { brand: 'nike', category: 'sneaker', fullName: 'Air Jordan' },
-  'ultraboost 22': { brand: 'adidas', category: 'running shoe', fullName: 'Adidas Ultraboost 22' },
-  'ultraboost': { brand: 'adidas', category: 'running shoe', fullName: 'Adidas Ultraboost' },
-  'nmd': { brand: 'adidas', category: 'sneaker', fullName: 'Adidas NMD' },
-  'superstar': { brand: 'adidas', category: 'sneaker', fullName: 'Adidas Superstar' },
-  'yeezy': { brand: 'adidas', category: 'sneaker', fullName: 'Adidas Yeezy' },
-  'suede': { brand: 'puma', category: 'sneaker', fullName: 'Puma Suede' },
-  'rs-x': { brand: 'puma', category: 'sneaker', fullName: 'Puma RS-X' },
-  'gel kayano': { brand: 'asics', category: 'running shoe', fullName: 'Asics Gel Kayano' },
-  'gel nimbus': { brand: 'asics', category: 'running shoe', fullName: 'Asics Gel Nimbus' },
-  'gel': { brand: 'asics', category: 'running shoe', fullName: 'Asics Gel' },
-  '990v5': { brand: 'new balance', category: 'running shoe', fullName: 'New Balance 990v5' },
-  '990': { brand: 'new balance', category: 'running shoe', fullName: 'New Balance 990' },
-  '574': { brand: 'new balance', category: 'sneaker', fullName: 'New Balance 574' }
+const MODEL_KNOWLEDGE: Record<string, ModelInfo & { canonical: CanonicalCategory }> = {
+  'cloudrunner 2': { brand: 'on running', category: 'running shoe', fullName: 'On Cloudrunner 2', canonical: 'running_shoe' },
+  'cloudrunner': { brand: 'on running', category: 'running shoe', fullName: 'On Cloudrunner', canonical: 'running_shoe' },
+  'cloudflow': { brand: 'on running', category: 'running shoe', fullName: 'On Cloudflow', canonical: 'running_shoe' },
+  'cloudswift': { brand: 'on running', category: 'running shoe', fullName: 'On Cloudswift', canonical: 'running_shoe' },
+  'air max 270': { brand: 'nike', category: 'running shoe', fullName: 'Nike Air Max 270', canonical: 'running_shoe' },
+  'air max 90': { brand: 'nike', category: 'running shoe', fullName: 'Nike Air Max 90', canonical: 'running_shoe' },
+  'air max': { brand: 'nike', category: 'running shoe', fullName: 'Nike Air Max', canonical: 'running_shoe' },
+  'air force 1': { brand: 'nike', category: 'sneaker', fullName: 'Nike Air Force 1', canonical: 'sneaker' },
+  'air force': { brand: 'nike', category: 'sneaker', fullName: 'Nike Air Force', canonical: 'sneaker' },
+  'jordan 1': { brand: 'nike', category: 'sneaker', fullName: 'Air Jordan 1', canonical: 'sneaker' },
+  'jordan': { brand: 'nike', category: 'sneaker', fullName: 'Air Jordan', canonical: 'sneaker' },
+  'ultraboost 22': { brand: 'adidas', category: 'running shoe', fullName: 'Adidas Ultraboost 22', canonical: 'running_shoe' },
+  'ultraboost': { brand: 'adidas', category: 'running shoe', fullName: 'Adidas Ultraboost', canonical: 'running_shoe' },
+  'nmd': { brand: 'adidas', category: 'sneaker', fullName: 'Adidas NMD', canonical: 'sneaker' },
+  'superstar': { brand: 'adidas', category: 'sneaker', fullName: 'Adidas Superstar', canonical: 'sneaker' },
+  'yeezy': { brand: 'adidas', category: 'sneaker', fullName: 'Adidas Yeezy', canonical: 'sneaker' },
+  'suede': { brand: 'puma', category: 'sneaker', fullName: 'Puma Suede', canonical: 'sneaker' },
+  'rs-x': { brand: 'puma', category: 'sneaker', fullName: 'Puma RS-X', canonical: 'sneaker' },
+  'gel kayano': { brand: 'asics', category: 'running shoe', fullName: 'Asics Gel Kayano', canonical: 'running_shoe' },
+  'gel nimbus': { brand: 'asics', category: 'running shoe', fullName: 'Asics Gel Nimbus', canonical: 'running_shoe' },
+  'gel': { brand: 'asics', category: 'running shoe', fullName: 'Asics Gel', canonical: 'running_shoe' },
+  '990v5': { brand: 'new balance', category: 'running shoe', fullName: 'New Balance 990v5', canonical: 'running_shoe' },
+  '990': { brand: 'new balance', category: 'running shoe', fullName: 'New Balance 990', canonical: 'running_shoe' },
+  '574': { brand: 'new balance', category: 'sneaker', fullName: 'New Balance 574', canonical: 'sneaker' }
 };
 
 // Versões válidas por linha de produto (evita capturar tamanhos/anos)
+// ✅ BUG FIX: Chaves normalizadas para lookup correto
 const VALID_VERSIONS: Record<string, string[]> = {
-  'air max': ['90', '95', '97', '98', '200', '270', '720', '2090'],
-  'air force': ['1', '07'],
+  'airmax': ['90', '95', '97', '98', '200', '270', '720', '2090'],
+  'airforce': ['1', '07'],
   'jordan': ['1', '3', '4', '5', '6', '11', '12', '13'],
   'ultraboost': ['19', '20', '21', '22', '23'],
   'gel': ['1090', '1130'],
   '990': ['v3', 'v4', 'v5', 'v6']
 };
 
-// Ordenar modelos por tamanho (mais específicos primeiro)
+/**
+ * ✅ Extrai linha base do modelo para lookup de versões
+ * "air max 270" -> "airmax"
+ * "gel kayano" -> "gel"
+ */
+function getModelBaseline(modelKey: string): string {
+  return modelKey.replace(/\s+/g, '').toLowerCase();
+}
+
+// ✅ Pré-compila regex para performance
 const SORTED_MODELS = Object.entries(MODEL_KNOWLEDGE)
-  .sort((a, b) => b[0].length - a[0].length);
+  .map(([key, value]) => ({
+    key,
+    value,
+    regex: new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+  }))
+  .sort((a, b) => b.key.length - a.key.length);
 
 // Base de conhecimento de marcas específicas
 const BRAND_KNOWLEDGE: Record<string, BrandInfo> = {
@@ -140,10 +165,22 @@ const INTENT_KEYWORDS = {
   features: ['camera', 'câmera', 'bateria', 'tela', 'processador', 'memoria']
 };
 
+// ✅ Frases compostas para review intent (evita falsos positivos)
+const REVIEW_PHRASES = [
+  'vale a pena',
+  'melhor que',
+  'comparação',
+  'comparacao',
+  'opinião',
+  'opiniao',
+  'review'
+];
+
 /**
  * Normaliza query com split inteligente (Token Matching)
  * airmax97 -> air max 97
  * nikeairmax -> nike air max
+ * ✅ BUG FIX: Negative lookahead/lookbehind para evitar quebrar palavras
  */
 function smartNormalize(query: string): string {
   let normalized = query
@@ -154,13 +191,17 @@ function smartNormalize(query: string): string {
     .replace(/(\d)([a-z])/g, '$1 $2')
     .replace(/[^a-z0-9 ]/g, ' ');
   
-  // Split tokens colados
+  // ✅ BUG FIX: Negative lookahead/lookbehind para não quebrar palavras
   for (const token of KNOWN_TOKENS) {
-    const pattern = new RegExp(`(${token})`, 'g');
-    normalized = normalized.replace(pattern, ' $1 ');
+    const pattern = new RegExp(`(?<![a-z])${token}(?![a-z])`, 'g');
+    normalized = normalized.replace(pattern, ` ${token} `);
   }
   
-  return normalized.replace(/\s+/g, ' ').trim();
+  // Remove stopwords
+  const words = normalized.split(/\s+/);
+  const filtered = words.filter(w => !STOPWORDS.has(w));
+  
+  return filtered.join(' ').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -182,6 +223,7 @@ export function normalizeProductAliases(query: string): string {
 
 /**
  * Detecta versão (iPhone 13, Galaxy S23)
+ * ✅ BUG FIX: Trim variant para evitar espaços extras
  */
 export function detectProductVersion(query: string): { product?: string; version?: string; variant?: string } {
   const normalized = query.toLowerCase();
@@ -191,7 +233,7 @@ export function detectProductVersion(query: string): { product?: string; version
     return {
       product: 'iphone',
       version: iphoneMatch[1],
-      variant: [iphoneMatch[2], iphoneMatch[3]].filter(Boolean).join(' ') || undefined
+      variant: [iphoneMatch[2], iphoneMatch[3]].filter(Boolean).join(' ').trim() || undefined
     };
   }
   
@@ -208,25 +250,33 @@ export function detectProductVersion(query: string): { product?: string; version
 }
 
 /**
- * Detecta intenção (preço, premium, features)
+ * Detecta intenção (preço, premium, features, review)
+ * ✅ BUG FIX: Word boundary para evitar "melhorar" -> "premium"
+ * ✅ BUG FIX: Review usa frases compostas para evitar falsos positivos
  */
 export function detectSearchIntent(query: string): SearchIntent {
   const normalized = query.toLowerCase();
   const intent: SearchIntent = {};
   
-  if (INTENT_KEYWORDS.priceSensitive.some(kw => normalized.includes(kw))) {
+  // ✅ BUG FIX: Word boundary
+  if (INTENT_KEYWORDS.priceSensitive.some(kw => new RegExp(`\\b${kw}\\b`).test(normalized))) {
     intent.priceSensitive = true;
   }
   
-  if (INTENT_KEYWORDS.premium.some(kw => normalized.includes(kw))) {
+  if (INTENT_KEYWORDS.premium.some(kw => new RegExp(`\\b${kw}\\b`).test(normalized))) {
     intent.premium = true;
   }
   
   for (const feature of INTENT_KEYWORDS.features) {
-    if (normalized.includes(feature)) {
+    if (new RegExp(`\\b${feature}\\b`).test(normalized)) {
       intent.feature = feature;
       break;
     }
+  }
+  
+  // ✅ BUG FIX: Review usa frases compostas (evita "melhor qualidade" -> review)
+  if (REVIEW_PHRASES.some(phrase => normalized.includes(phrase))) {
+    intent.review = true;
   }
   
   return intent;
@@ -234,17 +284,31 @@ export function detectSearchIntent(query: string): SearchIntent {
 
 /**
  * Detecta produto específico (iPhone, MacBook, PS5, etc)
+ * ✅ BUG FIX: Testa aliases além da chave principal
+ * ✅ BUG FIX: Usa query normalizada para evitar problemas com acentos
  */
 export function detectProductEntity(query: string): { brand?: string; category?: string } {
-  const normalized = query.toLowerCase();
+  const normalized = normalizeProductAliases(query).toLowerCase();
   
   for (const [productKey, productInfo] of Object.entries(PRODUCT_ENTITIES)) {
-    const pattern = new RegExp(`\\b${productKey}\\b`, 'i');
-    if (pattern.test(normalized)) {
+    // ✅ Testa chave principal
+    const keyPattern = new RegExp(`\\b${productKey}\\b`, 'i');
+    if (keyPattern.test(normalized)) {
       return {
         brand: productInfo.brand,
         category: productInfo.category
       };
+    }
+    
+    // ✅ BUG FIX: Testa aliases
+    for (const alias of productInfo.aliases) {
+      const aliasPattern = new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      if (aliasPattern.test(normalized)) {
+        return {
+          brand: productInfo.brand,
+          category: productInfo.category
+        };
+      }
     }
   }
   
@@ -255,31 +319,57 @@ export function detectProductEntity(query: string): { brand?: string; category?:
  * Detecta modelo e marca usando Product Knowledge Graph
  * Usa word boundary e ordenação por tamanho
  * Captura versão logo após o modelo com validação
+ * ✅ BUG FIX: Valida categoria antes de capturar modelo
+ * ✅ BUG FIX: Exige contexto mínimo para modelos genéricos (gel)
+ * ✅ PERFORMANCE: Regex pré-compilado
  */
 export function detectModelAndBrand(query: string): { brand?: string; model?: string; category?: string } {
   const normalized = query.toLowerCase();
   
-  // Busca no knowledge graph (modelos mais específicos primeiro)
-  for (const [modelKey, modelInfo] of SORTED_MODELS) {
-    const pattern = new RegExp(`\\b${modelKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-    if (pattern.test(normalized)) {
-      let fullModel = modelInfo.fullName;
+  // ✅ BUG FIX: Detecta categoria da query primeiro
+  const hasShoeContext = /\b(tenis|tênis|sapato|shoe|running|corrida)\b/i.test(normalized);
+  const hasElectronicsContext = /\b(celular|smartphone|phone|tv|geladeira|notebook|laptop)\b/i.test(normalized);
+  
+  // ✅ PERFORMANCE: Usa regex pré-compilado
+  for (const model of SORTED_MODELS) {
+    if (model.regex.test(normalized)) {
+      // ✅ BUG FIX: Valida categoria antes de retornar
+      const isShoeModel = model.value.canonical === 'running_shoe' || model.value.canonical === 'sneaker';
+      
+      // Se query tem contexto de eletrônicos e modelo é de tênis, ignora
+      if (hasElectronicsContext && isShoeModel) {
+        continue;
+      }
+      
+      // ✅ BUG FIX: Modelos genéricos (gel) exigem contexto de tênis
+      const isGenericModel = ['gel', 'suede', 'nmd'].includes(model.key);
+      if (isGenericModel && !hasShoeContext) {
+        continue;
+      }
+      
+      // Se query não tem contexto de tênis e modelo é de tênis, ignora (exceto se for único match)
+      if (!hasShoeContext && isShoeModel && normalized.split(/\s+/).length > 2) {
+        continue;
+      }
+      
+      let fullModel = model.value.fullName;
       
       // Captura versão logo após o modelo (evita anos/tamanhos distantes)
-      const versionPattern = new RegExp(`${modelKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(\\d{1,4})`, 'i');
+      const versionPattern = new RegExp(`${model.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(\\d{1,4})`, 'i');
       const versionMatch = normalized.match(versionPattern);
       if (versionMatch && versionMatch[1]) {
-        // Valida se é versão válida para essa linha de produto
-        const validVersions = VALID_VERSIONS[modelKey];
+        // ✅ BUG FIX: Usa baseline para lookup de versões
+        const baseline = getModelBaseline(model.key);
+        const validVersions = VALID_VERSIONS[baseline];
         if (!validVersions || validVersions.includes(versionMatch[1])) {
-          fullModel = `${modelInfo.fullName} ${versionMatch[1]}`;
+          fullModel = `${model.value.fullName} ${versionMatch[1]}`;
         }
       }
       
       return {
-        brand: modelInfo.brand,
+        brand: model.value.brand,
         model: fullModel,
-        category: modelInfo.category
+        category: model.value.category
       };
     }
   }
@@ -290,6 +380,7 @@ export function detectModelAndBrand(query: string): { brand?: string; model?: st
 /**
  * Detecta condição automaticamente (usado/novo)
  * IMPORTANTE: Remove da query para evitar duplicação
+ * ✅ BUG FIX: Regex mais específico para "zero" (zero km, 0km)
  */
 export function detectCondition(query: string): 'novo' | 'usado' | undefined {
   const normalized = query.toLowerCase();
@@ -299,8 +390,8 @@ export function detectCondition(query: string): 'novo' | 'usado' | undefined {
     return 'usado';
   }
   
-  // Detecta "novo" e variações
-  if (/\b(novo|nova|novos|novas|lacrado|lacrada|na caixa|zero|0km)\b/i.test(normalized)) {
+  // Detecta "novo" e variações (✅ BUG FIX: zero km específico)
+  if (/\b(novo|nova|novos|novas|lacrado|lacrada|na caixa|zero\s*km|0km)\b/i.test(normalized)) {
     return 'novo';
   }
   
@@ -309,9 +400,16 @@ export function detectCondition(query: string): 'novo' | 'usado' | undefined {
 
 /**
  * Remove condição da query (evita duplicação)
+ * ✅ BUG FIX: Cobre mais variações (semi novo, semi-novo, usadinho)
  */
 function removeCondition(query: string): string {
-  return query.replace(/\b(novo|nova|novos|novas|usado|usada|usados|usadas|seminovo|seminova|lacrado|lacrada)\b/gi, '').replace(/\s+/g, ' ').trim();
+  return query
+    .replace(/\b(novo|nova|novos|novas|usado|usada|usados|usadas|usadinho|usadinha)\b/gi, '')
+    .replace(/\bsemi[- ]?novo\b/gi, '')
+    .replace(/\bsemi[- ]?nova\b/gi, '')
+    .replace(/\b(lacrado|lacrada|na caixa|zero\s*km|0km)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -325,8 +423,8 @@ export function enrichProductQuery(query: string): ProductEnrichment {
   const queryWithoutCondition = removeCondition(normalizedQuery);
   const normalized = queryWithoutCondition.toLowerCase();
   
-  // 1. Detecta versão
-  const versionInfo = detectProductVersion(query);
+  // 1. ✅ BUG FIX: Detecta versão com query normalizada
+  const versionInfo = detectProductVersion(normalizedQuery);
   
   // 2. Detecta produto específico
   const productEntity = detectProductEntity(query);
@@ -351,8 +449,9 @@ export function enrichProductQuery(query: string): ProductEnrichment {
   // 5. Detecta intenção
   const intent = detectSearchIntent(query);
   
-  // 6. Verifica gênero
-  const needsGenderQuestion = GENDER_PRODUCT_REGEX.test(normalized);
+  // 6. ✅ BUG FIX: Verifica gênero (só pergunta se não detectado)
+  const hasGender = /\b(masculino|feminino|unissex)\b/i.test(normalized);
+  const needsGenderQuestion = GENDER_PRODUCT_REGEX.test(normalized) && !hasGender;
   
   // 7. Verifica condição
   const needsConditionQuestion = !condition;
@@ -360,8 +459,12 @@ export function enrichProductQuery(query: string): ProductEnrichment {
   // 8. Constrói query enriquecida (sem condição)
   let enrichedQuery = queryWithoutCondition;
   
-  if (detectedBrand && !normalized.includes(detectedBrand.toLowerCase())) {
-    enrichedQuery = `${detectedBrand} ${enrichedQuery}`;
+  // ✅ BUG FIX: Word boundary para evitar duplicação
+  if (detectedBrand) {
+    const brandRegex = new RegExp(`\\b${detectedBrand.toLowerCase()}\\b`);
+    if (!brandRegex.test(normalized)) {
+      enrichedQuery = `${detectedBrand} ${enrichedQuery}`;
+    }
   }
   
   if (category && !normalized.includes(category)) {
@@ -470,27 +573,39 @@ export function optimizeQueryOrder(parts: {
   return ordered.join(' ').trim();
 }
 
+// ✅ Configuração escalável para perguntas de marca
+const SMART_BRAND_QUESTIONS: Record<string, { question: string; options: string[] }> = {
+  'on running': {
+    question: 'Detectei que você quer um On Running. Confirma?',
+    options: ['Sim, quero On Running', 'Não, qualquer marca serve']
+  },
+  'nike': {
+    question: 'Detectei a marca Nike. Está correto?',
+    options: ['Sim, Nike', 'Não, outra marca']
+  },
+  'adidas': {
+    question: 'Detectei a marca Adidas. Está correto?',
+    options: ['Sim, Adidas', 'Não, outra marca']
+  }
+};
+
 /**
  * Gera pergunta inteligente baseada na marca detectada
+ * ✅ BUG FIX: Configuração escalável ao invés de if/else
  */
 export function generateSmartBrandQuestion(detectedBrand: string, originalQuery: string): {
   question: string;
   options: string[];
 } {
-  const normalized = originalQuery.toLowerCase();
+  const normalized = detectedBrand.toLowerCase();
   
-  // Se detectou On Running
-  if (detectedBrand === 'on running') {
-    return {
-      question: `Detectei que você quer um ${detectedBrand}. Confirma?`,
-      options: [
-        'Sim, quero On Running',
-        'Não, qualquer marca serve'
-      ]
-    };
+  // ✅ Lookup na configuração
+  const config = SMART_BRAND_QUESTIONS[normalized];
+  if (config) {
+    return config;
   }
   
-  // Pergunta genérica
+  // Fallback genérico
   return {
     question: `Detectei a marca ${detectedBrand}. Está correto?`,
     options: [
