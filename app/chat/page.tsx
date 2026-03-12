@@ -1309,7 +1309,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-[#0A0A0F] via-[#0F0F14] to-[#0A0A0F] flex">
+    <div className="h-screen bg-gradient-to-br from-[#0A0A0F] via-[#0F0F14] to-[#0A0A0F] flex overflow-hidden">
       {/* Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -1404,9 +1404,9 @@ export default function ChatPage() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full">
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="border-b border-white/5 bg-black/20 backdrop-blur-2xl px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between">
+        <div className="border-b border-white/5 bg-black/20 backdrop-blur-2xl px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <motion.button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1450,7 +1450,7 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4 sm:py-6" style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4">
             {messages.length === 1 && messages[0].type === 'ai' && (
               <div className="flex flex-col items-center gap-3 sm:gap-4 mt-4 sm:mt-8">
@@ -2129,7 +2129,7 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-white/5 bg-black/20 backdrop-blur-2xl p-4 sm:p-6 safe-area-bottom">
+        <div className="border-t border-white/5 bg-black/20 backdrop-blur-2xl p-3 sm:p-4 flex-shrink-0">
           <div className="max-w-4xl mx-auto">
             <AnimatePresence>
               {uploadedImage && (
@@ -2137,13 +2137,13 @@ export default function ChatPage() {
                   initial={{ opacity: 0, y: 10, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
-                  className="mb-3"
+                  className="mb-2"
                 >
                   <div className="relative inline-block">
                     <img 
                       src={uploadedImage} 
                       alt="Preview" 
-                      className="h-20 w-20 sm:h-24 sm:w-24 object-cover rounded-2xl border-2 border-blue-500/50 shadow-lg shadow-blue-500/20"
+                      className="h-16 w-16 sm:h-20 sm:w-20 object-cover rounded-xl border-2 border-blue-500/50 shadow-lg shadow-blue-500/20"
                     />
                     <motion.button
                       onClick={() => {
@@ -2152,7 +2152,7 @@ export default function ChatPage() {
                       }}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      className="absolute -top-2 -right-2 p-1.5 bg-red-500 rounded-full hover:bg-red-600 transition shadow-lg"
+                      className="absolute -top-1 -right-1 p-1 bg-red-500 rounded-full hover:bg-red-600 transition shadow-lg"
                     >
                       <X className="w-3 h-3 text-white" />
                     </motion.button>
@@ -2161,7 +2161,7 @@ export default function ChatPage() {
               )}
             </AnimatePresence>
             
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2174,7 +2174,7 @@ export default function ChatPage() {
                 disabled={loading}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-4 py-3.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl text-white disabled:opacity-50 transition-all flex-shrink-0 shadow-lg"
+                className="p-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-white disabled:opacity-50 transition-all flex-shrink-0 shadow-lg"
                 title="Buscar por imagem"
               >
                 <ImageIcon className="w-5 h-5" />
@@ -2191,8 +2191,14 @@ export default function ChatPage() {
                     handleSend();
                   }
                 }}
+                onFocus={() => {
+                  // Scroll para o final quando o input recebe foco (mobile)
+                  setTimeout(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                  }, 300);
+                }}
                 placeholder={uploadedImage ? "Ou digite..." : "Digite um produto..."}
-                className="flex-1 px-5 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 outline-none focus:border-blue-500/50 focus:bg-white/10 text-sm transition-all backdrop-blur-xl"
+                className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 outline-none focus:border-blue-500/50 focus:bg-white/10 text-sm transition-all backdrop-blur-xl min-w-0"
                 disabled={loading}
               />
               
@@ -2202,7 +2208,7 @@ export default function ChatPage() {
                   disabled={loading}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="px-6 py-3.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl text-white disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-500/30 flex-shrink-0 font-medium"
+                  className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl text-white disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-500/30 flex-shrink-0 font-medium"
                 >
                   <Search className="w-5 h-5" />
                   <span className="text-sm hidden sm:inline">Buscar</span>
@@ -2213,7 +2219,7 @@ export default function ChatPage() {
                   disabled={loading || !input.trim()}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl text-white disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-500/30 flex-shrink-0 font-medium"
+                  className="px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl text-white disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-500/30 flex-shrink-0 font-medium"
                 >
                   <Send className="w-5 h-5" />
                   <span className="text-sm hidden sm:inline">Enviar</span>
