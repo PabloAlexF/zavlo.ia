@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -48,7 +48,7 @@ interface ChatHistory {
   updatedAt: Date;
 }
 
-type ChatState = 'idle' | 'awaiting_condition' | 'awaiting_location' | 'awaiting_confirmation' | 'searching' | 'category_questions' | 'awaiting_image_confirmation' | 'awaiting_image_sort';
+type ChatState = 'idle' | 'awaiting_condition' | 'awaiting_location' | 'awaiting_confirmation' | 'searching' | 'category_questions' | 'awaiting_image_confirmation' | 'awaiting_image_sort' | 'awaiting_sort';
 
 interface CategoryAnswers {
   [key: string]: string;
@@ -81,9 +81,15 @@ export default function ChatPage() {
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string>('');
   
+  // Mobile keyboard detection
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -94,6 +100,57 @@ export default function ChatPage() {
       }
     }, 100);
   }, [messages]);
+
+  // Detecta teclado virtual no mobile
+  useEffect(() => {
+    // Salva altura inicial do viewport
+    const initialHeight = window.visualViewport?.height || window.innerHeight;
+    setViewportHeight(initialHeight);
+
+    const handleResize = () => {
+      if (window.visualViewport) {
+        const currentHeight = window.visualViewport.height;
+        const heightDiff = initialHeight - currentHeight;
+        
+        // Se a diferença for maior que 150px, consideramos que o teclado está aberto
+        if (heightDiff > 150) {
+          setIsKeyboardOpen(true);
+          setKeyboardHeight(heightDiff);
+          
+          // Scroll para o input quando o teclado abrir
+          setTimeout(() => {
+            inputContainerRef.current?.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'end' 
+            });
+          }, 100);
+        } else {
+          setIsKeyboardOpen(false);
+          setKeyboardHeight(0);
+        }
+      }
+    };
+
+    const handleVisualViewportResize = () => {
+      handleResize();
+    };
+
+    // Listeners para detectar mudanças no viewport
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleVisualViewportResize);
+      window.visualViewport.addEventListener('scroll', handleVisualViewportResize);
+    }
+    
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleVisualViewportResize);
+        window.visualViewport.removeEventListener('scroll', handleVisualViewportResize);
+      }
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     loadUserCredits();
@@ -636,8 +693,8 @@ export default function ChatPage() {
         contextManager.get().conversationHistory
       );
 
-      // Se usuário corrigiu/mudou de ideia, resetar estado e processar nova busca
-      if (contextChange.hasChange && (contextChange.type === 'correction' || contextChange.type === 'new_search')) {
+      // IMPORTANTE: Só processa mudança se confidence for alta (> 0.85)
+      if (contextChange.hasChange && contextChange.confidence > 0.85 && (contextChange.type === 'correction' || contextChange.type === 'new_search')) {
         console.log('🔄 Mudança de contexto detectada:', contextChange);
         
         // Resetar estado
@@ -678,25 +735,47 @@ export default function ChatPage() {
     // Estado: aguardando localização
     if (chatState === 'awaiting_location') {
       const location = currentInput.toLowerCase().trim();
-      const updatedLocation = (location === 'não' || location === 'nao') ? undefined : currentInput;
+      const updatedLocation = (location === 'nÃ£o' || location === 'nao') ? undefined : currentInput;
       
       setPendingSearch(prev => {
         if (!prev) return prev;
         return { ...prev, location: updatedLocation };
       });
       
+      // SEMPRE perguntar ordenaÃ§Ã£o apÃ³s localizaÃ§Ã£o
+      const sortMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'category_question',
+        content: 'Como quer ordenar os resultados?',
+        timestamp: new Date(),
+        categoryQuestion: {
+          id: 'sort_by',
+          options: ['Mais relevantes', 'Menor preÃ§o', 'Maior preÃ§o'],
+          category: 'sort'
+        }
+      };
+      setMessages(prev => [...prev, sortMessage]);
+      setChatState('awaiting_sort');
+      setLoading(false);
+      return;
+    }
+    
+    // Estado: aguardando ordenaÃ§Ã£o
+    if (chatState === 'awaiting_sort') {
+      const sortBy = currentInput.trim();
+      
       // Se tem categoria, gerar busca final com respostas
       if (pendingSearch?.category) {
-        const allAnswers = { ...categoryAnswers };
-        console.log('📝 Respostas coletadas:', allAnswers);
-        console.log('🗺️ Localização:', updatedLocation);
-        const searchResult = buildCategoryQuery(pendingSearch.query, allAnswers, updatedLocation);
-        console.log('🔍 Query final gerada:', searchResult);
+        const allAnswers = { ...categoryAnswers, sort_by: sortBy };
+        console.log('ðŸ“‹ Respostas coletadas:', allAnswers);
+        console.log('ðŸ—ºï¸ LocalizaÃ§Ã£o:', pendingSearch.location);
+        const searchResult = buildCategoryQuery(pendingSearch.query, allAnswers, pendingSearch.location);
+        console.log('ðŸ” Query final gerada:', searchResult);
         
         const confirmationMessage: Message = {
           id: crypto.randomUUID(),
           type: 'confirmation',
-          content: searchResult.query, // Usar apenas a query string
+          content: searchResult.query,
           timestamp: new Date(),
           searchType: 'text',
           creditCost: 1,
@@ -707,7 +786,12 @@ export default function ChatPage() {
         return;
       }
       
-      // Senão, perguntar condição
+      // SenÃ£o, perguntar condiÃ§Ã£o
+      setPendingSearch(prev => {
+        if (!prev) return prev;
+        return { ...prev, sortBy };
+      });
+      
       const aiMessage: Message = {
         id: crypto.randomUUID(),
         type: 'ai',
@@ -715,7 +799,7 @@ export default function ChatPage() {
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
-      setChatState('awaiting_condition');
+      setChatState('awaiting_condition')
       setLoading(false);
       return;
     }
@@ -1064,7 +1148,7 @@ export default function ChatPage() {
         
         if (remainingQuestions.length === 0) {
           // Todas as perguntas já foram respondidas, perguntar localização
-          setPendingSearch({ query: cleaned, category });
+          setPendingSearch({ query: withContext, category });
           setCategoryAnswers(providedInfo);
           
           const aiMessage: Message = {
@@ -1079,7 +1163,7 @@ export default function ChatPage() {
           return;
         }
         
-        setPendingSearch({ query: cleaned, category });
+        setPendingSearch({ query: withContext, category });
         setCategoryAnswers(providedInfo);
         
         const firstQuestion = remainingQuestions[0];
@@ -1104,8 +1188,8 @@ export default function ChatPage() {
       // 3. Verificar se precisa de localização
       if (parsed.needsLocation) {
         setPendingSearch(prev => {
-          if (!prev) return { query: cleaned };
-          return { ...prev, query: cleaned };
+          if (!prev) return { query: withContext };
+          return { ...prev, query: withContext };
         });
         const aiMessage: Message = {
           id: crypto.randomUUID(),
@@ -1123,8 +1207,8 @@ export default function ChatPage() {
       if (parsed.condition) {
         // Já tem condição, vai direto para confirmação
         setPendingSearch(prev => {
-          if (!prev) return { query: cleaned, condition: parsed.condition };
-          return { ...prev, query: cleaned, condition: parsed.condition };
+          if (!prev) return { query: withContext, condition: parsed.condition };
+          return { ...prev, query: withContext, condition: parsed.condition };
         });
         const searchResult = buildSearchQuery(parsed, parsed.condition);
         const confirmationMessage: Message = {
@@ -1143,8 +1227,8 @@ export default function ChatPage() {
       
       // 5. Pedir condição
       setPendingSearch(prev => {
-        if (!prev) return { query: cleaned };
-        return { ...prev, query: cleaned };
+        if (!prev) return { query: withContext };
+        return { ...prev, query: withContext };
       });
       const aiMessage: Message = {
         id: crypto.randomUUID(),
@@ -1558,7 +1642,14 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4 sm:py-6" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div 
+          className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4 sm:py-6" 
+          style={{ 
+            WebkitOverflowScrolling: 'touch',
+            paddingBottom: isKeyboardOpen ? `${keyboardHeight + 80}px` : '0px',
+            transition: 'padding-bottom 0.3s ease'
+          }}
+        >
           <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4">
             {messages.length === 1 && messages[0].type === 'ai' && (
               <div className="flex flex-col items-center gap-3 sm:gap-4 mt-4 sm:mt-8">
@@ -2237,7 +2328,18 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-white/5 bg-black/20 backdrop-blur-2xl p-3 sm:p-4 flex-shrink-0">
+        <div 
+          ref={inputContainerRef}
+          className="border-t border-white/5 bg-black/20 backdrop-blur-2xl p-3 sm:p-4 flex-shrink-0 transition-all duration-300"
+          style={{
+            position: isKeyboardOpen ? 'fixed' : 'relative',
+            bottom: isKeyboardOpen ? `${keyboardHeight}px` : 'auto',
+            left: isKeyboardOpen ? 0 : 'auto',
+            right: isKeyboardOpen ? 0 : 'auto',
+            zIndex: isKeyboardOpen ? 100 : 'auto',
+            transform: isKeyboardOpen ? 'translateY(0)' : 'none',
+          }}
+        >
           <div className="max-w-4xl mx-auto">
             <AnimatePresence>
               {uploadedImage && (
@@ -2300,10 +2402,21 @@ export default function ChatPage() {
                   }
                 }}
                 onFocus={() => {
-                  // Scroll para o final quando o input recebe foco (mobile)
+                  // Scroll suave para o input quando recebe foco
                   setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    inputContainerRef.current?.scrollIntoView({ 
+                      behavior: 'smooth', 
+                      block: 'end',
+                      inline: 'nearest'
+                    });
                   }, 300);
+                }}
+                onBlur={() => {
+                  // Pequeno delay para permitir que o teclado feche
+                  setTimeout(() => {
+                    setIsKeyboardOpen(false);
+                    setKeyboardHeight(0);
+                  }, 100);
                 }}
                 placeholder={uploadedImage ? "Ou digite..." : "Digite um produto..."}
                 className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 outline-none focus:border-blue-500/50 focus:bg-white/10 text-sm transition-all backdrop-blur-xl min-w-0"
