@@ -74,7 +74,7 @@ export function Header() {
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-[100] bg-[#0B0B0F]/95 backdrop-blur-xl border-b border-white/10">
+    <header className="fixed top-0 left-0 right-0 z-40 bg-[#0B0B0F]/95 backdrop-blur-xl border-b border-white/10">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 group">
           <Image 
@@ -106,7 +106,7 @@ export function Header() {
               
               {isDropdownOpen && (
                 <div 
-                  className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[4.5rem] sm:top-full mt-0 sm:mt-2 w-auto sm:w-80 bg-[#1A1A1F]/95 backdrop-blur-2xl border border-white/20 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 z-[100]"
+                  className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[4.5rem] sm:top-full mt-0 sm:mt-2 w-auto sm:w-80 bg-[#1A1A1F]/95 backdrop-blur-2xl border border-white/20 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 z-50"
                   style={{
                     maxHeight: 'calc(100vh - 5rem)',
                     overflowY: 'auto'
