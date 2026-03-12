@@ -12,9 +12,15 @@ export interface ContextChange {
 
 // Palavras que indicam correção/mudança
 const CORRECTION_PATTERNS = [
-  /\b(na verdade|não|nao|melhor|prefiro|quero|ao invés|em vez|invés|vez)\b/i,
+  /\b(na verdade|melhor|prefiro|ao invés|em vez|invés|vez)\b/i,
   /\b(mudei de ideia|mudei|esquece|deixa|cancela)\b/i,
   /\b(errei|erro|desculpa|ops)\b/i,
+];
+
+// Palavras que NÃO indicam mudança (apenas intenção de compra)
+const NOT_CORRECTION_PATTERNS = [
+  /^(eu\s+)?(quero|queria|gostaria|preciso)\s+(de\s+)?(comprar|buscar)/i,
+  /^(estou\s+)?(querendo|buscando|procurando)/i,
 ];
 
 // Palavras que indicam refinamento (não mudança completa)
@@ -28,6 +34,16 @@ export function detectContextChange(
   conversationHistory: string[]
 ): ContextChange {
   const normalized = currentMessage.toLowerCase().trim();
+  
+  // IMPORTANTE: Verifica se é apenas intenção de compra (NÃO é correção)
+  const isJustPurchaseIntent = NOT_CORRECTION_PATTERNS.some(pattern => pattern.test(normalized));
+  if (isJustPurchaseIntent) {
+    return {
+      hasChange: false,
+      type: 'none',
+      confidence: 0.1,
+    };
+  }
   
   // Verifica se é uma correção
   const isCorrection = CORRECTION_PATTERNS.some(pattern => pattern.test(normalized));

@@ -46,6 +46,7 @@ function mapSortByToAPI(userChoice?: string): 'BEST_MATCH' | 'LOWEST_PRICE' | 'H
 
 /**
  * Constrói query otimizada para Google Shopping Scraper
+ * ORDEM: marca > produto > modelo > armazenamento > condição > localização
  * IMPORTANTE: Preço NÃO deve ir na query, apenas nos filtros do backend
  */
 export function buildGoogleSearchQuery(
@@ -54,16 +55,21 @@ export function buildGoogleSearchQuery(
 ): { query: string; sortBy: 'BEST_MATCH' | 'LOWEST_PRICE' | 'HIGHEST_PRICE'; minPrice?: number; maxPrice?: number } {
   const parts: string[] = [];
   
-  // 1. Base query (produto + marca + modelo)
+  // 1. Base query (marca + produto + modelo) - JÁ VEM ORDENADO do optimizeQueryOrder
   const cleanBase = baseQuery.trim();
   parts.push(cleanBase);
   
-  // 2. Adiciona condição (remove acentos)
+  // 2. Adiciona armazenamento (ANTES da condição)
+  if (filters.storage && filters.storage !== 'Tanto faz') {
+    parts.push(filters.storage);
+  }
+  
+  // 3. Adiciona condição (remove acentos)
   if (filters.condition && filters.condition !== 'Tanto faz') {
     parts.push(removeAccents(filters.condition.toLowerCase()));
   }
   
-  // 3. PREÇO NÃO VAI NA QUERY - Extrair para filtro separado
+  // 4. PREÇO NÃO VAI NA QUERY - Extrair para filtro separado
   let minPrice: number | undefined;
   let maxPrice: number | undefined;
   
@@ -78,14 +84,9 @@ export function buildGoogleSearchQuery(
     }
   }
   
-  // 4. Adiciona localização (remove acentos)
+  // 5. Adiciona localização (remove acentos)
   if (filters.location && filters.location !== 'não' && filters.location !== 'nao') {
     parts.push(removeAccents(filters.location));
-  }
-  
-  // 5. Adiciona armazenamento
-  if (filters.storage && filters.storage !== 'Tanto faz') {
-    parts.push(filters.storage);
   }
   
   // 6. Adiciona gênero (remove acentos)

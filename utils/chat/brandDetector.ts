@@ -382,7 +382,8 @@ export function enrichProductQuery(query: string): ProductEnrichment {
 
 /**
  * Melhora a ordem das palavras na query final
- * ORDEM CORRETA: produto > marca > modelo > atributos > gênero > condição
+ * ORDEM CORRETA: marca > produto > modelo > atributos > gênero
+ * Exemplo: "apple iphone 15 pro max 256gb"
  */
 export function optimizeQueryOrder(parts: {
   brand?: string;
@@ -394,35 +395,65 @@ export function optimizeQueryOrder(parts: {
 }): string {
   const ordered: string[] = [];
   
-  // 1. PRODUTO PRIMEIRO (tenis, celular, notebook)
-  if (parts.product) {
-    ordered.push(parts.product);
-  }
-  // Se não tem produto mas tem modelo de tênis, adiciona "tenis" ANTES
-  else if (!parts.product && parts.model && /air|jordan|ultra|gel|990|574|suede|nmd|yeezy/i.test(parts.model)) {
-    ordered.push('tenis');
-  }
-  
-  // 2. MARCA (nike, adidas, samsung)
+  // 1. MARCA PRIMEIRO (apple, samsung, nike)
   if (parts.brand) {
     ordered.push(parts.brand);
   }
   
-  // 3. MODELO (air max 97, iphone 15)
+  // 2. PRODUTO (iphone, galaxy, tenis)
+  if (parts.product) {
+    // Verifica se produto já não está no modelo
+    const productLower = parts.product.toLowerCase();
+    const modelLower = parts.model?.toLowerCase() || '';
+    
+    // Só adiciona se não estiver no modelo
+    if (!modelLower.includes(productLower)) {
+      ordered.push(parts.product);
+    }
+  }
+  // Se não tem produto mas tem modelo de tênis, adiciona "tenis" ANTES do modelo
+  else if (!parts.product && parts.model && /air|jordan|ultra|gel|990|574|suede|nmd|yeezy/i.test(parts.model)) {
+    ordered.push('tenis');
+  }
+  
+  // 3. MODELO (15 pro max, air max 270)
   if (parts.model) {
-    // Só adiciona se não estiver duplicado no produto
-    if (!parts.product || !parts.model.toLowerCase().includes(parts.product.toLowerCase())) {
-      ordered.push(parts.model);
-    } else {
-      ordered.push(parts.model);
+    // Remove marca do modelo se já foi adicionada
+    let cleanModel = parts.model;
+    if (parts.brand) {
+      const brandLower = parts.brand.toLowerCase();
+      const modelLower = cleanModel.toLowerCase();
+      
+      // Remove marca do início do modelo
+      if (modelLower.startsWith(brandLower + ' ')) {
+        cleanModel = cleanModel.substring(parts.brand.length + 1).trim();
+      }
+    }
+    
+    // Remove produto do modelo se já foi adicionado
+    if (parts.product) {
+      const productLower = parts.product.toLowerCase();
+      const modelLower = cleanModel.toLowerCase();
+      
+      // Remove produto do início do modelo
+      if (modelLower.startsWith(productLower + ' ')) {
+        cleanModel = cleanModel.substring(parts.product.length + 1).trim();
+      }
+    }
+    
+    if (cleanModel) {
+      ordered.push(cleanModel);
     }
   }
   
   // 4. ATRIBUTOS (256gb, preto, gamer)
-  if (parts.attributes) {
+  if (parts.attributes && parts.attributes.length > 0) {
     for (const attr of parts.attributes) {
       // Só adiciona atributos que não estão no modelo
-      if (!parts.model || !parts.model.toLowerCase().includes(attr.toLowerCase())) {
+      const attrLower = attr.toLowerCase();
+      const modelLower = parts.model?.toLowerCase() || '';
+      
+      if (!modelLower.includes(attrLower)) {
         ordered.push(attr);
       }
     }

@@ -3,8 +3,8 @@ import { normalizeAccents } from './textNormalizer';
 
 // Padrões de intenção de compra que devem ser removidos
 const PURCHASE_INTENT_PATTERNS = [
-  /^(estou|to|tou)\s+(querendo|buscando|procurando|interessado|interessada)\s+/i,
-  /^(quero|preciso|busco|procuro|gostaria)\s+(de\s+)?/i,
+  /^(eu\s+)?(estou|to|tou)\s+(querendo|buscando|procurando|interessado|interessada)\s+/i,
+  /^(eu\s+)?(quero|queria|preciso|busco|procuro|gostaria)\s+(de\s+)?(comprar\s+)?/i,
   /^(vou|vamos)\s+(comprar|buscar)\s+/i,
   /^(me\s+)?(ajuda|ajudem?)\s+(a\s+)?(encontrar|achar)\s+/i
 ];
@@ -29,6 +29,12 @@ export function cleanProductQuery(query: string): string {
     words.shift();
     cleaned = words.join(' ');
   }
+  
+  // Remove pontuação e caracteres especiais (exceto números e letras)
+  cleaned = cleaned.replace(/[^a-z0-9\sáàâãéèêíïóôõöúçñ]/g, ' ');
+  
+  // Remove espaços múltiplos
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
   
   // Se ficou vazio, retorna a query original
   const result = cleaned.trim();
