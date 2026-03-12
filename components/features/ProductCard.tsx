@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { Product } from '@/types';
 import Link from 'next/link';
