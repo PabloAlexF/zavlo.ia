@@ -18,22 +18,22 @@ export class PriceAlertsController {
 
   @Post()
   async createAlert(@Request() req, @Body() body: any): Promise<any> {
-    return this.priceAlertsService.createAlert(req.user.uid, body);
+    return this.priceAlertsService.createAlert(req.user.userId, body);
   }
 
   @Get()
   async getUserAlerts(@Request() req): Promise<any> {
-    return this.priceAlertsService.getUserAlerts(req.user.uid);
+    return this.priceAlertsService.getUserAlerts(req.user.userId);
   }
 
   @Get('stats')
   async getStats(@Request() req) {
-    return this.priceAlertsService.getAlertStats(req.user.uid);
+    return this.priceAlertsService.getAlertStats(req.user.userId);
   }
 
   @Delete(':id')
   async deleteAlert(@Request() req, @Param('id') id: string) {
-    await this.priceAlertsService.deleteAlert(id, req.user.uid);
+    await this.priceAlertsService.deleteAlert(id, req.user.userId);
     return { message: 'Alert deleted successfully' };
   }
 }
