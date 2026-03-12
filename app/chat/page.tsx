@@ -117,16 +117,46 @@ export default function ChatPage() {
 
   // Detecta teclado virtual no mobile
   useEffect(() => {
-    const handleFocus = () => setIsKeyboardOpen(true);
-    const handleBlur = () => setIsKeyboardOpen(false);
+    const handleResize = () => {
+      // Detecta se o teclado está aberto comparando altura da janela
+      const isKeyboard = window.visualViewport ? 
+        window.visualViewport.height < window.innerHeight : false;
+      setIsKeyboardOpen(isKeyboard);
+      
+      // Scroll para o final quando teclado abre
+      if (isKeyboard) {
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+      }
+    };
+
+    const handleFocus = () => {
+      setIsKeyboardOpen(true);
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 300);
+    };
+    
+    const handleBlur = () => {
+      setTimeout(() => setIsKeyboardOpen(false), 100);
+    };
 
     const inputElement = inputRef.current;
+    
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+    }
+    
     if (inputElement) {
       inputElement.addEventListener('focus', handleFocus);
       inputElement.addEventListener('blur', handleBlur);
     }
 
     return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+      }
       if (inputElement) {
         inputElement.removeEventListener('focus', handleFocus);
         inputElement.removeEventListener('blur', handleBlur);
@@ -1779,9 +1809,9 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ marginTop: '4rem', height: 'calc(100vh - 4rem)' }}>
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ marginTop: '4rem', height: 'calc(100dvh - 4rem)' }}>
         {/* Header com Hamburguer - Logo abaixo do header global */}
-        <div className="border-b border-white/5 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between flex-shrink-0">
+        <div className="border-b border-white/5 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between flex-shrink-0 z-10">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <motion.button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1831,7 +1861,8 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
           className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4 sm:py-6" 
           style={{ 
             WebkitOverflowScrolling: 'touch',
-            paddingBottom: isKeyboardOpen ? '120px' : '0px'
+            overscrollBehavior: 'contain',
+            paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)'
           }}
         >
           <div className="max-w-4xl mx-auto space-y-6">
@@ -2428,7 +2459,10 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
         {/* Input */}
         <div 
           ref={inputContainerRef}
-          className="input-container-mobile border-t border-white/5 bg-black/95 backdrop-blur-2xl p-3 sm:p-4 flex-shrink-0 sticky bottom-0 left-0 right-0 z-50"
+          className="input-container-mobile border-t border-white/5 bg-black/95 backdrop-blur-2xl p-3 sm:p-4 flex-shrink-0 fixed bottom-0 left-0 right-0 z-50"
+          style={{
+            paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)'
+          }}
         >
           <div className="max-w-4xl mx-auto">
             <AnimatePresence>
@@ -2494,7 +2528,7 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                 onFocus={() => {
                   setIsKeyboardOpen(true);
                   setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                   }, 300);
                 }}
                 onBlur={() => {
