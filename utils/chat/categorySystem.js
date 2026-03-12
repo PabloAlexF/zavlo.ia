@@ -352,3 +352,9 @@ export function isCategoryConfident(query) {
 export function formatCategoryQuestion(question) {
     return question.question;
 }
+
+// Retorna perguntas relevantes para uma categoria
+export function getRelevantQuestions(category) {
+    const categoryData = PRODUCT_CATEGORIES[category] || PRODUCT_CATEGORIES.generico;
+    return categoryData.questions || [];
+}

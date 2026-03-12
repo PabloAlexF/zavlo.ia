@@ -278,8 +278,8 @@ export default function Home() {
                 </motion.div>
               </motion.div>
 
-              {/* Right — Brain Animation */}
-              <div className="row-start-1 lg:row-start-auto">
+              {/* Right — Brain Animation (Hidden on mobile) */}
+              <div className="hidden lg:block">
                 <BrainAnimation />
               </div>
 
@@ -292,7 +292,7 @@ export default function Home() {
           <div className="max-w-7xl mx-auto grid lg:grid-cols-[1.3fr_1fr] gap-5">
 
             {/* Comparison */}
-            <div
+            <motion.div
               className="bg-gradient-to-b from-white/5 to-transparent border border-white/10 rounded-2xl p-7 sm:p-10 flex flex-col justify-between"
               initial={{ opacity: 0, x: -16 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -368,7 +368,7 @@ export default function Home() {
                   )}
                 </p>
               </div>
-            </div>
+            </motion.div>
 
             {/* Stats + Features — Desktop only */}
             <motion.div

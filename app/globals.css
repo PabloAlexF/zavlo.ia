@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 @theme {
+  --font-family-sans: system-ui, -apple-system, sans-serif;
+}
+
+:root {
   --color-background: #000;
   --color-foreground: #fff;
 }
@@ -40,6 +44,27 @@ input:focus,
 textarea:focus,
 select:focus {
   font-size: 16px !important;
+}
+
+/* Fix específico para input de chat no mobile */
+@media (max-width: 640px) {
+  input[type="text"] {
+    font-size: 16px !important;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+  
+  /* Garantir que o input container fique visível */
+  .input-container-mobile {
+    position: sticky !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 999 !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+  }
 }
 
 /* Melhorar scroll em mobile */

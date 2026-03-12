@@ -1,8 +1,9 @@
 // Detector de intenção do usuário
 export interface UserIntent {
-  type: 'buy' | 'sell' | 'search' | 'greeting' | 'despedida' | 'question' | 'help' | 'credits_question' | 'plans_question' | 'platform_question' | 'other';
+  type: 'buy' | 'sell' | 'search' | 'greeting' | 'despedida' | 'question' | 'help' | 'credits_question' | 'plans_question' | 'platform_question' | 'introduction' | 'casual_talk' | 'other';
   confidence: number;
   extractedPrice?: number;
+  userName?: string;
 }
 
 // Alias para compatibilidade
@@ -11,6 +12,8 @@ export type Intent = UserIntent;
 // Patterns de intenção
 const INTENT_PATTERNS = {
   greeting: /\b(oi|ola|olá|bom dia|boa tarde|boa noite|hey|hello|opa|e ai|eai)\b/i,
+  introduction: /\b(meu nome é|me chamo|sou o|sou a|pode me chamar de|eu sou)\b/i,
+  casual_talk: /\b(tudo bem|como vai|beleza|tranquilo|legal|show|massa|top)\b/i,
   despedida: /\b(tchau|adeus|até logo|até mais|falou|flw|bye|até)\b/i,
   help: /\b(ajuda|help|socorro|como usar|como funciona|tutorial|comandos)\b/i,
   credits_question: /\b(meus? créditos?|saldo|quanto tenho|creditos|quantos creditos)\b/i,
@@ -50,6 +53,25 @@ export function detectUserIntent(query: string): UserIntent {
     return { type: 'platform_question', confidence: 0.95 };
   }
   
+  // Detecta apresentação pessoal
+  if (INTENT_PATTERNS.introduction.test(normalized)) {
+    const userName = extractUserName(query);
+    return { type: 'introduction', confidence: 0.95, userName };
+  }
+  
+  // Se é uma palavra curta sem palavras-chave de produto, pode ser um nome
+  const words = normalized.split(/\s+/);
+  if (words.length === 1 && words[0].length >= 2 && words[0].length <= 20 && !hasProductKeywords(normalized)) {
+    // Provavelmente é um nome
+    const userName = query.charAt(0).toUpperCase() + query.slice(1).toLowerCase();
+    return { type: 'introduction', confidence: 0.85, userName };
+  }
+  
+  // Detecta conversa casual
+  if (INTENT_PATTERNS.casual_talk.test(normalized) && !hasProductKeywords(normalized)) {
+    return { type: 'casual_talk', confidence: 0.9 };
+  }
+  
   if (INTENT_PATTERNS.greeting.test(normalized)) {
     return { type: 'greeting', confidence: 0.9 };
   }
@@ -77,6 +99,30 @@ export function detectUserIntent(query: string): UserIntent {
     confidence: 0.6,
     extractedPrice: extractPrice(query)
   };
+}
+
+function extractUserName(query: string): string | undefined {
+  const patterns = [
+    /meu nome é ([a-záàâãéèêíïóôõöúçñ]+)/i,
+    /me chamo ([a-záàâãéèêíïóôõöúçñ]+)/i,
+    /sou o ([a-záàâãéèêíïóôõöúçñ]+)/i,
+    /sou a ([a-záàâãéèêíïóôõöúçñ]+)/i,
+    /pode me chamar de ([a-záàâãéèêíïóôõöúçñ]+)/i,
+    /eu sou ([a-záàâãéèêíïóôõöúçñ]+)/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match && match[1]) {
+      return match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+    }
+  }
+  return undefined;
+}
+
+function hasProductKeywords(query: string): boolean {
+  const productKeywords = /\b(iphone|samsung|notebook|celular|tv|smart|fone|tenis|carro|moto|casa|apartamento|computador|tablet|console|playstation|xbox)\b/i;
+  return productKeywords.test(query);
 }
 
 function extractPrice(query: string): number | undefined {

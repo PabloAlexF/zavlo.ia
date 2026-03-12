@@ -12,7 +12,16 @@ export interface CategoryQuestion {
   type: 'choice' | 'text' | 'number';
   options?: string[];
   required: boolean;
+  conditions?: string[]; // e.g., ['smartphone'] - only ask if category matches
 }
+
+export interface ProductCategory {
+  name: string;
+  questions: CategoryQuestion[];
+  keywords: string[];
+  patterns: RegExp[];
+}
+
 
 // Categorias com detecção robusta
 export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
@@ -195,6 +204,39 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
     ]
   },
 
+  acessorio: {
+    name: 'Acessório',
+    keywords: ['oculos', 'óculos', 'luz azul', 'anti luz', 'óculos de grau', 'óculos solar', 'relogio', 'relógio', 'bolsa', 'mochila', 'carteira', 'cinto', 'bone', 'boné', 'chapeu', 'chapéu', 'luva', 'cachecol', 'gravata', 'pulseira', 'colar', 'brinco', 'anel'],
+    patterns: [
+      /\b[oó]culos\b.*?(luz\s+azul|anti\s+luz|grau|sol|degrau)/i,
+      /\banti[- ]?luz\b/i,
+      /\b[lL]uz\s+[aA]zul\b/i,
+      /\b[oó]culos\b/i,
+      /\brel[oó]gio\b/i,
+      /\bbolsa\b/i,
+      /\bmochila\b/i,
+      /\bbon[eé]\b/i,
+      /\bchap[eé]u\b/i
+    ],
+    questions: [
+      {
+        id: 'condition',
+        question: 'Produto novo ou usado?',
+        type: 'choice',
+        options: ['Novo', 'Usado', 'Tanto faz'],
+        required: false,
+        conditions: ['acessorio']
+      }
+    ]
+  },
+
+  universal: {
+    name: 'Produto Universal',
+    keywords: ['qualquer', 'produto', 'item', 'coisa', 'objeto'],
+    patterns: [/./], // Matches anything
+    questions: []
+  },
+
   generico: {
     name: 'Produto',
     keywords: [],
@@ -205,11 +247,12 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
         question: 'Produto novo ou usado?',
         type: 'choice',
         options: ['Novo', 'Usado', 'Tanto faz'],
-        required: true
+        required: false
       }
     ]
   }
 };
+
 
 import { normalizeAndTokenize, expandWithSynonyms } from './advancedNormalizer';
 import { detectProductEntity } from './brandDetector';
@@ -248,9 +291,10 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   notebook: 9,
   veiculo: 8,
   calcado_roupa: 7,
-  eletronico: 6,
-  movel: 5,
-  eletrodomestico: 4,
+  acessorio: 6,
+  eletronico: 5,
+  movel: 4,
+  eletrodomestico: 3,
   generico: 1
 };
 
@@ -363,22 +407,41 @@ export function detectProductCategoryWithRanking(query: string): Array<{category
 export function detectProductCategory(query: string): string {
   const ranking = detectProductCategoryWithRanking(query);
   
-  if (ranking.length === 0) return 'generico';
+  if (ranking.length === 0) return 'universal';
   
-  // Threshold mínimo de confiança
-  if (ranking[0].score < 5) {
-    console.log('⚠️ Score muito baixo, usando genérico');
-    return 'generico';
-  }
-  
-  // Se a diferença entre top 1 e top 2 for pequena, há incerteza
-  if (ranking.length >= 2 && (ranking[0].score - ranking[1].score) < 2) {
-    console.log('⚠️ Categoria incerta. Top 2:', ranking.slice(0, 2));
-    // Por enquanto retorna a melhor, mas poderia perguntar ao usuário
+  // Threshold mínimo de confiança - se baixo, universal
+  if (ranking[0].score < 8) {
+    console.log('⭐ Low confidence, using universal category');
+    return 'universal';
   }
   
   return ranking[0].category;
 }
+
+// Filtra perguntas relevantes baseado na categoria e parsed data
+export function getRelevantQuestions(questions: CategoryQuestion[], category: string, parsedProduct?: any): CategoryQuestion[] {
+  return questions.filter(question => {
+    if (!question.conditions || question.conditions.length === 0) return true;
+    
+    // Skip if category doesn't match condition
+    const matchesCategory = question.conditions.includes(category);
+    if (!matchesCategory) {
+      console.log(`⏭️ Skipping irrelevant question ${question.id} for category ${category}`);
+      return false;
+    }
+    
+    // Additional product-based filtering (future)
+    if (parsedProduct) {
+      // Ex: skip storage if not smartphone/notebook
+      if (question.id === 'storage' && !['smartphone', 'notebook'].includes(category)) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+}
+
 
 // Verifica se a detecção de categoria é confiável
 export function isCategoryConfident(query: string): boolean {

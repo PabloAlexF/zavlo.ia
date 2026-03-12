@@ -11,7 +11,13 @@ import { contextManager } from '@/utils/chat/contextManager';
 import { parseProductQuery, buildSearchQuery } from '@/utils/chat/productParser';
 import { handleGenericProduct } from '@/utils/chat/genericProductHandler';
 import { cleanProductQuery } from '@/utils/chat/queryProcessor';
-import { detectProductCategory, PRODUCT_CATEGORIES, formatCategoryQuestion } from '@/utils/chat/categorySystem';
+import { 
+  detectProductCategory, 
+  PRODUCT_CATEGORIES, 
+  formatCategoryQuestion, 
+  isCategoryConfident,
+  getRelevantQuestions 
+} from '@/utils/chat/categorySystem';
 import { detectProvidedInfo, filterQuestions } from '@/utils/chat/smartQuestions';
 import { parseAnswer } from '@/utils/chat/answerParser';
 import { detectContextChange } from '@/utils/chat/contextChangeDetector';
@@ -22,6 +28,8 @@ import {
   updateConversationContext,
   detectNegotiationIntent 
 } from '@/utils/chat/smartBot';
+import { extractSmartFilters, getMissingFilters, generateFilterConfirmation } from '@/utils/chat/smartFilter';
+import { executeStateHandler } from '@/utils/chat/stateHandlers';
 
 interface Message {
   id: string;
@@ -48,10 +56,16 @@ interface ChatHistory {
   updatedAt: Date;
 }
 
-type ChatState = 'idle' | 'awaiting_condition' | 'awaiting_location' | 'awaiting_confirmation' | 'searching' | 'category_questions' | 'awaiting_image_confirmation' | 'awaiting_image_sort' | 'awaiting_sort';
+type ChatState = 'idle' | 'awaiting_condition' | 'awaiting_location' | 'awaiting_confirmation' | 'searching' | 'category_questions' | 'awaiting_image_confirmation' | 'awaiting_image_sort' | 'awaiting_sort' | 'awaiting_limit' | 'awaiting_price_range';
 
 interface CategoryAnswers {
   [key: string]: string;
+}
+
+interface SearchFilters {
+  limit?: number;
+  minPrice?: number;
+  maxPrice?: number;
 }
 
 export default function ChatPage() {
@@ -60,7 +74,7 @@ export default function ChatPage() {
     {
       id: '1',
       type: 'ai',
-      content: 'Olá! Sou a IA da Zavlo.\n\nPosso encontrar o melhor preço para você.\n\nDigite um produto para buscar!',
+      content: 'Olá! 👋 Eu sou a Zavlo, sua assistente de compras inteligente!\n\nAntes de começarmos, como posso te chamar?',
       timestamp: new Date(),
     }
   ]);
@@ -70,21 +84,21 @@ export default function ChatPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [detectedProductName, setDetectedProductName] = useState<string>('');
   const [chatState, setChatState] = useState<ChatState>('idle');
-  const [pendingSearch, setPendingSearch] = useState<{ query: string; condition?: string; location?: string; category?: string } | null>(null);
+  const [pendingSearch, setPendingSearch] = useState<{ query: string; condition?: string; location?: string; category?: string; sortBy?: string; limit?: number; minPrice?: number; maxPrice?: number } | null>(null);
   const [categoryAnswers, setCategoryAnswers] = useState<CategoryAnswers>({});
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
 
   const [userCredits, setUserCredits] = useState(0);
   
-  // Sidebar states
+// Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string>('');
+  const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   
   // Mobile keyboard detection
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState(0);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,52 +117,20 @@ export default function ChatPage() {
 
   // Detecta teclado virtual no mobile
   useEffect(() => {
-    // Salva altura inicial do viewport
-    const initialHeight = window.visualViewport?.height || window.innerHeight;
-    setViewportHeight(initialHeight);
+    const handleFocus = () => setIsKeyboardOpen(true);
+    const handleBlur = () => setIsKeyboardOpen(false);
 
-    const handleResize = () => {
-      if (window.visualViewport) {
-        const currentHeight = window.visualViewport.height;
-        const heightDiff = initialHeight - currentHeight;
-        
-        // Se a diferença for maior que 150px, consideramos que o teclado está aberto
-        if (heightDiff > 150) {
-          setIsKeyboardOpen(true);
-          setKeyboardHeight(heightDiff);
-          
-          // Scroll para o input quando o teclado abrir
-          setTimeout(() => {
-            inputContainerRef.current?.scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'end' 
-            });
-          }, 100);
-        } else {
-          setIsKeyboardOpen(false);
-          setKeyboardHeight(0);
-        }
-      }
-    };
-
-    const handleVisualViewportResize = () => {
-      handleResize();
-    };
-
-    // Listeners para detectar mudanças no viewport
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleVisualViewportResize);
-      window.visualViewport.addEventListener('scroll', handleVisualViewportResize);
+    const inputElement = inputRef.current;
+    if (inputElement) {
+      inputElement.addEventListener('focus', handleFocus);
+      inputElement.addEventListener('blur', handleBlur);
     }
-    
-    window.addEventListener('resize', handleResize);
 
     return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleVisualViewportResize);
-        window.visualViewport.removeEventListener('scroll', handleVisualViewportResize);
+      if (inputElement) {
+        inputElement.removeEventListener('focus', handleFocus);
+        inputElement.removeEventListener('blur', handleBlur);
       }
-      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
@@ -200,33 +182,71 @@ export default function ChatPage() {
     }
   };
 
-  const loadChatHistory = () => {
+const loadChatHistory = () => {
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) return;
+      
       const userData = JSON.parse(user);
       const userId = userData.userId;
-      
       const saved = localStorage.getItem(`zavlo_chat_history_${userId}`);
-      if (saved) {
-        const history = JSON.parse(saved).map((chat: any) => ({
-          ...chat,
-          createdAt: new Date(chat.createdAt),
-          updatedAt: new Date(chat.updatedAt),
-          messages: chat.messages.map((m: any) => ({
-            ...m,
-            timestamp: new Date(m.timestamp)
-          }))
-        }));
-        setChatHistory(history);
-      }
-      // Create new chat ID if none exists
-      if (!currentChatId) {
-        const newChatId = Date.now().toString();
-        setCurrentChatId(newChatId);
-      }
+      
+      if (!saved) return;
+      
+      const parsedHistory = JSON.parse(saved);
+      
+      // Validate and filter valid chats only
+      const validHistory = Array.isArray(parsedHistory) ? parsedHistory.filter(chat => {
+        try {
+          if (typeof chat.id !== 'string' || !chat.messages || !Array.isArray(chat.messages)) return false;
+          
+          // Validate and sanitize messages
+          chat.messages = chat.messages.filter(msg => {
+            if (!msg.content || typeof msg.content !== 'string') return false;
+            
+            // Remove corrupted patterns
+            msg.content = msg.content
+              .replace(/\}\)/g, '')
+              .replace(/\}\)'/g, '')
+              .replace(/\\}\\\\/g, '')
+              .trim();
+            
+            // Skip empty messages after cleaning
+            return msg.content.length > 0;
+          });
+          
+          // Skip chats with no valid messages
+          if (chat.messages.length === 0) return false;
+          
+          chat.createdAt = new Date(chat.createdAt);
+          chat.updatedAt = new Date(chat.updatedAt);
+          chat.messages.forEach((m: any) => {
+            m.timestamp = new Date(m.timestamp);
+          });
+          return true;
+        } catch {
+          return false; // Skip corrupted chat
+        }
+      }) : [];
+      
+      setChatHistory(validHistory);
+      console.log(`✅ Loaded ${validHistory.length} valid chats`);
+      
     } catch (error) {
-      console.error('Erro ao carregar histórico:', error);
+      console.error('❌ Failed to load chat history, clearing:', error);
+      // Clear corrupted data
+      const user = localStorage.getItem('zavlo_user');
+      if (user) {
+        const userData = JSON.parse(user);
+        localStorage.removeItem(`zavlo_chat_history_${userData.userId}`);
+      }
+      setChatHistory([]);
+    }
+    
+    // Always ensure we have a current chat
+    if (!currentChatId) {
+      const newChatId = Date.now().toString();
+      setCurrentChatId(newChatId);
     }
   };
 
@@ -242,12 +262,23 @@ export default function ChatPage() {
         const chatTitle = messages.find(m => m.type === 'user')?.content.slice(0, 30) || 'Nova conversa';
         const existingIndex = prevHistory.findIndex(c => c.id === currentChatId);
         
+        // Clean messages before saving
+        const cleanedMessages = messages.slice(-50).map(m => {
+          const cleaned = m.type === 'products' ? { ...m, products: m.products?.slice(0, 6) } : { ...m };
+          // Remove any corrupted content
+          if (cleaned.content && typeof cleaned.content === 'string') {
+            cleaned.content = cleaned.content
+              .replace(/\}\)/g, '')
+              .replace(/\}\)'/g, '')
+              .trim();
+          }
+          return cleaned;
+        });
+        
         const chatData: ChatHistory = {
           id: currentChatId,
           title: chatTitle,
-          messages: messages.slice(-50).map(m => 
-            m.type === 'products' ? { ...m, products: m.products?.slice(0, 6) } : m
-          ),
+          messages: cleanedMessages,
           createdAt: existingIndex >= 0 ? prevHistory[existingIndex].createdAt : new Date(),
           updatedAt: new Date(),
         };
@@ -281,18 +312,36 @@ export default function ChatPage() {
   };
 
   const createNewChat = () => {
+    setIsCreatingNewChat(true);
+    
+    // Save current chat before creating new one
+    if (currentChatId && messages.length > 1) {
+      saveChatToHistory();
+    }
+    
     const newChatId = Date.now().toString();
     setCurrentChatId(newChatId);
     setMessages([{
       id: '1',
       type: 'ai',
-      content: 'Olá! Sou a IA da Zavlo.\n\nPosso encontrar o melhor preço para você.\n\nDigite um produto para buscar!',
+      content: 'Olá! 👋 Eu sou a Zavlo, sua assistente de compras inteligente!\n\nAntes de começarmos, como posso te chamar?',
       timestamp: new Date(),
     }]);
     setChatState('idle');
     setPendingSearch(null);
+    setCategoryAnswers({});
+    setUploadedImage(null);
+    setImageFile(null);
+    setDetectedProductName('');
+    setShowMoreSuggestions(false);
     contextManager.clear();
+    
+    setTimeout(() => {
+      setIsCreatingNewChat(false);
+      inputRef.current?.focus();
+    }, 300);
   };
+
 
   const deleteChat = (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -735,34 +784,50 @@ export default function ChatPage() {
     // Estado: aguardando localização
     if (chatState === 'awaiting_location') {
       const location = currentInput.toLowerCase().trim();
-      const updatedLocation = (location === 'nÃ£o' || location === 'nao') ? undefined : currentInput;
+      const updatedLocation = (location === 'não' || location === 'nao') ? undefined : currentInput;
       
       setPendingSearch(prev => {
         if (!prev) return prev;
         return { ...prev, location: updatedLocation };
       });
       
-      // SEMPRE perguntar ordenaÃ§Ã£o apÃ³s localizaÃ§Ã£o
-      const sortMessage: Message = {
-        id: crypto.randomUUID(),
-        type: 'category_question',
-        content: 'Como quer ordenar os resultados?',
-        timestamp: new Date(),
-        categoryQuestion: {
-          id: 'sort_by',
-          options: ['Mais relevantes', 'Menor preÃ§o', 'Maior preÃ§o'],
-          category: 'sort'
-        }
-      };
-      setMessages(prev => [...prev, sortMessage]);
+      // SEMPRE perguntar ordenação após localização
       setChatState('awaiting_sort');
+      
+      setMessages(prev => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          type: 'category_question',
+          content: 'Como quer ordenar os resultados?',
+          timestamp: new Date(),
+          categoryQuestion: {
+            id: 'sort_by',
+            options: ['Mais relevantes', 'Menor preço', 'Maior preço'],
+            category: 'sort'
+          }
+        }
+      ]);
+      
       setLoading(false);
       return;
     }
     
     // Estado: aguardando ordenaÃ§Ã£o
     if (chatState === 'awaiting_sort') {
-      const sortBy = currentInput.trim();
+      const sortInput = currentInput.trim().toLowerCase();
+      
+      // Mapear resposta do usuário para valor da API
+      let sortBy = 'RELEVANCE';
+      if (sortInput.includes('menor') || sortInput.includes('barato') || sortInput === '2') {
+        sortBy = 'LOWEST_PRICE';
+      } else if (sortInput.includes('maior') || sortInput.includes('caro') || sortInput === '3') {
+        sortBy = 'HIGHEST_PRICE';
+      } else if (sortInput.includes('relevante') || sortInput === '1') {
+        sortBy = 'RELEVANCE';
+      }
+      
+      console.log(`🔄 Mapeamento sortBy: "${currentInput}" → ${sortBy}`);
       
       // Se tem categoria, gerar busca final com respostas
       if (pendingSearch?.category) {
@@ -792,6 +857,45 @@ export default function ChatPage() {
         return { ...prev, sortBy };
       });
       
+      const quantityMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'category_question',
+        content: 'Quantos produtos deseja ver?',
+        timestamp: new Date(),
+        categoryQuestion: {
+          id: 'limit',
+          options: ['10 produtos', '20 produtos', '50 produtos', '100 produtos'],
+          category: 'limit'
+        }
+      };
+      setMessages(prev => [...prev, quantityMessage]);
+      setChatState('awaiting_limit');
+      setLoading(false);
+      return;
+    }
+
+    // Estado: aguardando quantidade
+    if (chatState === 'awaiting_limit') {
+      const limitInput = currentInput.trim().toLowerCase();
+      
+      let limit = 50;
+      if (limitInput.includes('10') || limitInput === '1') {
+        limit = 10;
+      } else if (limitInput.includes('20') || limitInput === '2') {
+        limit = 20;
+      } else if (limitInput.includes('50') || limitInput === '3') {
+        limit = 50;
+      } else if (limitInput.includes('100') || limitInput === '4') {
+        limit = 100;
+      }
+      
+      console.log(`🔢 Mapeamento limit: "${currentInput}" → ${limit}`);
+      
+      setPendingSearch(prev => {
+        if (!prev) return prev;
+        return { ...prev, limit };
+      });
+      
       const aiMessage: Message = {
         id: crypto.randomUUID(),
         type: 'ai',
@@ -799,7 +903,7 @@ export default function ChatPage() {
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
-      setChatState('awaiting_condition')
+      setChatState('awaiting_condition');
       setLoading(false);
       return;
     }
@@ -881,12 +985,14 @@ export default function ChatPage() {
     // Estado: aguardando condição
     if (chatState === 'awaiting_condition') {
       const condition = currentInput.toLowerCase().trim();
+      console.log(`🏷️ Condição capturada: "${currentInput}" → "${condition}"`);
+      
       setPendingSearch(prev => {
         if (!prev) return prev;
         return { ...prev, condition };
       });
       
-      const searchResult = buildFinalQuery();
+      const searchResult = buildFinalQuery(condition);
       const confirmationMessage: Message = {
         id: crypto.randomUUID(),
         type: 'confirmation',
@@ -969,12 +1075,39 @@ export default function ChatPage() {
       }
       
       // IMPORTANTE: Tratar comandos ANTES de processar como produto
+      // Tratar apresentação pessoal
+      if (intent.type === 'introduction') {
+        const userName = intent.userName || 'amigo(a)';
+        const aiMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'ai',
+          content: `Prazer em conhecer você, ${userName}! 😊\n\nSou especialista em encontrar os melhores preços do Brasil!\n\n🔍 O que faço:\n• Busco em 9+ marketplaces\n• Comparo preços automaticamente\n• Encontro ofertas exclusivas\n• Filtro por localização\n\n🎯 Marketplaces:\nOLX, Mercado Livre, Amazon, Shopee, KaBuM, Enjoei e mais!\n\n💡 Que produto você está procurando hoje?`,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        setLoading(false);
+        return; // IMPORTANTE: Parar aqui!
+      }
+      
+      // Tratar conversa casual
+      if (intent.type === 'casual_talk') {
+        const aiMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'ai',
+          content: 'Tudo ótimo por aqui! 😊\n\nEstou pronta para te ajudar a encontrar os melhores preços!\n\n💰 Economize tempo e dinheiro:\n• Digite o produto que procura\n• Eu busco nos principais sites\n• Você escolhe a melhor oferta\n\n🔍 O que você gostaria de buscar?',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        setLoading(false);
+        return;
+      }
+      
       // Tratar saudações
       if (intent.type === 'greeting') {
         const aiMessage: Message = {
           id: crypto.randomUUID(),
           type: 'ai',
-          content: 'Olá! 👋\n\nSou especialista em encontrar os melhores preços!\n\nQue produto você procura hoje?',
+          content: 'Olá! 👋\n\nQue bom te ver por aqui!\n\nSou a Zavlo, sua assistente de compras inteligente. Posso te ajudar a encontrar os melhores preços em diversos produtos!\n\n💡 Como funciona:\n1️⃣ Você me diz o que procura\n2️⃣ Eu busco nos melhores sites\n3️⃣ Você economiza!\n\n🛒 Que produto você está procurando?',
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, aiMessage]);
@@ -1124,66 +1257,83 @@ export default function ChatPage() {
         return;
       }
       
-      // 2. Detectar categoria e iniciar perguntas inteligentes
+      // 2. Detectar categoria e iniciar perguntas inteligentes (ENHANCED)
       const detectedCategory = detectProductCategory(withContext);
+      const categoryConfident = isCategoryConfident(withContext);
       
-      // Debug crítico
-      console.log('🔎 Categoria detectada:', detectedCategory);
-      console.log('📦 Existe no catálogo?', !!PRODUCT_CATEGORIES[detectedCategory]);
-      console.log('📦 Categorias disponíveis:', Object.keys(PRODUCT_CATEGORIES));
+      console.log('🔎 Categoria detectada:', detectedCategory, 'Confiante?', categoryConfident);
       
-      // Fallback seguro
-      const category = PRODUCT_CATEGORIES[detectedCategory] ? detectedCategory : 'generico';
+      const category = PRODUCT_CATEGORIES[detectedCategory] ? detectedCategory : 'universal';
       const categoryData = PRODUCT_CATEGORIES[category];
       
-      console.log('✅ Categoria final:', category, '📊 Nome:', categoryData.name);
+      // PASSO NOVO: Filtrar perguntas relevantes
+      const categoryQuestions = categoryData?.questions || [];
+      const relevantQuestions = categoryQuestions; // Usar todas as perguntas da categoria
       
-      if (categoryData && categoryData.questions.length > 0) {
-        // Detecta informações já fornecidas
-        const providedInfo = detectProvidedInfo(withContext);
-        console.log('📝 Informações já fornecidas:', providedInfo);
+      console.log('📋 Perguntas relevantes:', relevantQuestions.length, relevantQuestions.map(q => q.id));
+      
+      // Universal ou low confidence → perguntar localização (que depois pergunta ordenação)
+      if (category === 'universal' || !categoryConfident || relevantQuestions.length === 0) {
+        console.log('🚀 No category questions - going to location');
         
-        // Filtra perguntas já respondidas
-        const remainingQuestions = filterQuestions(categoryData.questions, providedInfo);
+        setPendingSearch({ query: withContext });
         
-        if (remainingQuestions.length === 0) {
-          // Todas as perguntas já foram respondidas, perguntar localização
-          setPendingSearch({ query: withContext, category });
-          setCategoryAnswers(providedInfo);
-          
-          const aiMessage: Message = {
-            id: crypto.randomUUID(),
-            type: 'ai',
-            content: 'location_question',
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, aiMessage]);
-          setChatState('awaiting_location');
-          setLoading(false);
-          return;
-        }
-        
-        setPendingSearch({ query: withContext, category });
-        setCategoryAnswers(providedInfo);
-        
-        const firstQuestion = remainingQuestions[0];
-        const questionMessage: Message = {
+        const aiMessage: Message = {
           id: crypto.randomUUID(),
-          type: 'category_question',
-          content: formatCategoryQuestion(firstQuestion),
+          type: 'ai',
+          content: 'location_question',
           timestamp: new Date(),
-          categoryQuestion: {
-            id: firstQuestion.id,
-            options: firstQuestion.options || [],
-            category
-          }
         };
-        
-        setMessages(prev => [...prev, questionMessage]);
-        setChatState('category_questions');
+        setMessages(prev => [...prev, aiMessage]);
+        setChatState('awaiting_location');
         setLoading(false);
         return;
       }
+      
+      // Detecta informações já fornecidas
+      const providedInfo = detectProvidedInfo(withContext);
+      
+      // Filtra perguntas já respondidas (SOBRE relevantQuestions)
+      const remainingQuestions = filterQuestions(relevantQuestions, providedInfo);
+      
+      if (remainingQuestions.length === 0) {
+        // Todas respondidas → localização
+        setPendingSearch({ query: withContext, category });
+        setCategoryAnswers(providedInfo);
+        
+        const aiMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'ai',
+          content: 'location_question',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        setChatState('awaiting_location');
+        setLoading(false);
+        return;
+      }
+      
+      setPendingSearch({ query: withContext, category });
+      setCategoryAnswers(providedInfo);
+      
+      const firstQuestion = remainingQuestions[0];
+      const questionMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'category_question',
+        content: formatCategoryQuestion(firstQuestion),
+        timestamp: new Date(),
+        categoryQuestion: {
+          id: firstQuestion.id,
+          options: firstQuestion.options || [],
+          category
+        }
+      };
+      
+      setMessages(prev => [...prev, questionMessage]);
+      setChatState('category_questions');
+      setLoading(false);
+      return;
+
       
       // 3. Verificar se precisa de localização
       if (parsed.needsLocation) {
@@ -1241,23 +1391,36 @@ export default function ChatPage() {
       setLoading(false);
   };
 
-  const buildFinalQuery = (): { query: string; sortBy: string; minPrice?: number; maxPrice?: number } => {
+const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: string; limit?: number; minPrice?: number; maxPrice?: number } => {
     if (!pendingSearch) return { query: '', sortBy: 'RELEVANCE' };
     
-    // Extrai priceMax, storage e sortBy com optional chaining
     const priceMax = categoryAnswers?.price_max;
     const storage = categoryAnswers?.storage;
     const sortBy = categoryAnswers?.sort_by;
+    const condition = overrideCondition || pendingSearch.condition; // ✅ Usar override se fornecido
     
-    return buildSearchQuery(
+    console.log(`🔍 buildFinalQuery - condition: "${condition}"`);
+    
+    const result = buildSearchQuery(
       parseProductQuery(pendingSearch.query),
-      pendingSearch.condition,
+      condition, // ✅ Usar a condição correta
       pendingSearch.location,
       undefined, // gender
       priceMax,
       storage,
       sortBy
     );
+    
+    console.log(`✅ buildFinalQuery - result.query: "${result.query}"`);
+    
+    console.log(`✅ buildFinalQuery - result.query: "${result.query}"`);
+    
+    return {
+      ...result,
+      ...(pendingSearch.limit !== undefined && { limit: pendingSearch.limit }),
+      ...(pendingSearch.minPrice !== undefined && { minPrice: pendingSearch.minPrice }),
+      ...(pendingSearch.maxPrice !== undefined && { maxPrice: pendingSearch.maxPrice })
+    };
   };
 
   const buildCategoryQuery = (baseQuery: string, answers: CategoryAnswers, location?: string): { query: string; sortBy: string; minPrice?: number; maxPrice?: number } => {
@@ -1330,12 +1493,17 @@ export default function ChatPage() {
       // Construir URL com parâmetros
       const params = new URLSearchParams({
         query: searchParams.query,
-        limit: '50',
+        limit: String(searchParams.limit || 50), // ✅ Usar limit do pendingSearch
         sortBy: searchParams.sortBy
       });
       
-      if (searchParams.minPrice) params.append('minPrice', searchParams.minPrice.toString());
-      if (searchParams.maxPrice) params.append('maxPrice', searchParams.maxPrice.toString());
+      // ✅ Usar !== undefined ao invés de truthy check
+      if (searchParams.minPrice !== undefined) {
+        params.append('minPrice', String(searchParams.minPrice));
+      }
+      if (searchParams.maxPrice !== undefined) {
+        params.append('maxPrice', String(searchParams.maxPrice));
+      }
       
       const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
         method: 'GET',
@@ -1488,15 +1656,32 @@ export default function ChatPage() {
 
             {/* New Chat Button */}
             <div className="p-3">
-              <motion.button
-                onClick={createNewChat}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border border-white/10 rounded-xl text-white transition-all text-sm font-medium shadow-lg shadow-blue-500/5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nova conversa</span>
-              </motion.button>
+
+
+                <motion.button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    createNewChat();
+                  }}
+                  disabled={isCreatingNewChat}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 border border-white/10 rounded-xl text-white transition-all text-sm font-medium shadow-lg shadow-blue-500/5 ${isCreatingNewChat ? 'bg-gray-500/30 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20'}`}
+                >
+
+                  {isCreatingNewChat ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Nova conversa
+                    </>
+                  )}
+                </motion.button>
+
             </div>
 
             {/* Chat History */}
@@ -1646,11 +1831,10 @@ export default function ChatPage() {
           className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4 sm:py-6" 
           style={{ 
             WebkitOverflowScrolling: 'touch',
-            paddingBottom: isKeyboardOpen ? `${keyboardHeight + 80}px` : '0px',
-            transition: 'padding-bottom 0.3s ease'
+            paddingBottom: isKeyboardOpen ? '120px' : '0px'
           }}
         >
-          <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4">
+          <div className="max-w-4xl mx-auto space-y-6">
             {messages.length === 1 && messages[0].type === 'ai' && (
               <div className="flex flex-col items-center gap-3 sm:gap-4 mt-4 sm:mt-8">
                 <div className="flex items-center gap-2">
@@ -1658,8 +1842,41 @@ export default function ChatPage() {
                   <p className="text-sm sm:text-base font-semibold text-white">Sugestões Rápidas</p>
                 </div>
                 
-                {/* Sugestões principais */}
-                <div className="grid grid-cols-2 gap-2 w-full max-w-2xl">
+                {/* Sugestões de apresentação */}
+                {messages[0].content.includes('como posso te chamar') && (
+                  <div className="grid grid-cols-1 gap-2 w-full max-w-2xl">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        const name = prompt('👋 Qual é o seu nome?');
+                        if (name) {
+                          setInput(`Meu nome é ${name}`);
+                          inputRef.current?.focus();
+                        }
+                      }}
+                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl text-white transition-all hover:shadow-lg"
+                    >
+                      <span className="text-sm sm:text-base font-medium">👤 Me apresentar</span>
+                    </motion.button>
+                    
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setInput('Quero buscar um produto');
+                        inputRef.current?.focus();
+                      }}
+                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl text-white transition-all hover:shadow-lg"
+                    >
+                      <span className="text-sm sm:text-base font-medium">🛒 Começar a buscar</span>
+                    </motion.button>
+                  </div>
+                )}
+                
+                {/* Sugestões principais de produtos */}
+                {!messages[0].content.includes('como posso te chamar') && (
+                  <div className="grid grid-cols-2 gap-2 w-full max-w-2xl">
                   {[
                     { icon: <Smartphone className="w-4 h-4 sm:w-5 sm:h-5" />, text: 'iPhone 15 Pro', color: 'from-blue-500/20 to-purple-500/20 border-blue-500/30' },
                     { icon: <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />, text: 'Fone até R$ 200', color: 'from-green-500/20 to-emerald-500/20 border-green-500/30' },
@@ -1681,7 +1898,8 @@ export default function ChatPage() {
                       <span className="truncate text-sm sm:text-base font-medium">{suggestion.text}</span>
                     </motion.button>
                   ))}
-                </div>
+                  </div>
+                )}
 
                 {/* Dropdown de mais sugestões */}
                 <div className="w-full max-w-2xl">
@@ -1830,7 +2048,16 @@ export default function ChatPage() {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                     >
-                      <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl rounded-tr-md px-5 py-3 max-w-[85%] shadow-lg shadow-blue-500/20">
+                      <div className="bg-blue-500/90 backdrop-blur-xl rounded-2xl rounded-tr-sm px-5 py-3.5 max-w-[85%] shadow-lg border border-blue-400/20">
+                        {message.imageData && (
+                          <div className="mb-3">
+                            <img 
+                              src={message.imageData} 
+                              alt="Imagem enviada" 
+                              className="rounded-xl max-w-[200px] border border-white/20"
+                            />
+                          </div>
+                        )}
                         <p className="text-white whitespace-pre-wrap text-sm break-words">{message.content}</p>
                       </div>
                     </motion.div>
@@ -1842,84 +2069,94 @@ export default function ChatPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                     >
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/20">
-                        <Sparkles className="w-4 h-4 text-white" />
+                      <div className="w-9 h-9 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="w-4 h-4 text-blue-400" />
                       </div>
-                      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl rounded-tl-md px-5 py-3 max-w-[85%]">
+                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm px-5 py-4 max-w-[85%]">
                         {message.content === 'searching_animation' ? (
                           <div className="space-y-4">
                             <div className="flex items-center gap-3">
                               <motion.div
                                 animate={{ rotate: 360 }}
                                 transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                className="w-10 h-10 bg-blue-500/10 backdrop-blur-xl border border-blue-500/20 rounded-xl flex items-center justify-center"
                               >
                                 <Search className="w-5 h-5 text-blue-400" />
                               </motion.div>
-                              <span className="text-white font-semibold">Buscando na internet...</span>
+                              <div>
+                                <span className="text-white font-medium text-sm">Buscando produtos</span>
+                                <p className="text-gray-500 text-xs mt-0.5">Aguarde alguns instantes</p>
+                              </div>
                             </div>
                             
                             <div className="space-y-2">
                               <motion.div 
-                                className="flex items-center gap-2"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-3 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.2 }}
                               >
-                                <Globe className="w-4 h-4 text-green-400" />
-                                <span className="text-gray-300 text-sm">Vasculhando a web inteira</span>
+                                <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                                <span className="text-gray-300 text-sm">Analisando marketplaces</span>
                               </motion.div>
                               
                               <motion.div 
-                                className="flex items-center gap-2"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-3 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.4 }}
                               >
-                                <Zap className="w-4 h-4 text-yellow-400" />
+                                <div className="w-2 h-2 bg-blue-400 rounded-full" />
                                 <span className="text-gray-300 text-sm">Comparando preços</span>
                               </motion.div>
                               
                               <motion.div 
-                                className="flex items-center gap-2"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-3 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.6 }}
                               >
-                                <Sparkles className="w-4 h-4 text-purple-400" />
-                                <span className="text-gray-300 text-sm">Encontrando as melhores ofertas</span>
+                                <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                                <span className="text-gray-300 text-sm">Organizando resultados</span>
                               </motion.div>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 pt-2">
-                              <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                              <span className="text-gray-400 text-xs">Aguarde alguns instantes...</span>
                             </div>
                           </div>
                         ) : message.content === 'location_question' ? (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2">
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2.5">
                               <MapPin className="w-4 h-4 text-blue-400" />
-                              <span className="text-white font-medium">Localização</span>
+                              <span className="text-white font-medium text-sm">Localização</span>
                             </div>
                             
-                            <p className="text-white text-sm">Quer buscar em alguma região específica?</p>
+                            <p className="text-gray-300 text-sm">Quer buscar em alguma região específica?</p>
                             
                             <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Trophy className="w-4 h-4 text-yellow-400" />
-                                <span className="text-white text-sm font-medium">Exemplos:</span>
-                              </div>
-                              <div className="ml-6 space-y-1">
-                                <p className="text-gray-300 text-sm">• "São Paulo"</p>
-                                <p className="text-gray-300 text-sm">• "Rio de Janeiro"</p>
-                                <p className="text-gray-300 text-sm">• "Minas Gerais"</p>
-                              </div>
+                              <button
+                                onClick={() => handleSend('São Paulo')}
+                                className="w-full text-left px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
+                              >
+                                São Paulo
+                              </button>
+                              <button
+                                onClick={() => handleSend('Rio de Janeiro')}
+                                className="w-full text-left px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
+                              >
+                                Rio de Janeiro
+                              </button>
+                              <button
+                                onClick={() => handleSend('Minas Gerais')}
+                                className="w-full text-left px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
+                              >
+                                Minas Gerais
+                              </button>
                             </div>
                             
-                            <div className="flex items-center gap-2">
-                              <Flag className="w-4 h-4 text-green-400" />
-                              <span className="text-white text-sm">Ou digite "não" para buscar em todo Brasil</span>
-                            </div>
+                            <button
+                              onClick={() => handleSend('não')}
+                              className="w-full px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-white text-sm font-medium transition-colors"
+                            >
+                              Buscar em todo Brasil
+                            </button>
                           </div>
                         ) : (
                           <p className="text-gray-200 whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
@@ -1930,28 +2167,27 @@ export default function ChatPage() {
 
                   {message.type === 'category_question' && (
                     <div className="flex justify-start">
-                      <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl rounded-tl-sm p-4 max-w-lg w-full">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Bot className="w-4 h-4 text-purple-400" />
-                          <h3 className="text-white font-semibold text-sm">Pergunta Inteligente</h3>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 mb-3">
-                          <HelpCircle className="w-4 h-4 text-yellow-400" />
-                          <span className="text-white text-sm font-medium">{message.content}</span>
+                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm p-5 max-w-lg w-full">
+                        <div className="flex items-center gap-2.5 mb-4">
+                          <Bot className="w-4 h-4 text-blue-400" />
+                          <span className="text-white font-medium text-sm">{message.content}</span>
                         </div>
                         
                         {message.categoryQuestion?.options && (
-                          <div className="grid grid-cols-1 gap-2">
+                          <div className="space-y-2">
                             {message.categoryQuestion.options.map((option, i) => (
-                              <button
+                              <motion.button
                                 key={i}
                                 onClick={() => handleSend(option)}
-                                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-sm text-left transition-colors"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: i * 0.05 }}
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.99 }}
+                                className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm text-left transition-colors"
                               >
-                                <Hash className="w-3 h-3 text-gray-400" />
-                                <span>{i + 1}. {option}</span>
-                              </button>
+                                {option}
+                              </motion.button>
                             ))}
                           </div>
                         )}
@@ -1961,39 +2197,13 @@ export default function ChatPage() {
 
                   {message.type === 'image_confirmation' && (
                     <div className="flex justify-start">
-                      <motion.div 
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ duration: 0.3, type: "spring" }}
-                        className="bg-purple-500/10 border border-purple-500/30 rounded-2xl rounded-tl-sm p-4 max-w-lg w-full"
-                      >
-                        <motion.div 
-                          initial={{ x: -20, opacity: 0 }}
-                          animate={{ x: 0, opacity: 1 }}
-                          transition={{ delay: 0.1 }}
-                          className="flex items-center gap-2 mb-3"
-                        >
-                          <motion.div
-                            animate={{ rotate: [0, 10, -10, 0] }}
-                            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
-                          >
-                            <Sparkles className="w-4 h-4 text-purple-400" />
-                          </motion.div>
-                          <h3 className="text-white font-semibold text-sm">Produto Identificado</h3>
-                        </motion.div>
+                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm p-5 max-w-lg w-full">
+                        <div className="flex items-center gap-2.5 mb-4">
+                          <Sparkles className="w-4 h-4 text-blue-400" />
+                          <span className="text-white font-medium text-sm">Produto identificado</span>
+                        </div>
                         
-                        <motion.div 
-                          initial={{ y: -10, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          transition={{ delay: 0.2 }}
-                          className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-2 relative group"
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs text-blue-400 font-medium flex items-center gap-1">
-                              <span className="animate-pulse">✏️</span>
-                              Clique para editar
-                            </span>
-                          </div>
+                        <div className="mb-4 p-4 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl">
                           <input
                             type="text"
                             defaultValue={message.detectedProduct}
@@ -2014,242 +2224,130 @@ export default function ChatPage() {
                                 (e.target as HTMLInputElement).blur();
                               }
                             }}
-                            className="w-full bg-transparent text-blue-300 text-sm font-medium outline-none border-b border-blue-500/30 pb-1 focus:border-blue-400 transition-colors cursor-text hover:border-blue-400/50"
+                            className="w-full bg-transparent text-white text-sm outline-none border-b border-white/10 focus:border-blue-400/50 pb-2 transition-colors"
                             placeholder="Edite o nome do produto..."
                           />
-                          <p className="text-xs text-gray-400 mt-1">Pressione Enter para salvar</p>
-                        </motion.div>
+                          <p className="text-gray-500 text-xs mt-2">Pressione Enter para salvar</p>
+                        </div>
                         
-                        <motion.div 
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ delay: 0.3 }}
-                          className="bg-black/20 rounded-lg p-3 mb-3 border border-white/10"
-                        >
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 text-green-400" />
-                              <p className="text-green-300 text-sm font-medium">Já gasto: -{message.creditCost || 1} crédito (identificação)</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Coins className="w-4 h-4 text-yellow-400" />
-                              <p className="text-gray-300 text-sm">Buscar preços: +1 crédito adicional</p>
-                            </div>
+                        <div className="space-y-2 mb-4 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-400">Identificação</span>
+                            <span className="text-white">-{message.creditCost || 1} crédito</span>
                           </div>
-                        </motion.div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-400">Busca de preços</span>
+                            <span className="text-white">+1 crédito</span>
+                          </div>
+                        </div>
                         
-                        <motion.div 
-                          initial={{ y: 10, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          transition={{ delay: 0.4 }}
-                          className="flex gap-2"
-                        >
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
+                        <div className="flex gap-2">
+                          <button
                             onClick={handleImageSearchReject}
                             disabled={loading || chatState === 'searching'}
-                            className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white text-sm hover:bg-white/20 transition-colors"
+                            className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
                           >
                             Não
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
+                          </button>
+                          <button
                             onClick={handleImagePriceSearch}
                             disabled={loading || chatState === 'searching'}
-                            className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white text-sm disabled:opacity-50 shadow-lg shadow-green-500/20"
+                            className="flex-1 px-4 py-2.5 bg-blue-500/90 hover:bg-blue-500 backdrop-blur-xl border border-blue-400/20 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
                           >
-                            <motion.span
-                              animate={{ opacity: [1, 0.7, 1] }}
-                              transition={{ duration: 1.5, repeat: Infinity }}
-                            >
-                              Sim, buscar!
-                            </motion.span>
-                          </motion.button>
-                        </motion.div>
-                      </motion.div>
+                            Sim, buscar
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
                   {message.type === 'sort_question' && (
                     <div className="flex justify-start">
-                      <motion.div 
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ duration: 0.3, type: "spring" }}
-                        className="bg-blue-500/10 border border-blue-500/30 rounded-2xl rounded-tl-sm p-4 max-w-lg w-full"
-                      >
-                        <motion.div 
-                          initial={{ x: -20, opacity: 0 }}
-                          animate={{ x: 0, opacity: 1 }}
-                          transition={{ delay: 0.1 }}
-                          className="flex items-center gap-2 mb-3"
-                        >
-                          <motion.div
-                            animate={{ rotate: [0, 10, -10, 0] }}
-                            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
-                          >
-                            <Sparkles className="w-4 h-4 text-blue-400" />
-                          </motion.div>
-                          <h3 className="text-white font-semibold text-sm">{message.content}</h3>
-                        </motion.div>
+                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm p-5 max-w-lg w-full">
+                        <div className="flex items-center gap-2.5 mb-4">
+                          <Sparkles className="w-4 h-4 text-blue-400" />
+                          <span className="text-white font-medium text-sm">{message.content}</span>
+                        </div>
                         
-                        <div className="grid grid-cols-1 gap-2">
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
+                        <div className="space-y-2">
+                          <button
                             onClick={() => executeImageSearch('BEST_MATCH')}
                             disabled={loading}
-                            className="flex items-center gap-3 px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-sm text-left transition-colors disabled:opacity-50"
+                            className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-left transition-colors disabled:opacity-50"
                           >
-                            <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <Sparkles className="w-4 h-4 text-purple-400" />
-                            </div>
-                            <div>
-                              <p className="font-medium">Maior relevância</p>
-                              <p className="text-xs text-gray-400">Produtos mais relacionados</p>
-                            </div>
-                          </motion.button>
+                            <div className="text-white text-sm font-medium">Maior relevância</div>
+                            <div className="text-gray-500 text-xs mt-0.5">Produtos mais relacionados</div>
+                          </button>
                           
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
+                          <button
                             onClick={() => executeImageSearch('LOWEST_PRICE')}
                             disabled={loading}
-                            className="flex items-center gap-3 px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-sm text-left transition-colors disabled:opacity-50"
+                            className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-left transition-colors disabled:opacity-50"
                           >
-                            <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <ArrowRight className="w-4 h-4 text-green-400 rotate-90" />
-                            </div>
-                            <div>
-                              <p className="font-medium">Menor preço</p>
-                              <p className="text-xs text-gray-400">Do mais barato ao mais caro</p>
-                            </div>
-                          </motion.button>
+                            <div className="text-white text-sm font-medium">Menor preço</div>
+                            <div className="text-gray-500 text-xs mt-0.5">Do mais barato ao mais caro</div>
+                          </button>
                           
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
+                          <button
                             onClick={() => executeImageSearch('HIGHEST_PRICE')}
                             disabled={loading}
-                            className="flex items-center gap-3 px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-sm text-left transition-colors disabled:opacity-50"
+                            className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-left transition-colors disabled:opacity-50"
                           >
-                            <div className="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <ArrowRight className="w-4 h-4 text-yellow-400 -rotate-90" />
-                            </div>
-                            <div>
-                              <p className="font-medium">Maior preço</p>
-                              <p className="text-xs text-gray-400">Do mais caro ao mais barato</p>
-                            </div>
-                          </motion.button>
+                            <div className="text-white text-sm font-medium">Maior preço</div>
+                            <div className="text-gray-500 text-xs mt-0.5">Do mais caro ao mais barato</div>
+                          </button>
                         </div>
-                      </motion.div>
+                      </div>
                     </div>
                   )}
 
                   {message.type === 'confirmation' && (
                     <div className="flex justify-start">
-                      <motion.div 
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ duration: 0.3, type: "spring" }}
-                        className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/30 rounded-3xl rounded-tl-md p-5 max-w-lg w-full shadow-lg"
-                      >
-                        <motion.div 
-                          initial={{ x: -20, opacity: 0 }}
-                          animate={{ x: 0, opacity: 1 }}
-                          transition={{ delay: 0.1 }}
-                          className="flex items-center gap-2 mb-4"
-                        >
-                          <motion.div
-                            animate={{ rotate: [0, 10, -10, 0] }}
-                            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
-                          >
-                            <Sparkles className="w-5 h-5 text-yellow-400" />
-                          </motion.div>
-                          <h3 className="text-white font-semibold">Pronto para buscar!</h3>
-                        </motion.div>
+                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm p-5 max-w-lg w-full">
+                        <div className="flex items-center gap-2.5 mb-4">
+                          <Search className="w-4 h-4 text-blue-400" />
+                          <span className="text-white font-medium text-sm">Confirmar busca</span>
+                        </div>
                         
-                        <motion.div 
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ delay: 0.2 }}
-                          className="bg-black/30 rounded-2xl p-4 mb-4 border border-white/10 cursor-pointer hover:border-blue-400/50 transition-colors group"
-                        >
-                          <div className="flex items-start gap-3 mb-3">
-                            <Search className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1">
-                              <p className="text-xs text-gray-400 mb-1">Busca final:</p>
-                              <input
-                                type="text"
-                                defaultValue={message.content}
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  setMessages(prev => {
-                                    const updated = [...prev];
-                                    const idx = updated.findIndex(m => m.id === message.id);
-                                    if (idx >= 0) updated[idx].content = e.target.value;
-                                    return updated;
-                                  });
-                                }}
-                                className="w-full bg-transparent text-white font-medium text-lg outline-none border-b border-transparent group-hover:border-blue-400/30 focus:border-blue-400 transition-colors pb-1"
-                                placeholder="Edite a busca..."
-                              />
-                            </div>
+                        <div className="mb-4 p-4 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl">
+                          <input
+                            type="text"
+                            defaultValue={message.content}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              setMessages(prev => {
+                                const updated = [...prev];
+                                const idx = updated.findIndex(m => m.id === message.id);
+                                if (idx >= 0) updated[idx].content = e.target.value;
+                                return updated;
+                              });
+                            }}
+                            className="w-full bg-transparent text-white text-base outline-none border-b border-white/10 focus:border-blue-400/50 pb-2 transition-colors"
+                            placeholder="Edite a busca..."
+                          />
+                          <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>Custo: 1 crédito</span>
                           </div>
-                          
-                          <div className="flex items-center gap-2 pt-3 border-t border-white/10">
-                            <CreditCard className="w-4 h-4 text-yellow-400" />
-                            <p className="text-sm text-gray-300">Custo: <span className="text-yellow-400 font-semibold">1 crédito</span></p>
-                          </div>
-                        </motion.div>
+                        </div>
                         
-                        <motion.div 
-                          initial={{ y: -10, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          transition={{ delay: 0.3 }}
-                          className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 mb-4"
-                        >
-                          <p className="text-blue-300 text-xs flex items-center gap-2">
-                            <span className="animate-pulse">✏️</span>
-                            Clique no texto acima para editar antes de confirmar
-                          </p>
-                        </motion.div>
-                        
-                        <motion.div 
-                          initial={{ y: 10, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          transition={{ delay: 0.4 }}
-                          className="flex gap-3"
-                        >
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
+                        <div className="flex gap-2">
+                          <button
                             onClick={handleCancelSearch}
-                            className="flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm hover:bg-white/20 transition-colors font-medium"
+                            className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
                           >
                             Cancelar
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
+                          </button>
+                          <button
                             onClick={handleConfirmSearch}
                             disabled={loading || chatState === 'searching'}
-                            className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white text-sm disabled:opacity-50 shadow-lg shadow-green-500/30 font-semibold"
+                            className="flex-1 px-4 py-2.5 bg-blue-500/90 hover:bg-blue-500 backdrop-blur-xl border border-blue-400/20 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
                           >
-                            <motion.span
-                              animate={{ opacity: [1, 0.7, 1] }}
-                              transition={{ duration: 1.5, repeat: Infinity }}
-                              className="flex items-center justify-center gap-2"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                              Confirmar Busca
-                            </motion.span>
-                          </motion.button>
-                        </motion.div>
-                      </motion.div>
+                            Confirmar
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -2258,7 +2356,7 @@ export default function ChatPage() {
                       {message.products && message.products.length > 0 && (
                         <>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                            {message.products.slice(0, 6).map((product, idx) => (
+                            {message.products.map((product, idx) => (
                               <ProductCard key={product.id || idx} product={product} />
                             ))}
                           </div>
@@ -2330,15 +2428,7 @@ export default function ChatPage() {
         {/* Input */}
         <div 
           ref={inputContainerRef}
-          className="border-t border-white/5 bg-black/20 backdrop-blur-2xl p-3 sm:p-4 flex-shrink-0 transition-all duration-300"
-          style={{
-            position: isKeyboardOpen ? 'fixed' : 'relative',
-            bottom: isKeyboardOpen ? `${keyboardHeight}px` : 'auto',
-            left: isKeyboardOpen ? 0 : 'auto',
-            right: isKeyboardOpen ? 0 : 'auto',
-            zIndex: isKeyboardOpen ? 100 : 'auto',
-            transform: isKeyboardOpen ? 'translateY(0)' : 'none',
-          }}
+          className="input-container-mobile border-t border-white/5 bg-black/95 backdrop-blur-2xl p-3 sm:p-4 flex-shrink-0 sticky bottom-0 left-0 right-0 z-50"
         >
           <div className="max-w-4xl mx-auto">
             <AnimatePresence>
@@ -2402,21 +2492,13 @@ export default function ChatPage() {
                   }
                 }}
                 onFocus={() => {
-                  // Scroll suave para o input quando recebe foco
+                  setIsKeyboardOpen(true);
                   setTimeout(() => {
-                    inputContainerRef.current?.scrollIntoView({ 
-                      behavior: 'smooth', 
-                      block: 'end',
-                      inline: 'nearest'
-                    });
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
                   }, 300);
                 }}
                 onBlur={() => {
-                  // Pequeno delay para permitir que o teclado feche
-                  setTimeout(() => {
-                    setIsKeyboardOpen(false);
-                    setKeyboardHeight(0);
-                  }, 100);
+                  setTimeout(() => setIsKeyboardOpen(false), 100);
                 }}
                 placeholder={uploadedImage ? "Ou digite..." : "Digite um produto..."}
                 className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 outline-none focus:border-blue-500/50 focus:bg-white/10 text-sm transition-all backdrop-blur-xl min-w-0"
