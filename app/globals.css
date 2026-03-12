@@ -18,6 +18,33 @@
 html, body {
   overflow-x: hidden;
   max-width: 100vw;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+/* Prevenir zoom no input (iOS) */
+input, textarea, select {
+  font-size: 16px !important;
+}
+
+/* Melhorar scroll em mobile */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Prevenir bounce scroll (iOS) */
+body {
+  overscroll-behavior: none;
+}
+
+/* Fix para teclado virtual */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari */
+  .h-screen {
+    height: -webkit-fill-available;
+  }
 }
 
 /* Animações */
