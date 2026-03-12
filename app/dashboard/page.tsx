@@ -119,7 +119,7 @@ export default function DashboardPage() {
     window.addEventListener('userChanged', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     
-    const interval = setInterval(loadDashboardData, 5000);
+    const interval = setInterval(loadDashboardData, 30000); // 30s ao invés de 5s
     
     return () => {
       window.removeEventListener('userChanged', handleUpdate);
@@ -139,14 +139,22 @@ export default function DashboardPage() {
       const userData = JSON.parse(user);
       const headers = { 'Authorization': `Bearer ${userData.token}` };
 
-      const fetchWithRetry = async (url: string, options: any, retries = 3) => {
+      const fetchWithRetry = async (url: string, options: any, retries = 2) => {
         for (let i = 0; i < retries; i++) {
           try {
-            const response = await fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+            
+            const response = await fetch(url, { 
+              ...options, 
+              signal: controller.signal 
+            });
+            
+            clearTimeout(timeoutId);
             return response;
           } catch (error) {
             if (i === retries - 1) throw error;
-            await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
       };
@@ -252,10 +260,14 @@ export default function DashboardPage() {
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      const errorMessage = error instanceof TypeError && error.message === 'Failed to fetch'
-        ? 'Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente.'
-        : 'Erro ao carregar dados do dashboard';
-      setToast({ message: errorMessage, type: 'error' });
+      
+      // Não mostrar toast se for apenas timeout - dados podem estar parcialmente carregados
+      if (error instanceof Error && error.name !== 'AbortError') {
+        const errorMessage = error.message === 'Failed to fetch'
+          ? 'Servidor offline. Usando dados em cache.'
+          : 'Erro ao carregar alguns dados';
+        setToast({ message: errorMessage, type: 'info' });
+      }
     } finally {
       setLoading(false);
     }

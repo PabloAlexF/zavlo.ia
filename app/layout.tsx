@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ClientLayout } from "@/components/layout/ClientLayout";
 import { ReactNode } from "react";
 import { Sora } from 'next/font/google';
@@ -9,19 +9,20 @@ const sora = Sora({
   display: 'swap',
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
+  themeColor: '#12110D',
+};
+
 export const metadata: Metadata = {
   title: "Zavlo.ia - Encontre o melhor preço com IA",
   description: "Busque produtos em todos os marketplaces brasileiros usando Inteligência Artificial. Compare preços e economize!",
   keywords: "marketplace, comparação de preços, IA, busca inteligente, OLX, Mercado Livre",
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: 'cover',
-    interactiveWidget: 'resizes-content'
-  },
-  themeColor: '#12110D',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',

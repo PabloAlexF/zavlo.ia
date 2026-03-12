@@ -32,13 +32,17 @@ function mapSortByToAPI(userChoice) {
  * IMPORTANTE: Preço NÃO deve ir na query, apenas nos filtros do backend
  */
 export function buildGoogleSearchQuery(baseQuery, filters) {
+    console.log(`🔍 buildGoogleSearchQuery chamado:`, { baseQuery, filters });
+    
     const parts = [];
     // 1. Base query (produto + marca + modelo)
     const cleanBase = baseQuery.trim();
     parts.push(cleanBase);
     // 2. Adiciona condição (remove acentos)
     if (filters.condition && filters.condition !== 'Tanto faz') {
-        parts.push(removeAccents(filters.condition.toLowerCase()));
+        const normalizedCondition = removeAccents(filters.condition.toLowerCase());
+        console.log(`🏷️ Condição adicionada à query: "${filters.condition}" → "${normalizedCondition}"`);
+        parts.push(normalizedCondition);
     }
     // 3. PREÇO NÃO VAI NA QUERY - Extrair para filtro separado
     let minPrice;
@@ -73,6 +77,8 @@ export function buildGoogleSearchQuery(baseQuery, filters) {
         maxPrice
     };
 }
+
+console.log('✅ googleQueryBuilder.js carregado - buildGoogleSearchQuery disponível');
 /**
  * Exemplo de uso:
  *

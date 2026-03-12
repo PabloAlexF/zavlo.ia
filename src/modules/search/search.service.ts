@@ -136,21 +136,23 @@ export class SearchService {
       };
     }
 
-    // Se freeMode (plano free/usuário não logado), busca limitada a 3 lojas
+    // Se freeMode (plano free/usuário não logado), busca limitada
     if (filters?.freeMode) {
-      this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - 10 resultados (freeMode=${filters.freeMode})`);
+      const requestedLimit = filters?.limit || 10;
+      const maxLimit = Math.min(requestedLimit, 20); // Máximo 20 para free
+      
+      this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - ${maxLimit} resultados (freeMode=${filters.freeMode})`);
       
       try {
-        const results = await this.googleShoppingService.search(normalizedQuery, 20, sortBy);
-        const limitedProducts = results.slice(0, 10); // Limitar a 10 no frontend
+        const results = await this.googleShoppingService.search(normalizedQuery, maxLimit, sortBy);
         const result = { 
-          results: limitedProducts, 
-          total: limitedProducts.length,
+          results: results, 
+          total: results.length,
           creditsUsed,
           remainingCredits
         };
         
-        this.logger.log(`🆓 [SEARCH DEBUG] Free search completed with ${limitedProducts.length} results`);
+        this.logger.log(`🆓 [SEARCH DEBUG] Free search completed with ${results.length} results`);
         
         await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
         return result;
@@ -169,11 +171,13 @@ export class SearchService {
 
     // GOOGLE SHOPPING SEARCH (planos pagos)
     let products: Product[] = [];
+    const requestedLimit = filters?.limit || 50;
+    const maxLimit = Math.min(requestedLimit, 100); // Máximo 100 conforme API
 
     try {
-      this.logger.log(`[GOOGLE SHOPPING] Buscando produtos com sortBy=${sortBy}...`);
+      this.logger.log(`[GOOGLE SHOPPING] Buscando ${maxLimit} produtos com sortBy=${sortBy}...`);
       
-      products = await this.googleShoppingService.search(normalizedQuery, 50, sortBy);
+      products = await this.googleShoppingService.search(normalizedQuery, maxLimit, sortBy);
       this.logger.log(`[GOOGLE SHOPPING] ${products.length} produtos encontrados`);
     } catch (error) {
       this.logger.warn(`[GOOGLE SHOPPING] Erro: ${error.message}`);

@@ -1,10 +1,18 @@
 // Detecta mudanças de contexto e extrai informações da conversa completa
 // Palavras que indicam correção/mudança
 const CORRECTION_PATTERNS = [
-    /\b(na verdade|não|nao|melhor|prefiro|quero|ao invés|em vez|invés|vez)\b/i,
+    /\b(na verdade|melhor|prefiro|ao invés|em vez|invés|vez)\b/i,
     /\b(mudei de ideia|mudei|esquece|deixa|cancela)\b/i,
     /\b(errei|erro|desculpa|ops)\b/i,
 ];
+
+// Frases genéricas que NÃO são mudança de contexto
+const GENERIC_PHRASES = [
+    /\b(quero buscar|vou buscar|queria buscar|gostaria de buscar)\s+(um|uma|outro|outra)?\s+(novo|nova)?\s+produto\b/i,
+    /\b(buscar|procurar|encontrar)\s+(um|uma|outro|outra)?\s+produto\b/i,
+    /\b(novo|outra|outra)\s+busca\b/i,
+];
+
 // Palavras que indicam refinamento (não mudança completa)
 const REFINEMENT_PATTERNS = [
     /\b(também|e|mais|além|junto|com)\b/i,
@@ -12,6 +20,17 @@ const REFINEMENT_PATTERNS = [
 ];
 export function detectContextChange(currentMessage, conversationHistory) {
     const normalized = currentMessage.toLowerCase().trim();
+    
+    // PRIMEIRO: Verificar se é frase genérica (NÃO é mudança)
+    const isGeneric = GENERIC_PHRASES.some(pattern => pattern.test(normalized));
+    if (isGeneric) {
+        return {
+            hasChange: false,
+            type: 'generic',
+            confidence: 0.1,
+        };
+    }
+    
     // Verifica se é uma correção
     const isCorrection = CORRECTION_PATTERNS.some(pattern => pattern.test(normalized));
     if (isCorrection) {

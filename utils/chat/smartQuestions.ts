@@ -1,4 +1,4 @@
-import { CategoryQuestion } from './categorySystem';
+import { CategoryQuestion, PRODUCT_CATEGORIES, detectProductCategory } from './categorySystem';
 import { enrichProductQuery, detectCondition } from './brandDetector';
 
 // Detecta informações já fornecidas na query
@@ -7,6 +7,10 @@ export function detectProvidedInfo(query: string) {
   const provided: Record<string, string> = {};
   
   console.log('🔍 Analisando query para informações:', normalized);
+  
+  // Detecta categoria primeiro para validar perguntas
+  const category = detectProductCategory(query);
+  console.log('🎯 Categoria detectada:', category);
   
   // NÃO detecta condição automaticamente - sempre perguntar
   // Isso evita confusão quando o usuário digita "tenis nike air max 97 novo"
@@ -24,34 +28,38 @@ export function detectProvidedInfo(query: string) {
     console.log('✅ Detectou gênero: Unissex');
   }
   
-  // Detecta armazenamento (melhorado)
-  const storagePatterns = [
-    /\b(\d+)\s*gb\b/i,
-    /\b(\d+)gb\b/i,
-    /\bde\s+(\d+)\s*gb\b/i
-  ];
-  
-  for (const pattern of storagePatterns) {
-    const match = normalized.match(pattern);
-    if (match) {
-      const size = parseInt(match[1]);
-      if (size === 64) provided.storage = '64GB';
-      else if (size === 128) provided.storage = '128GB';
-      else if (size === 256) provided.storage = '256GB';
-      else if (size === 512) provided.storage = '512GB';
-      else if (size === 1024 || size === 1) provided.storage = '1TB';
-      console.log('✅ Detectou armazenamento:', provided.storage);
-      break;
+  // Detecta armazenamento APENAS para smartphone e notebook
+  if (category === 'smartphone' || category === 'notebook') {
+    const storagePatterns = [
+      /\b(\d+)\s*gb\b/i,
+      /\b(\d+)gb\b/i,
+      /\bde\s+(\d+)\s*gb\b/i
+    ];
+    
+    for (const pattern of storagePatterns) {
+      const match = normalized.match(pattern);
+      if (match) {
+        const size = parseInt(match[1]);
+        if (size === 64) provided.storage = '64GB';
+        else if (size === 128) provided.storage = '128GB';
+        else if (size === 256) provided.storage = '256GB';
+        else if (size === 512) provided.storage = '512GB';
+        else if (size === 1024 || size === 1) provided.storage = '1TB';
+        console.log('✅ Detectou armazenamento:', provided.storage);
+        break;
+      }
     }
   }
   
   // Detecta tipo de móvel
-  if (/cadeira\s*gamer/i.test(normalized)) {
-    provided.type = 'Cadeira gamer';
-  } else if (/mesa\s*gamer/i.test(normalized)) {
-    provided.type = 'Mesa gamer';
-  } else if (/\bsofa\b|\bsofá\b/i.test(normalized)) {
-    provided.type = 'Sofá';
+  if (category === 'movel') {
+    if (/cadeira\s*gamer/i.test(normalized)) {
+      provided.type = 'Cadeira gamer';
+    } else if (/mesa\s*gamer/i.test(normalized)) {
+      provided.type = 'Mesa gamer';
+    } else if (/\bsofa\b|\bsofá\b/i.test(normalized)) {
+      provided.type = 'Sofá';
+    }
   }
   
   // Detecta material
