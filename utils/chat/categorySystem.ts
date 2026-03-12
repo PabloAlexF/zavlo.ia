@@ -1,9 +1,9 @@
 // Sistema de categorização inteligente de produtos
 export interface ProductCategory {
   name: string;
-  questions: CategoryQuestion[];
   keywords: string[];
   patterns: RegExp[];
+  questions: CategoryQuestion[];
 }
 
 export interface CategoryQuestion {
@@ -13,13 +13,6 @@ export interface CategoryQuestion {
   options?: string[];
   required: boolean;
   conditions?: string[]; // e.g., ['smartphone'] - only ask if category matches
-}
-
-export interface ProductCategory {
-  name: string;
-  questions: CategoryQuestion[];
-  keywords: string[];
-  patterns: RegExp[];
 }
 
 
@@ -188,6 +181,13 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
     ],
     questions: [
       {
+        id: 'gender',
+        question: 'Para quem é o produto?',
+        type: 'choice',
+        options: ['Masculino', 'Feminino', 'Unissex', 'Tanto faz'],
+        required: false
+      },
+      {
         id: 'condition',
         question: 'Produto novo ou usado?',
         type: 'choice',
@@ -230,12 +230,7 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
     ]
   },
 
-  universal: {
-    name: 'Produto Universal',
-    keywords: ['qualquer', 'produto', 'item', 'coisa', 'objeto'],
-    patterns: [/./], // Matches anything
-    questions: []
-  },
+  // universal removido - categoria catch-all perigosa que matcha tudo
 
   generico: {
     name: 'Produto',
@@ -256,6 +251,11 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
 
 import { normalizeAndTokenize, expandWithSynonyms } from './advancedNormalizer';
 import { detectProductEntity } from './brandDetector';
+
+// Stopwords para filtrar tokens inúteis
+const STOPWORDS = new Set([
+  'quero', 'comprar', 'buscar', 'procurar', 'um', 'uma', 'de', 'para', 'com', 'me', 'mostra', 'mostrar'
+]);
 
 // Modelos específicos de produtos (detecção prioritária)
 const PRODUCT_MODEL_PATTERNS: Record<string, RegExp[]> = {
@@ -280,10 +280,53 @@ const PRODUCT_MODEL_PATTERNS: Record<string, RegExp[]> = {
   ]
 };
 
-// Marcas que não devem pontuar sozinhas
-const BRAND_ONLY_KEYWORDS = new Set([
-  'nike', 'adidas', 'puma', 'olympikus', 'samsung', 'lg', 'brastemp', 'consul'
+// Objetos que SEMPRE indicam acessório (override forte)
+const HARD_ACCESSORY_OBJECTS = new Set([
+  'capa', 'case', 'capinha', 'cover',
+  'carregador', 'fonte', 'adaptador',
+  'pelicula', 'película', 'protetor',
+  'cabo', 'fio',
+  'suporte', 'base'
 ]);
+
+// Dispositivos que podem ser eletrônicos OU acessórios (não forçar override)
+const DEVICE_ACCESSORIES = new Set([
+  'mouse', 'teclado', 'mousepad',
+  'fone', 'headset', 'earphone'
+]);
+
+// Pré-filtro: tokens que indicam categoria (performance)
+const CATEGORY_TOKEN_HINTS: Record<string, Set<string>> = {
+  smartphone: new Set(['iphone', 'celular', 'galaxy', 'redmi', 'smartphone', 'telefone', 'android', 'ios']),
+  notebook: new Set(['notebook', 'laptop', 'macbook', 'thinkpad', 'inspiron']),
+  calcado_roupa: new Set(['tenis', 'sapato', 'bota', 'sandalia', 'chinelo', 'camisa', 'calça', 'cloudrunner', 'airmax', 'air', 'max', 'ultraboost', 'pegasus', 'revolution', 'react']),
+  eletronico: new Set(['tv', 'televisao', 'monitor', 'playstation', 'xbox', 'nintendo', 'airpods', 'ipad', 'mouse', 'teclado', 'fone', 'headset']),
+  eletrodomestico: new Set(['geladeira', 'fogao', 'microondas', 'secadora', 'freezer']),
+  movel: new Set(['sofa', 'mesa', 'cadeira', 'cama', 'guarda', 'armario', 'estante', 'rack']),
+  veiculo: new Set(['carro', 'moto', 'bicicleta', 'bike', 'automovel', 'veiculo']),
+  acessorio: new Set(['oculos', 'relogio', 'bolsa', 'mochila', 'carteira', 'cinto', 'bone', 'capa', 'carregador', 'pelicula', 'cabo'])
+};
+
+// Marcas que não devem pontuar sozinhas (exceto samsung/lg que são fortemente eletrônicos)
+const BRAND_ONLY_KEYWORDS = new Set([
+  'nike', 'adidas', 'puma', 'olympikus', 'brastemp', 'consul'
+]);
+
+// Substantivos de produto (peso maior que marcas)
+const PRODUCT_NOUNS = new Set([
+  'tenis', 'sapato', 'bota', 'sandalia', 'chinelo',
+  'celular', 'smartphone', 'telefone',
+  'notebook', 'laptop',
+  'tv', 'televisao', 'monitor',
+  'geladeira', 'fogao', 'microondas',
+  'sofa', 'mesa', 'cadeira', 'cama',
+  'carro', 'moto', 'bicicleta', 'bike',
+  'oculos', 'relogio', 'bolsa', 'mochila'
+]);
+
+// Cache de classificação (performance)
+const categoryCache = new Map<string, string>();
+const CACHE_MAX_SIZE = 1000;
 
 // Prioridade das categorias (maior = mais prioritário)
 const CATEGORY_PRIORITY: Record<string, number> = {
@@ -291,8 +334,8 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   notebook: 9,
   veiculo: 8,
   calcado_roupa: 7,
-  acessorio: 6,
-  eletronico: 5,
+  eletronico: 6,
+  acessorio: 5,
   movel: 4,
   eletrodomestico: 3,
   generico: 1
@@ -300,6 +343,15 @@ const CATEGORY_PRIORITY: Record<string, number> = {
 
 // Detecta categoria com ranking (retorna top 3)
 export function detectProductCategoryWithRanking(query: string): Array<{category: string, score: number}> {
+  // Normalize query once (agora com bigramas e trigramas)
+  const { normalized, tokens, bigrams, trigrams, allTokens } = normalizeAndTokenize(query);
+  
+  // Filtrar stopwords ANTES de expandir sinônimos (ordem correta)
+  const filteredTokens = tokens.filter(t => !STOPWORDS.has(t));
+  const expandedTokens = expandWithSynonyms(filteredTokens);
+  
+  const DEBUG = process.env.NODE_ENV === 'development';
+  
   // PRIORIDADE 0: Detecta categoria via entity (iPhone, PS5, MacBook)
   const entity = detectProductEntity(query);
   if (entity.category) {
@@ -311,81 +363,170 @@ export function detectProductCategoryWithRanking(query: string): Array<{category
     };
     const mappedCategory = categoryMap[entity.category];
     if (mappedCategory) {
-      console.log('⭐ Entity category detected:', mappedCategory);
+      if (DEBUG) console.log('⭐ Entity category detected:', mappedCategory);
       return [{ category: mappedCategory, score: 100 }];
     }
   }
   
-  // PRIORIDADE 1: Detecta modelos específicos primeiro
+  // PRIORIDADE 1: Override para objetos de acessório HARD (após entity)
+  for (const token of tokens) {
+    if (HARD_ACCESSORY_OBJECTS.has(token)) {
+      if (DEBUG) console.log('⭐ Hard accessory object detected:', token);
+      return [{ category: 'acessorio', score: 100 }];
+    }
+  }
+  
+  // PRIORIDADE 2: Detecta modelos específicos (score máximo)
   for (const [category, patterns] of Object.entries(PRODUCT_MODEL_PATTERNS)) {
     for (const pattern of patterns) {
-      if (pattern.test(query)) {
-        console.log('⭐ Modelo específico detectado:', category, pattern);
-        return [{ category, score: 50 }];
+      if (pattern.test(normalized)) {
+        if (DEBUG) console.log('⭐ Modelo específico detectado:', category, pattern);
+        return [{ category, score: 100 }];
       }
     }
   }
   
-  const { normalized, tokens } = normalizeAndTokenize(query);
-  const expandedTokens = expandWithSynonyms(tokens);
+  const expandedTokens = expandWithSynonyms(filteredTokens);
   
-  const DEBUG = process.env.NODE_ENV === 'development';
+  // Separar tokens originais de sinônimos para peso diferenciado
+  const tokenSet = new Set(filteredTokens);
+  const synonymSet = new Set(expandedTokens.filter(t => !tokenSet.has(t)));
+  const candidateCategories = new Set<string>();
+  
+  for (const [category, hints] of Object.entries(CATEGORY_TOKEN_HINTS)) {
+    for (const token of filteredTokens) {
+      if (hints.has(token)) {
+        candidateCategories.add(category);
+        break;
+      }
+    }
+  }
+  
+  // Se nenhuma categoria candidata, processar todas
+  const categoriesToProcess = candidateCategories.size > 0 
+    ? Array.from(candidateCategories)
+    : Object.keys(PRODUCT_CATEGORIES).filter(c => c !== 'generico' && c !== 'universal');
+  
   if (DEBUG) {
     console.log('🔍 QUERY:', query);
     console.log('🔍 NORMALIZED:', normalized);
     console.log('🔍 TOKENS:', tokens);
+    console.log('🔍 BIGRAMS:', bigrams);
+    console.log('🔍 TRIGRAMS:', trigrams);
+    console.log('🔍 FILTERED:', filteredTokens);
     console.log('🔍 EXPANDED:', expandedTokens);
   }
   
-  // Otimização: Set para O(1) lookup
-  const tokenSet = new Set(expandedTokens);
-  
   const scores: Array<{category: string, score: number}> = [];
   
-  for (const [categoryId, category] of Object.entries(PRODUCT_CATEGORIES)) {
-    if (categoryId === 'generico') continue;
+  for (const categoryId of categoriesToProcess) {
+    const category = PRODUCT_CATEGORIES[categoryId];
     
     let score = 0;
     
-    // Patterns regex (pontuação alta - aumentada para 10)
-    for (const pattern of category.patterns) {
-      if (pattern.test(normalized)) {
-        score += 10;
-        if (DEBUG) console.log('✅ Pattern match:', categoryId, '+10 pontos');
+    // Patterns regex (só roda se categoria é candidata - performance)
+    if (candidateCategories.has(categoryId) || candidateCategories.size === 0) {
+      for (const pattern of category.patterns) {
+        if (pattern.test(normalized)) {
+          score += 10;
+          if (DEBUG) console.log('✅ Pattern match:', categoryId, '+10 pontos');
+          break;
+        }
+      }
+    } else {
+      // Pula categoria se não é candidata (evita regex desnecessária)
+      continue;
+    }
+    
+    // Keywords com tokens - separar contadores (usa allTokens para incluir bigramas e trigramas)
+    let tokenMatches = 0;
+    let synonymMatches = 0;
+    let hasBrandOnly = false;
+    let hasProductNoun = false;
+    
+    for (const keyword of category.keywords) {
+      // Multi-word keywords (phrases) com word boundary
+      if (keyword.includes(' ')) {
+        const phraseRegex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
+        if (phraseRegex.test(normalized)) {
+          tokenMatches++;
+          if (DEBUG) console.log('✅ Phrase keyword match:', keyword);
+        }
+        // Também verifica em bigramas e trigramas
+        else if (bigrams.includes(keyword) || trigrams.includes(keyword)) {
+          tokenMatches++;
+          if (DEBUG) console.log('✅ N-gram keyword match:', keyword);
+        }
+      }
+      // Single-word keywords (tokens originais peso maior)
+      else if (tokenSet.has(keyword)) {
+        tokenMatches++;
+        
+        // Check if it's a product noun (higher weight)
+        if (PRODUCT_NOUNS.has(keyword)) {
+          hasProductNoun = true;
+          if (DEBUG) console.log('✅ Product noun match:', keyword);
+        }
+        // Check if it's a device accessory (bonus for eletronico)
+        else if (DEVICE_ACCESSORIES.has(keyword)) {
+          if (categoryId === 'eletronico') {
+            score += 3;
+            if (DEBUG) console.log('✅ Device accessory bonus for eletronico:', keyword);
+          }
+        }
+        
+        // Verifica se é apenas marca sem contexto
+        if (BRAND_ONLY_KEYWORDS.has(keyword) && tokens.length === 1) {
+          hasBrandOnly = true;
+        }
+      }
+      // Sinônimos têm peso menor (2 pontos vs 5 do original)
+      else if (synonymSet.has(keyword)) {
+        synonymMatches++;
+        if (DEBUG) console.log('✅ Synonym match:', keyword);
+      }
+    }
+    
+    // Brand + Product boost (marca + produto = super forte)
+    if (entity.brand && hasProductNoun) {
+      score += 6;
+      if (DEBUG) console.log('✅ Brand + Product boost:', categoryId, '+6 pontos');
+    }
+    
+    // Scoring com peso por tipo de palavra (contadores separados)
+    if (hasBrandOnly && tokenMatches === 1 && synonymMatches === 0) {
+      score += 1;
+      if (DEBUG) console.log('⚠️ Brand only:', categoryId, '+1 ponto');
+    } else if (hasProductNoun) {
+      score += Math.min(tokenMatches * 5, 15);
+      score += Math.min(synonymMatches * 2, 6);
+      if (DEBUG) console.log('✅ Product noun:', categoryId, `tokens:${Math.min(tokenMatches * 5, 15)} synonyms:${Math.min(synonymMatches * 2, 6)}`);
+    } else if (tokenMatches >= 2) {
+      score += Math.min(tokenMatches * 4, 12);
+      score += Math.min(synonymMatches * 2, 6);
+      if (DEBUG) console.log('✅ Multiple keywords:', categoryId, `tokens:${Math.min(tokenMatches * 4, 12)} synonyms:${Math.min(synonymMatches * 2, 6)}`);
+    } else if (tokenMatches > 0) {
+      score += Math.min(tokenMatches * 3, 8);
+      score += Math.min(synonymMatches * 2, 6);
+      if (DEBUG) console.log('✅ Single keyword:', categoryId, `tokens:${Math.min(tokenMatches * 3, 8)} synonyms:${Math.min(synonymMatches * 2, 6)}`);
+    } else if (synonymMatches > 0) {
+      score += Math.min(synonymMatches * 2, 6);
+      if (DEBUG) console.log('✅ Synonym only:', categoryId, `+${Math.min(synonymMatches * 2, 6)}`);
+    }
+    
+    // Bonus por posição: peso decrescente (produto principal no início)
+    for (let i = 0; i < Math.min(filteredTokens.length, 3); i++) {
+      if (category.keywords.includes(filteredTokens[i])) {
+        const positionWeight = [4, 2, 1][i];
+        score += positionWeight;
+        if (DEBUG) console.log(`✅ Position ${i+1} bonus:`, categoryId, `+${positionWeight} pontos`);
         break;
       }
     }
     
-    // Keywords com tokens - limitado
-    let keywordMatches = 0;
-    let hasBrandOnly = false;
-    
-    for (const keyword of category.keywords) {
-      if (tokenSet.has(keyword)) {
-        keywordMatches++;
-        // Verifica se é apenas marca sem contexto
-        if (BRAND_ONLY_KEYWORDS.has(keyword) && expandedTokens.length === 1) {
-          hasBrandOnly = true;
-        }
-      }
-    }
-    
-    // Se é apenas marca, reduz pontuação
-    if (hasBrandOnly && keywordMatches === 1) {
-      score += 1;
-      if (DEBUG) console.log('⚠️ Brand only:', categoryId, '+1 ponto');
-    } else if (keywordMatches >= 2) {
-      // Bonus para múltiplos matches
-      score += keywordMatches * 4;
-      if (DEBUG) console.log('✅ Keywords match:', categoryId, `+${keywordMatches * 4} pontos`);
-    } else if (keywordMatches > 0) {
-      score += keywordMatches * 3;
-      if (DEBUG) console.log('✅ Keywords match:', categoryId, `+${keywordMatches * 3} pontos`);
-    }
-    
-    // Bonus por prioridade
+    // Bonus por prioridade (apenas como tiebreaker, não como pontuação principal)
     const priorityBonus = CATEGORY_PRIORITY[categoryId] || 0;
-    score += priorityBonus * 0.5;
+    score += priorityBonus * 0.1;
     
     if (score > 0) {
       scores.push({ category: categoryId, score });
@@ -403,19 +544,51 @@ export function detectProductCategoryWithRanking(query: string): Array<{category
   return ranking;
 }
 
-// Detecta categoria do produto com confiança
+// Detecta categoria do produto com confiança (cache por query normalizada)
 export function detectProductCategory(query: string): string {
-  const ranking = detectProductCategoryWithRanking(query);
+  // Cache com query normalizada (preserva semântica)
+  const { normalized, tokens } = normalizeAndTokenize(query);
+  const cached = categoryCache.get(normalized);
+  if (cached) return cached;
   
-  if (ranking.length === 0) return 'universal';
+  let ranking = detectProductCategoryWithRanking(query);
   
-  // Threshold mínimo de confiança - se baixo, universal
-  if (ranking[0].score < 8) {
-    console.log('⭐ Low confidence, using universal category');
-    return 'universal';
+  // Score negativo para conflitos: se hard accessory presente, penaliza outras categorias
+  if (ranking.length > 1) {
+    const hasHardAccessory = tokens.some(t => HARD_ACCESSORY_OBJECTS.has(t));
+    if (hasHardAccessory) {
+      ranking = ranking.map(r => ({
+        ...r,
+        score: r.category === 'acessorio' ? r.score : r.score - 10
+      })).sort((a, b) => b.score - a.score);
+    }
   }
   
-  return ranking[0].category;
+  if (ranking.length === 0) return 'generico';
+  
+  // If score is too low, return generic (threshold aumentado para 6)
+  if (ranking[0].score < 6) return 'generico';
+  
+  // If not confident enough, return generic
+  if (!isCategoryConfident(ranking)) {
+    categoryCache.set(normalized, 'generico');
+    if (categoryCache.size > CACHE_MAX_SIZE) {
+      const firstKey = categoryCache.keys().next().value;
+      categoryCache.delete(firstKey);
+    }
+    return 'generico';
+  }
+  
+  const result = ranking[0].category;
+  
+  // Cache result (usando normalized)
+  categoryCache.set(normalized, result);
+  if (categoryCache.size > CACHE_MAX_SIZE) {
+    const firstKey = categoryCache.keys().next().value;
+    categoryCache.delete(firstKey);
+  }
+  
+  return result;
 }
 
 // Filtra perguntas relevantes baseado na categoria e parsed data
@@ -443,15 +616,14 @@ export function getRelevantQuestions(questions: CategoryQuestion[], category: st
 }
 
 
-// Verifica se a detecção de categoria é confiável
-export function isCategoryConfident(query: string): boolean {
-  const ranking = detectProductCategoryWithRanking(query);
-  
+// Verifica se a detecção de categoria é confiável (usa ratio)
+export function isCategoryConfident(ranking: Array<{category: string, score: number}>): boolean {
   if (ranking.length === 0) return false;
   if (ranking.length === 1) return true;
   
-  // Confiante se diferença > 2 pontos
-  return (ranking[0].score - ranking[1].score) >= 2;
+  // Confiante se ratio >= 1.3 (padrão em classificadores heurísticos)
+  const ratio = ranking[0].score / ranking[1].score;
+  return ratio >= 1.3;
 }
 
 export function formatCategoryQuestion(question: CategoryQuestion): string {

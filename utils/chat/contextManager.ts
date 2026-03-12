@@ -1,12 +1,22 @@
 import { detectContextChange } from './contextChangeDetector';
 
+// ✅ Tipagem forte para resultados de busca
+export interface SearchResult {
+  id: string;
+  title: string;
+  price: number;
+  brand?: string;
+  condition?: 'new' | 'used';
+  location?: string;
+}
+
 interface ConversationContext {
   lastProduct?: string;
   lastBrand?: string;
   lastLocation?: string;
   lastCondition?: 'new' | 'used';
   lastPriceMax?: number;
-  lastResults?: any[];
+  lastResults?: SearchResult[];
   conversationHistory: string[];
 }
 
@@ -15,32 +25,15 @@ class ContextManager {
     conversationHistory: []
   };
 
-  update(data: Partial<ConversationContext>) {
-    this.context = { ...this.context, ...data };
-  }
-
-  get(): ConversationContext {
-    return { ...this.context };
-  }
-
-  clear() {
-    this.context = { conversationHistory: [] };
-  }
-
-  addToHistory(message: string) {
-    this.context.conversationHistory.push(message);
-    // Mantém apenas últimas 10 mensagens
-    if (this.context.conversationHistory.length > 10) {
-      this.context.conversationHistory.shift();
-    }
-  }
-
-  private readonly STOPWORDS = [
+  // ✅ Constantes pré-compiladas (performance)
+  private readonly MAX_HISTORY = 10;
+  
+  private readonly STOPWORDS = new Set([
     'quero', 'buscar', 'procuro', 'preciso', 'comprar', 'ver', 'mostrar',
     'gostaria', 'queria', 'estou', 'querendo', 'buscando', 'procurando',
-    'barato', 'caro', 'promoção', 'promo', 'oferta', 'melhor', 'preço',
+    'barato', 'caro', 'promocao', 'promo', 'oferta', 'melhor', 'preco',
     'bom', 'boa', 'top', 'legal', 'muito', 'mais', 'menos'
-  ];
+  ]);
 
   private readonly CONDITION_MAP: Record<string, 'new' | 'used'> = {
     'novo': 'new',
@@ -51,131 +44,344 @@ class ContextManager {
     'seminova': 'used'
   };
 
-  private extractProduct(query: string): string | null {
-    const words = query
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(w => 
-        w.length > 2 && 
-        !this.STOPWORDS.includes(w) &&
-        !/^\d+$/.test(w)
-      );
-    
-    if (words.length === 0) return null;
-    
-    const invalidStart = ['comprar', 'buscar', 'ver', 'mostrar', 'querer'];
-    if (invalidStart.includes(words[0])) return null;
-    
-    const product = words.slice(0, 3).join(' ');
-    return product.trim();
+  // ✅ Regex pré-compilados
+  private readonly PRICE_REGEX = /(ate|até|abaixo de|menos de|menor que|max|maximo|máximo)\s*(\d+(?:[.,]\d+)?)(k|mil)?/i;
+  private readonly LOCATION_REGEX = /(em|na|no|perto de)\s+(.+)/i;
+  private readonly CONDITION_REGEX = /(novo|nova|usado|usada|seminovo|seminova)/i;
+  private readonly SEMANTIC_REFINEMENT_REGEX = /^(o|a|os|as)\s+(.+)$/i;
+  private readonly BRAND_REFINEMENT_REGEX = /^(so|só|apenas|somente)\s+(?:da|do)?\s*(.+)$/i;
+  private readonly CHEAPER_REGEX = /(qual o )?(mais barato|menor preco|menor preço)/i;
+  private readonly SORT_REGEX = /(ordenar|ordenado|ordem|classificar)\s+(por\s+)?(preco|preço|relevancia|relevância)/i;
+  private readonly EXPENSIVE_REGEX = /(mais caro|maior preco|maior preço)/i;
+  private readonly RECENT_REGEX = /(mais recente|recentes|novos anuncios|novos anúncios)/i;
+  private readonly REMOVE_FILTER_REGEX = /(remover|tirar|sem)\s+(filtro|preco|preço|condicao|condição)/i;
+  private readonly ANY_PRICE_REGEX = /(qualquer preco|qualquer preço|sem preco|sem preço)/i;
+  private readonly CHANGE_PRODUCT_REGEX = /^(agora|mudar para|trocar para)\s+(.+)$/i;
+  
+  private readonly GENERIC_WORDS = new Set([
+    'celular', 'telefone', 'notebook', 'laptop', 'produto', 'item', 'coisa'
+  ]);
+
+  // ✅ Helper para atualização imutável
+  private setContext(data: Partial<ConversationContext>) {
+    this.context = { ...this.context, ...data };
   }
 
-  applyContext(query: string): string {
-    const lower = query.toLowerCase().trim();
-    const ctx = this.context;
+  update(data: Partial<ConversationContext>) {
+    this.setContext(data);
+  }
 
-    // Detecta mudança de contexto ANTES de adicionar ao histórico
-    const change = detectContextChange(query, ctx.conversationHistory);
+  // ✅ Get com deep copy (protege arrays)
+  get(): ConversationContext {
+    return {
+      ...this.context,
+      conversationHistory: [...this.context.conversationHistory],
+      lastResults: this.context.lastResults
+        ? [...this.context.lastResults]
+        : undefined
+    };
+  }
+
+  clear() {
+    this.context = {
+      conversationHistory: [],
+      lastProduct: undefined,
+      lastBrand: undefined,
+      lastLocation: undefined,
+      lastCondition: undefined,
+      lastPriceMax: undefined,
+      lastResults: undefined
+    };
+  }
+
+  // ✅ Histórico como fila otimizada
+  addToHistory(message: string) {
+    const history = [...this.context.conversationHistory, message];
+    this.context.conversationHistory = history.slice(-this.MAX_HISTORY);
+  }
+
+  // ✅ Normalização centralizada
+  private normalize(text: string): string {
+    return text
+      .toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
+  }
+
+  // ✅ Normalização de preço extraída
+  private normalizePrice(value: string, unit?: string): number {
+    let price = parseFloat(value.replace(',', '.'));
     
-    // Agora adiciona ao histórico
-    this.addToHistory(query);
-    
-    if (change.hasChange && change.type === 'correction') {
-      // Usuário corrigiu - usar nova informação
-      if (change.newProduct) ctx.lastProduct = change.newProduct;
-      if (change.newBrand) ctx.lastBrand = change.newBrand;
-      if (change.newCondition) ctx.lastCondition = change.newCondition as 'new' | 'used';
-      if (change.newLocation) ctx.lastLocation = change.newLocation;
-      
-      // Retorna a query limpa com as novas informações
-      const parts = [];
-      if (change.newProduct) parts.push(change.newProduct);
-      if (change.newBrand) parts.push(change.newBrand);
-      if (change.newCondition) parts.push(change.newCondition);
-      if (change.newLocation) parts.push(change.newLocation);
-      
-      return parts.join(' ').trim() || query;
+    if (unit && ['k', 'mil'].includes(unit.toLowerCase())) {
+      price *= 1000;
     }
+    
+    return Math.round(price);
+  }
 
-    // Detecta produto automaticamente se não existe
+  // ✅ Extração de produto melhorada (permite números, remove genéricos)
+  private extractProduct(query: string): string | null {
+    const cleaned = query
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '');
+
+    const words = cleaned.split(/\s+/);
+
+    const filtered = words.filter(w => {
+      if (w.length <= 1) return false;
+      if (this.STOPWORDS.has(w)) return false;
+      if (this.GENERIC_WORDS.has(w)) return false; // Remove genéricos
+      
+      // ✅ Permite números em produtos (iphone 15, ps5, gopro 12)
+      const hasLetter = /[a-z]/i.test(w);
+      const isShortNumber = /^\d{1,3}$/.test(w);
+      
+      return hasLetter || isShortNumber;
+    });
+
+    if (!filtered.length) return null;
+
+    // Até 4 palavras para cobrir "iphone 15 pro max"
+    return filtered.slice(0, 4).join(' ');
+  }
+
+  // ✅ Handler: Correção de contexto
+  private handleCorrection(query: string, history: string[]): string | null {
+    const change = detectContextChange(query, history);
+    
+    if (!change.hasChange || change.type !== 'correction') return null;
+
+    // Atualiza contexto com correções
+    const updates: Partial<ConversationContext> = {};
+    if (change.newProduct) updates.lastProduct = change.newProduct;
+    if (change.newBrand) updates.lastBrand = change.newBrand;
+    if (change.newCondition) updates.lastCondition = change.newCondition as 'new' | 'used';
+    if (change.newLocation) updates.lastLocation = change.newLocation;
+    
+    this.setContext(updates);
+
+    // Retorna query limpa
+    const parts = [
+      change.newProduct,
+      change.newBrand,
+      change.newCondition,
+      change.newLocation
+    ].filter(Boolean);
+
+    return parts.join(' ').trim() || query;
+  }
+
+  // ✅ Handler: Detecção de produto
+  private handleProductDetection(query: string): string | null {
     const possibleProduct = this.extractProduct(query);
     
-    if (possibleProduct && possibleProduct !== ctx.lastProduct) {
+    if (!possibleProduct) return null;
+
+    if (possibleProduct !== this.context.lastProduct) {
       // Produto mudou - resetar contexto
-      ctx.lastProduct = possibleProduct;
-      ctx.lastBrand = undefined;
-      ctx.lastCondition = undefined;
-      ctx.lastPriceMax = undefined;
-      ctx.lastLocation = undefined;
-    } else if (possibleProduct && !ctx.lastProduct) {
+      this.setContext({
+        lastProduct: possibleProduct,
+        lastBrand: undefined,
+        lastCondition: undefined,
+        lastPriceMax: undefined,
+        lastLocation: undefined
+      });
+    } else if (!this.context.lastProduct) {
       // Primeiro produto
-      ctx.lastProduct = possibleProduct;
+      this.setContext({ lastProduct: possibleProduct });
     }
 
-    if (!ctx.lastProduct) return query;
+    return possibleProduct;
+  }
 
-    // Condição simples
-    if (/^(novo|nova|usado|usada|seminovo|seminova)$/i.test(lower)) {
-      const normalized = this.CONDITION_MAP[lower];
-      if (normalized) {
-        ctx.lastCondition = normalized;
-        return `${ctx.lastProduct} ${lower}`;
-      }
+  // ✅ Handler: Condição simples
+  private handleCondition(normalized: string): string | null {
+    if (!/^(novo|nova|usado|usada|seminovo|seminova)$/i.test(normalized)) {
+      return null;
     }
 
-    // Preço (melhorado - aceita mais variações incluindo k e mil)
-    const priceMatch = lower.match(/(até|abaixo de|menos de|menor que|max|maximo|máximo)\s*(\d+(?:[.,]\d+)?)(k|mil)?/i);
-    if (priceMatch) {
-      let price = parseFloat(priceMatch[2].replace(',', '.'));
-      // Converte k ou mil para milhares
-      if (priceMatch[3] && (priceMatch[3].toLowerCase() === 'k' || priceMatch[3].toLowerCase() === 'mil')) {
-        price *= 1000;
-      }
-      // Arredonda para inteiro (padrão e-commerce)
-      ctx.lastPriceMax = Math.round(price);
-      return `${ctx.lastProduct} até ${Math.round(price)}`;
+    const condition = this.CONDITION_MAP[normalized];
+    if (!condition) return null;
+
+    this.setContext({ lastCondition: condition });
+    return `${this.context.lastProduct} ${normalized}`;
+  }
+
+  // ✅ Handler: Preço
+  private handlePrice(normalized: string): string | null {
+    const match = normalized.match(this.PRICE_REGEX); // Mais seguro que exec()
+    if (!match) return null;
+
+    const price = this.normalizePrice(match[2], match[3]);
+    this.setContext({ lastPriceMax: price });
+
+    return this.buildQuery();
+  }
+
+  // ✅ Handler: Refinamento semântico
+  private handleSemanticRefinement(normalized: string): string | null {
+    const match = this.SEMANTIC_REFINEMENT_REGEX.exec(normalized);
+    if (!match) return null;
+
+    return `${this.context.lastProduct} ${match[2]}`;
+  }
+
+  // ✅ Handler: Refinamento de marca (aceita "só samsung" sem "da/do")
+  private handleBrand(normalized: string): string | null {
+    const match = normalized.match(this.BRAND_REFINEMENT_REGEX);
+    if (!match) return null;
+
+    this.setContext({ lastBrand: match[2] }); // FIX: match[2] não match[3]
+    return this.buildQuery();
+  }
+
+  // ✅ Handler: Mais barato
+  private handleCheaper(normalized: string): string | null {
+    if (!this.CHEAPER_REGEX.test(normalized)) return null;
+    return this.buildQuery() + ' mais barato';
+  }
+
+  // ✅ Handler: Ordenação
+  private handleSort(normalized: string): string | null {
+    const match = normalized.match(this.SORT_REGEX);
+    if (!match) return null;
+    
+    const sortType = match[3];
+    return this.buildQuery() + ` ordenar por ${sortType}`;
+  }
+
+  // ✅ Handler: Mais caro
+  private handleExpensive(normalized: string): string | null {
+    if (!this.EXPENSIVE_REGEX.test(normalized)) return null;
+    return this.buildQuery() + ' mais caro';
+  }
+
+  // ✅ Handler: Mais recente
+  private handleRecent(normalized: string): string | null {
+    if (!this.RECENT_REGEX.test(normalized)) return null;
+    return this.buildQuery() + ' mais recente';
+  }
+
+  // ✅ Handler: Remover filtro
+  private handleRemoveFilter(normalized: string): string | null {
+    if (!this.REMOVE_FILTER_REGEX.test(normalized)) return null;
+    
+    if (/preco|preço/.test(normalized)) {
+      this.setContext({ lastPriceMax: undefined });
+    }
+    if (/condicao|condição/.test(normalized)) {
+      this.setContext({ lastCondition: undefined });
+    }
+    
+    return this.buildQuery();
+  }
+
+  // ✅ Handler: Qualquer preço
+  private handleAnyPrice(normalized: string): string | null {
+    if (!this.ANY_PRICE_REGEX.test(normalized)) return null;
+    
+    this.setContext({ lastPriceMax: undefined });
+    return this.buildQuery();
+  }
+
+  // ✅ Handler: Mudar produto
+  private handleChangeProduct(normalized: string): string | null {
+    const match = normalized.match(this.CHANGE_PRODUCT_REGEX);
+    if (!match) return null;
+    
+    const newProduct = this.extractProduct(match[2]);
+    if (!newProduct) return null;
+    
+    // Reset contexto com novo produto
+    this.setContext({
+      lastProduct: newProduct,
+      lastBrand: undefined,
+      lastCondition: undefined,
+      lastPriceMax: undefined,
+      lastLocation: undefined
+    });
+    
+    return newProduct;
+  }
+
+  // ✅ Handler: Mudança de condição com palavras extras (evita duplicação)
+  private handleConditionChange(normalized: string, query: string): string | null {
+    // ✅ Evita processar se já foi tratado como condição simples
+    if (/^(novo|nova|usado|usada|seminovo|seminova)$/i.test(normalized)) {
+      return null;
+    }
+    
+    const match = normalized.match(this.CONDITION_REGEX);
+    if (!match) return null;
+
+    const condition = this.CONDITION_MAP[match[1]];
+    if (condition) {
+      this.setContext({ lastCondition: condition });
     }
 
-    // Refinamento semântico ("o pro max", "a versão pro")
-    if (/^(o|a|os|as)\s+(.+)$/i.test(lower)) {
-      const match = lower.match(/^(o|a|os|as)\s+(.+)$/i);
-      if (match) {
-        return `${ctx.lastProduct} ${match[2]}`;
-      }
-    }
+    return this.buildQuery();
+  }
 
-    // Refinamento de marca
-    if (/^(só|apenas|somente)\s+(da|do)\s+(.+)$/i.test(lower)) {
-      const match = lower.match(/^(só|apenas|somente)\s+(da|do)\s+(.+)$/i);
-      if (match) {
-        return `${ctx.lastProduct} ${match[3]}`;
-      }
-    }
+  // ✅ Handler: Localização
+  private handleLocation(normalized: string, query: string): string | null {
+    const match = normalized.match(this.LOCATION_REGEX);
+    if (!match) return null;
 
-    // Mais barato (retorna query natural)
-    if (/(qual o )?(mais barato|menor preço)/i.test(lower)) {
-      return `${ctx.lastProduct} mais barato`;
-    }
+    this.setContext({ lastLocation: match[2].trim() });
+    return this.buildQuery();
+  }
 
-    // Mudar condição com palavras extras
-    if (/(agora|prefiro|quero|procura|buscar)?\s*(novo|nova|usado|usada|seminovo|seminova)/i.test(lower)) {
-      const condMatch = lower.match(/(novo|nova|usado|usada|seminovo|seminova)/i);
-      if (condMatch) {
-        const normalized = this.CONDITION_MAP[condMatch[1]];
-        if (normalized) {
-          ctx.lastCondition = normalized;
-        }
-      }
-      return `${ctx.lastProduct} ${query}`;
-    }
+  // ✅ Reconstrói query completa com todo o contexto
+  private buildQuery(): string {
+    const ctx = this.context;
 
-    // Mudar localização
-    if (/(em|na|no|perto de)\s+(.+)/i.test(lower)) {
-      const locMatch = lower.match(/(em|na|no|perto de)\s+(.+)/i);
-      if (locMatch) {
-        ctx.lastLocation = locMatch[2].trim();
-      }
-      return `${ctx.lastProduct} ${query}`;
+    return [
+      ctx.lastProduct,
+      ctx.lastBrand,
+      ctx.lastCondition === 'new' ? 'novo' : ctx.lastCondition === 'used' ? 'usado' : null,
+      ctx.lastPriceMax ? `até ${ctx.lastPriceMax}` : null,
+      ctx.lastLocation ? `em ${ctx.lastLocation}` : null
+    ].filter(Boolean).join(' ');
+  }
+
+  // ✅ Pipeline principal (modular e testável)
+  applyContext(query: string): string {
+    const normalized = this.normalize(query);
+    
+    // ✅ Correção ANTES de adicionar ao histórico (usa histórico atual)
+    const history = this.context.conversationHistory;
+    const correction = this.handleCorrection(query, history);
+    
+    // Adiciona ao histórico DEPOIS da correção
+    this.addToHistory(query);
+    
+    if (correction) return correction;
+
+    // 2. Detecta produto (usa texto normalizado)
+    const product = this.handleProductDetection(normalized);
+    if (!product) return query;
+
+    // 3. Pipeline de handlers (ordem de prioridade, extensível)
+    const handlers = [
+      () => this.handleCondition(normalized),
+      () => this.handlePrice(normalized),
+      () => this.handleSemanticRefinement(normalized),
+      () => this.handleBrand(normalized),
+      () => this.handleCheaper(normalized),
+      () => this.handleSort(normalized),
+      () => this.handleExpensive(normalized),
+      () => this.handleRecent(normalized),
+      () => this.handleRemoveFilter(normalized),
+      () => this.handleAnyPrice(normalized),
+      () => this.handleChangeProduct(normalized),
+      () => this.handleConditionChange(normalized, query),
+      () => this.handleLocation(normalized, query)
+    ];
+
+    for (const handler of handlers) {
+      const result = handler();
+      if (result) return result;
     }
 
     return query;

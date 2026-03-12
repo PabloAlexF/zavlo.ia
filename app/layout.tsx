@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ClientLayout } from "@/components/layout/ClientLayout";
+import { Toaster } from "sonner";
 import { ReactNode } from "react";
 import { Sora } from 'next/font/google';
 import "./globals.css";
@@ -43,7 +44,21 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className="bg-[#050409] text-white antialiased selection:bg-blue-500/30 selection:text-blue-200" suppressHydrationWarning>
-        <ClientLayout>{children}</ClientLayout>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
+        <Toaster 
+          theme="dark" 
+          className="toaster group" 
+          toastOptions={{
+            classNames: {
+              toast: "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+              description: "group-[.toast]:text-muted-foreground",
+              actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+              cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+            },
+          }}
+        />
       </body>
     </html>
   );

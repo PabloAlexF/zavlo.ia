@@ -1,8 +1,12 @@
 'use client';
 
+import { memo } from 'react';
+import Image from 'next/image';
 import { Product } from '@/types';
 import Link from 'next/link';
-import { useState, useCallback } from 'react';
+import { useUser } from '@/contexts/UserContext';
+import { getUser } from '@/utils/auth';
+import { toast } from 'sonner';
 import { Heart, ExternalLink } from 'lucide-react';
 
 interface ProductCardProps {
@@ -35,7 +39,11 @@ function getSourceColor(source: string): string {
   return colorMap[source] || 'from-blue-500 to-purple-500';
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ product }: ProductCardProps) {
+  const { user } = useUser();
+  const fallbackUser = getUser(); // Fallback para casos sem context
+  const currentUser = user || fallbackUser;
+  
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,62 +95,45 @@ export function ProductCard({ product }: ProductCardProps) {
     e.preventDefault();
     e.stopPropagation();
     
-    const user = localStorage.getItem('zavlo_user');
-    if (!user) {
+    if (!currentUser?.token) {
       window.location.href = '/auth';
       return;
     }
 
     try {
-      const userData = JSON.parse(user);
-      
-      if (!isFavorite) {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL;
-        const response = await fetch(`${API_URL}/favorites`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userData.token}`,
-          },
-          body: JSON.stringify({
-            id: product.id,
-            title: product.title,
-            price: product.price,
-            image: images[0] || '',
-            url: product.sourceUrl,
-            source: product.source,
-          }),
-        });
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+      const response = await fetch(`${API_URL}/favorites`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUser.token}`,
+        },
+        body: JSON.stringify({
+          id: product.id,
+          title: product.title,
+          price: product.price,
+          image: images[0] || '',
+          url: product.sourceUrl,
+          source: product.source,
+        }),
+      });
 
-        if (response.ok) {
-          setIsFavorite(true);
-          
-          // Mostrar toast de sucesso
-          const toast = document.createElement('div');
-          toast.className = 'fixed top-20 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-slide-in';
-          toast.innerHTML = `
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span>Salvo nos favoritos!</span>
-          `;
-          document.body.appendChild(toast);
-          
-          setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(100%)';
-            setTimeout(() => toast.remove(), 300);
-          }, 2000);
-        }
+      if (response.ok) {
+        setIsFavorite(true);
+        toast.success("Salvo nos favoritos!");
+      } else {
+        toast.error("Erro ao salvar favorito");
       }
     } catch (error) {
       console.error('Erro ao favoritar:', error);
+      toast.error("Erro ao favoritar");
     }
-  }, [isFavorite, product, images]);
+  }, [currentUser, product, images, isFavorite]);
 
   return (
     <Link href={`/product/${product.id}`}>
       <div className="group cursor-pointer transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/20">
-        <div className="relative w-full bg-gradient-to-br from-white/5 to-white/[0.02] rounded-2xl overflow-hidden mb-4 shadow-lg border border-white/10" style={{ height: '280px' }}>
+        <div className="relative w-full bg-gradient-to-br from-white/5 to-white/[0.02] rounded-2xl overflow-hidden mb-4 shadow-lg border border-white/10" style={{ height: '280px', position: 'relative' }}>
           {hasImage && !imageError ? (
             <>
               {/* Loading Skeleton */}
@@ -150,21 +141,16 @@ export function ProductCard({ product }: ProductCardProps) {
                 <div className="absolute inset-0 bg-white/10 animate-pulse z-10" />
               )}
 
-              {/* Image */}
-              <img
+              {/* Next.js Image */}
+              <Image
                 src={currentImageUrl || ''}
                 alt={product.title}
-                style={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  objectFit: 'cover', 
-                  display: 'block',
-                  opacity: isLoading ? 0.5 : 1,
-                  transition: 'opacity 0.2s'
-                }}
+                fill
+                style={{ objectFit: 'cover' }}
+                sizes="(max-width: 768px) 100vw, 25vw"
                 onError={handleImageError}
-                onLoad={handleImageLoad}
-                loading="lazy"
+                onLoadingComplete={handleImageLoad}
+                priority={false}
               />
 
               {/* Navigation Buttons */}
@@ -173,14 +159,7 @@ export function ProductCard({ product }: ProductCardProps) {
                   <button
                     onClick={prevImage}
                     aria-label="Imagem anterior"
-                    style={{ 
-                      position: 'absolute', 
-                      left: '8px', 
-                      top: '50%', 
-                      transform: 'translateY(-50%)', 
-                      zIndex: 20 
-                    }}
-                    className="w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 active:scale-90"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 active:scale-90 z-20"
                   >
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -190,14 +169,7 @@ export function ProductCard({ product }: ProductCardProps) {
                   <button
                     onClick={nextImage}
                     aria-label="Próxima imagem"
-                    style={{ 
-                      position: 'absolute', 
-                      right: '8px', 
-                      top: '50%', 
-                      transform: 'translateY(-50%)', 
-                      zIndex: 20 
-                    }}
-                    className="w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 active:scale-90"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 active:scale-90 z-20"
                   >
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -205,16 +177,7 @@ export function ProductCard({ product }: ProductCardProps) {
                   </button>
 
                   {/* Indicators */}
-                  <div 
-                    style={{ 
-                      position: 'absolute', 
-                      bottom: '12px', 
-                      left: '50%', 
-                      transform: 'translateX(-50%)', 
-                      zIndex: 20 
-                    }} 
-                    className="flex gap-1.5"
-                  >
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-20" >
                     {images.map((_, index) => (
                       <div
                         key={index}
@@ -228,28 +191,14 @@ export function ProductCard({ product }: ProductCardProps) {
               )}
 
               {/* Source Badge */}
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  top: '12px', 
-                  right: '12px', 
-                  zIndex: 20 
-                }} 
-                className={`px-3 py-1 bg-gradient-to-r ${getSourceColor(product.source)} rounded-full text-xs font-semibold text-white whitespace-nowrap shadow-lg`}
-              >
+              <div className={`absolute top-3 right-3 px-3 py-1 bg-gradient-to-r ${getSourceColor(product.source)} rounded-full text-xs font-semibold text-white whitespace-nowrap shadow-lg z-20`}>
                 {getSourceName(product.source)}
               </div>
 
               {/* Favorite Button */}
               <button
                 onClick={toggleFavorite}
-                style={{ 
-                  position: 'absolute', 
-                  top: '12px', 
-                  left: '12px', 
-                  zIndex: 20 
-                }}
-                className={`w-9 h-9 rounded-full backdrop-blur-md flex items-center justify-center transition-all ${
+                className={`absolute top-3 left-3 w-9 h-9 rounded-full backdrop-blur-md flex items-center justify-center transition-all z-20 ${
                   isFavorite 
                     ? 'bg-red-500/90 scale-110' 
                     : 'bg-black/40 hover:bg-black/60'
@@ -302,4 +251,6 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
     </Link>
   );
-}
+});
+
+ProductCard.displayName = 'ProductCard';
