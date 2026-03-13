@@ -229,14 +229,55 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
             {product.title}
           </h3>
           
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-              R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-            <span className="text-xs text-gray-500 text-right max-w-[100px] truncate">
+          {/* Preço */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+                R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              {product.percentOff && (
+                <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded-md text-xs font-semibold text-red-400">
+                  {product.percentOff}
+                </span>
+              )}
+            </div>
+            {product.originalPrice && product.originalPrice > product.price && (
+              <p className="text-xs text-gray-500 line-through">
+                De: R$ {product.originalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            )}
+          </div>
+          
+          {/* Rating e Localização */}
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              {product.rating && product.rating > 0 && (
+                <div className="flex items-center gap-1">
+                  <span className="text-yellow-400">⭐</span>
+                  <span className="text-white font-medium">{product.rating.toFixed(1)}</span>
+                  {product.reviews && product.reviews > 0 && (
+                    <span className="text-gray-500">({product.reviews})</span>
+                  )}
+                </div>
+              )}
+            </div>
+            <span className="text-gray-500 text-right max-w-[100px] truncate">
               {location}
             </span>
           </div>
+          
+          {/* Badges: Condição */}
+          {product.condition && (
+            <div className="flex flex-wrap gap-1.5">
+              <span className={`px-2 py-1 rounded-md text-xs font-medium ${
+                product.condition === 'new' 
+                  ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400' 
+                  : 'bg-orange-500/10 border border-orange-500/30 text-orange-400'
+              }`}>
+                {product.condition === 'new' ? '🆕 Novo' : '♻️ Usado'}
+              </span>
+            </div>
+          )}
 
           {/* Action Button */}
           <a
