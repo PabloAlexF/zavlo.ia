@@ -102,10 +102,17 @@ export function extractProductInfo(query) {
     if (!product && words.length > 0) {
         product = words[0];
     }
-    // Detecta modelo (números + letras)
+    // Detecta modelo (números + letras, mas NÃO especificações de armazenamento)
     const MODEL_BLACKLIST = new Set(['gamer', 'barato', 'novo', 'usado', 'seminovo', 'ultra', 'nova', 'novos', 'novas', 'usada', 'usados', 'usadas']);
+    const STORAGE_PATTERN = /^\d+(gb|tb|mb)$/i; // Padrão de armazenamento: 1tb, 256gb, etc
     const modelPattern = /\b(\d+[a-z]*|[a-z]+\d+|pro|max|mini|plus|se|note)\b/i;
+    
     for (const word of words) {
+        // Pula se for especificação de armazenamento
+        if (STORAGE_PATTERN.test(word)) {
+            continue;
+        }
+        
         if (modelPattern.test(word) && word !== product && !MODEL_BLACKLIST.has(word)) {
             model = word;
             break;

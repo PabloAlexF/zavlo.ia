@@ -956,6 +956,24 @@ const loadChatHistory = () => {
         return { ...prev, limit };
       });
       
+      // Se já tem condição detectada, pular pergunta
+      if (pendingSearch?.condition) {
+        console.log(`✅ Condição já detectada: ${pendingSearch.condition}`);
+        const searchResult = buildFinalQuery(pendingSearch.condition);
+        const confirmationMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'confirmation',
+          content: searchResult.query,
+          timestamp: new Date(),
+          searchType: 'text',
+          creditCost: 1,
+        };
+        setMessages(prev => [...prev, confirmationMessage]);
+        setChatState('awaiting_confirmation');
+        setLoading(false);
+        return;
+      }
+      
       const aiMessage: Message = {
         id: crypto.randomUUID(),
         type: 'ai',
@@ -1317,7 +1335,7 @@ const loadChatHistory = () => {
         return;
       }
       
-      // 2. Detectar categoria e iniciar perguntas inteligentes (ENHANCED)
+      // Detecta categoria e iniciar perguntas inteligentes (ENHANCED)
       const detectedCategory = detectProductCategory(withContext);
       const categoryConfident = isCategoryConfident(withContext);
       
@@ -1332,11 +1350,15 @@ const loadChatHistory = () => {
       
       console.log('📋 Perguntas relevantes:', relevantQuestions.length, relevantQuestions.map(q => q.id));
       
+      // Detecta informações já fornecidas (PASSA CATEGORIA)
+      const providedInfo = detectProvidedInfo(withContext, category);
+      console.log('📝 Informações detectadas automaticamente:', providedInfo);
+      
       // Universal ou low confidence → perguntar localização (que depois pergunta ordenação)
       if (category === 'universal' || !categoryConfident || relevantQuestions.length === 0) {
         console.log('🚀 No category questions - going to location');
         
-        setPendingSearch({ query: withContext });
+        setPendingSearch({ query: withContext, condition: providedInfo.condition });
         
         const aiMessage: Message = {
           id: crypto.randomUUID(),
@@ -1350,15 +1372,12 @@ const loadChatHistory = () => {
         return;
       }
       
-      // Detecta informações já fornecidas
-      const providedInfo = detectProvidedInfo(withContext);
-      
       // Filtra perguntas já respondidas (SOBRE relevantQuestions)
       const remainingQuestions = filterQuestions(relevantQuestions, providedInfo);
       
       if (remainingQuestions.length === 0) {
         // Todas respondidas → localização
-        setPendingSearch({ query: withContext, category });
+        setPendingSearch({ query: withContext, category, condition: providedInfo.condition });
         setCategoryAnswers(providedInfo);
         
         const aiMessage: Message = {
@@ -1373,7 +1392,7 @@ const loadChatHistory = () => {
         return;
       }
       
-      setPendingSearch({ query: withContext, category });
+      setPendingSearch({ query: withContext, category, condition: providedInfo.condition });
       setCategoryAnswers(providedInfo);
       
       const firstQuestion = remainingQuestions[0];
