@@ -60,7 +60,7 @@ export function extractPriceRange(input: string): { min?: number; max?: number }
  * Valida se um número está dentro das opções permitidas
  */
 export function validateLimit(value: number): boolean {
-  return [10, 20].includes(value);
+  return [10, 20, 50, 100].includes(value);
 }
 
 /**
@@ -104,11 +104,19 @@ export function parseLimitInput(input: string): number | null {
   }
   
   // Fallback para mapeamento de texto
-  const limitMap: Record<string, number> = {
+const limitMap: Record<string, number> = {
     '1': 10,
     'dez': 10,
+    '10': 10,
     '2': 20,
-    'vinte': 20
+    'vinte': 20,
+    '20': 20,
+    '3': 50,
+    'cinquenta': 50,
+    '50': 50,
+    '4': 100,
+    'cem': 100,
+    '100': 100
   };
   
   return limitMap[normalized] || null;

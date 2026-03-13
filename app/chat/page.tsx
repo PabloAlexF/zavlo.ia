@@ -215,65 +215,97 @@ export default function ChatPage() {
 const loadChatHistory = () => {
     try {
       const user = localStorage.getItem('zavlo_user');
-      if (!user) return;
+      if (!user) {
+        setChatHistory([]);
+        return;
+      }
       
       const userData = JSON.parse(user);
       const userId = userData.userId;
       const saved = localStorage.getItem(`zavlo_chat_history_${userId}`);
       
-      if (!saved) return;
+      if (!saved) {
+        setChatHistory([]);
+        return;
+      }
       
       const parsedHistory = JSON.parse(saved);
       
-      // Validate and filter valid chats only
-      const validHistory = Array.isArray(parsedHistory) ? parsedHistory.filter(chat => {
+      if (!Array.isArray(parsedHistory)) {
+        localStorage.removeItem(`zavlo_chat_history_${userId}`);
+        setChatHistory([]);
+        console.log('✅ Cleared invalid chat history array');
+        return;
+      }
+      
+      // Deep robust validation + sanitization
+      const validHistory: ChatHistory[] = [];
+      
+      for (const chat of parsedHistory) {
         try {
-          if (typeof chat.id !== 'string' || !chat.messages || !Array.isArray(chat.messages)) return false;
+          if (typeof chat !== 'object' || chat === null || typeof chat.id !== 'string' || !chat.id) {
+            continue;
+          }
           
-          // Validate and sanitize messages
-          chat.messages = chat.messages.filter(msg => {
-            if (!msg.content || typeof msg.content !== 'string') return false;
+          if (!Array.isArray(chat.messages)) {
+            continue;
+          }
+          
+          // Sanitize messages - immutable
+          const validMessages: Message[] = chat.messages.filter((msg: any) => {
+            if (!msg || typeof msg !== 'object') return false;
+            if (typeof msg.content !== 'string' || !msg.content.trim()) return false;
+            if (typeof msg.id !== 'string' || !msg.id) return false;
             
-            // Remove corrupted patterns
-            msg.content = msg.content
+            // Clean corrupted content
+            const cleanedContent = msg.content
+              .replace(/\\u0000/g, '') // Null bytes
               .replace(/\}\)/g, '')
               .replace(/\}\)'/g, '')
               .replace(/\\}\\\\/g, '')
+              .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // XSS
               .trim();
             
-            // Skip empty messages after cleaning
-            return msg.content.length > 0;
+            return cleanedContent.length > 0;
+          }).map((msg: any) => ({
+            ...msg,
+            content: msg.content.replace(/\\u0000/g, '').trim(),
+            timestamp: new Date(msg.timestamp || Date.now())
+          }));
+          
+          if (validMessages.length === 0) continue;
+          
+          validHistory.push({
+            id: chat.id,
+            title: (typeof chat.title === 'string' ? chat.title.slice(0, 50) : 'Chat'),
+            messages: validMessages,
+            createdAt: new Date(chat.createdAt || Date.now()),
+            updatedAt: new Date(chat.updatedAt || Date.now())
           });
           
-          // Skip chats with no valid messages
-          if (chat.messages.length === 0) return false;
-          
-          chat.createdAt = new Date(chat.createdAt);
-          chat.updatedAt = new Date(chat.updatedAt);
-          chat.messages.forEach((m: any) => {
-            m.timestamp = new Date(m.timestamp);
-          });
-          return true;
-        } catch {
-          return false; // Skip corrupted chat
+        } catch (chatError) {
+          console.warn('Skipping corrupted chat:', chatError);
+          continue;
         }
-      }) : [];
+      }
       
       setChatHistory(validHistory);
-      console.log(`✅ Loaded ${validHistory.length} valid chats`);
+      console.log(`✅ Loaded ${validHistory.length} valid chats safely`);
       
     } catch (error) {
-      console.error('❌ Failed to load chat history, clearing:', error);
-      // Clear corrupted data
+      console.error('❌ Failed to load chat history:', error);
+      // Clear ALL chat history for this user
       const user = localStorage.getItem('zavlo_user');
       if (user) {
-        const userData = JSON.parse(user);
-        localStorage.removeItem(`zavlo_chat_history_${userData.userId}`);
+        try {
+          const userData = JSON.parse(user);
+          localStorage.removeItem(`zavlo_chat_history_${userData.userId}`);
+        } catch {}
       }
       setChatHistory([]);
     }
     
-    // Always ensure we have a current chat
+    // Always ensure current chat
     if (!currentChatId) {
       const newChatId = Date.now().toString();
       setCurrentChatId(newChatId);
