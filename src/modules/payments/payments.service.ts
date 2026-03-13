@@ -66,16 +66,121 @@ export class PaymentsService {
     }
   }
 
+  async createCardPayment(data: {
+    plan: string;
+    amount: number;
+    userId: string;
+    userEmail: string;
+    cardToken: string;
+    installments: number;
+    payer: any;
+  }) {
+    try {
+      this.logger.log('[CARD] Creating direct card payment...');
+      
+      if (!this.accessToken) {
+        return {
+          error: true,
+          statusCode: 503,
+          message: 'Payment gateway is not configured',
+        };
+      }
+
+      const payload = {
+        transaction_amount: data.amount,
+        token: data.cardToken,
+        description: `Plano ${data.plan} - Zavlo.ia`,
+        installments: data.installments,
+        payment_method_id: 'visa', // Será detectado automaticamente pelo token
+        payer: {
+          email: data.payer.email,
+          identification: {
+            type: data.payer.identification?.type || 'CPF',
+            number: data.payer.identification?.number,
+          },
+        },
+        external_reference: `${data.userId}-${data.plan}`,
+        statement_descriptor: 'ZAVLO.IA',
+      };
+
+      this.logger.log('[CARD] Payload:', JSON.stringify(payload, null, 2));
+
+      const response = await axios.post(
+        'https://api.mercadopago.com/v1/payments',
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': `${data.userId}-${data.plan}-${Date.now()}`,
+          },
+        }
+      );
+
+      this.logger.log('[CARD] Payment created:', response.data.id);
+      this.logger.log('[CARD] Status:', response.data.status);
+
+      // Se aprovado, atualizar usuário imediatamente
+      if (response.data.status === 'approved') {
+        const billingCycle = data.amount >= 200 ? 'yearly' : 'monthly';
+        let creditsToAdd = 15;
+        
+        if (data.plan === 'basic') {
+          creditsToAdd = billingCycle === 'yearly' ? 180 : 15;
+        } else if (data.plan === 'pro') {
+          creditsToAdd = billingCycle === 'yearly' ? 576 : 48;
+        } else if (data.plan === 'business') {
+          creditsToAdd = billingCycle === 'yearly' ? 2400 : 200;
+        }
+
+        await this.usersService.addCredits(data.userId, creditsToAdd);
+        await this.usersService.updatePlan(data.userId, data.plan as any, billingCycle);
+        
+        this.logger.log(`[CARD] ✅ User updated: ${creditsToAdd} credits, plan ${data.plan}`);
+      }
+
+      return {
+        id: response.data.id,
+        status: response.data.status,
+        status_detail: response.data.status_detail,
+        payment_method_id: response.data.payment_method_id,
+        payment_type_id: response.data.payment_type_id,
+      };
+    } catch (error) {
+      this.logger.error('[CARD] Error:', error.response?.data || error.message);
+      
+      if (error.response) {
+        return {
+          error: true,
+          statusCode: error.response.status,
+          message: error.response.data?.message || 'Payment failed',
+          details: error.response.data,
+        };
+      }
+      
+      return {
+        error: true,
+        statusCode: 500,
+        message: 'Internal payment error',
+      };
+    }
+  }
+
   async createPayment(data: {
     plan: string;
     amount: number;
     userId: string;
     userEmail: string;
+    payer?: {
+      name?: string;
+      surname?: string;
+      email?: string;
+      phone?: { number?: string };
+    };
   }) {
     try {
       this.logger.log('[PAYMENT] Creating payment preference:', { plan: data.plan, amount: data.amount });
       
-      // Check if token is configured
       if (!this.accessToken) {
         this.logger.error('[PAYMENT] MERCADOPAGO_ACCESS_TOKEN is not configured');
         return {
@@ -83,6 +188,27 @@ export class PaymentsService {
           statusCode: 503,
           message: 'Payment gateway is not configured',
           solution: 'Add MERCADOPAGO_ACCESS_TOKEN to your .env file'
+        };
+      }
+      
+      // Preparar dados do pagador
+      const payerData: any = {
+        email: data.payer?.email || data.userEmail,
+      };
+
+      // Adicionar nome se fornecido
+      if (data.payer?.name) {
+        payerData.name = data.payer.name;
+      }
+      if (data.payer?.surname) {
+        payerData.surname = data.payer.surname;
+      }
+
+      // Adicionar telefone se fornecido
+      if (data.payer?.phone?.number) {
+        payerData.phone = {
+          area_code: data.payer.phone.number.substring(0, 2),
+          number: data.payer.phone.number.substring(2),
         };
       }
       
@@ -97,9 +223,7 @@ export class PaymentsService {
               currency_id: 'BRL',
             },
           ],
-          payer: {
-            email: data.userEmail,
-          },
+          payer: payerData,
           back_urls: {
             success: 'https://zavlo.ia/checkout/success',
             failure: 'https://zavlo.ia/checkout/failure',
@@ -107,6 +231,7 @@ export class PaymentsService {
           },
           auto_return: 'approved',
           external_reference: `${data.userId}-${data.plan}`,
+          statement_descriptor: 'ZAVLO.IA',
         },
         {
           headers: {
