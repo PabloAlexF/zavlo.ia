@@ -28,6 +28,31 @@ export class PaymentsController {
     return this.paymentsService.testConnection();
   }
 
+  @Post('card')
+  @UseGuards(JwtAuthGuard)
+  async createCardPayment(
+    @CurrentUser() user: any,
+    @Body() body: {
+      plan: string;
+      amount: number;
+      cardToken: string;
+      installments: number;
+      payer: any;
+    },
+  ) {
+    const userId = user?.userId || user?.id;
+    this.logger.log(`Criando pagamento com cartão para usuário: ${userId}`);
+    return this.paymentsService.createCardPayment({
+      plan: body.plan,
+      amount: body.amount,
+      userId: userId,
+      userEmail: user.email,
+      cardToken: body.cardToken,
+      installments: body.installments || 1,
+      payer: body.payer,
+    });
+  }
+
   @Post('create')
   @UseGuards(JwtAuthGuard)
   async createPayment(
