@@ -2204,7 +2204,7 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                           <span className="text-white font-medium text-sm">{message.content}</span>
                         </div>
                         
-{['10 produtos', '20 produtos'].map((option, i) => (
+
                                   <motion.button
                                     key={i}
                                     onClick={() => handleSend(option)}
@@ -2260,7 +2260,7 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                         <div className="space-y-2 mb-4 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl">
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-gray-400">Identificação</span>
-                            <span className="text-white">-{message.creditCost || 1} crédito</span>
+
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-gray-400">Busca de preços</span>
