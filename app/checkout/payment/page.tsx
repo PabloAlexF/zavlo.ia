@@ -148,70 +148,66 @@ function PaymentContent() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0B0B0F] relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-      <div className="absolute top-0 left-0 w-96 h-96 bg-blue-500/20 rounded-full blur-[100px] animate-pulse mix-blend-screen" />
-      <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-[100px] animate-pulse mix-blend-screen" />
+    <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Subtle gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-black to-zinc-950" />
 
       {/* Header */}
-      <header className="relative z-10 border-b border-white/10 bg-black/20 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold">
-              Z
-            </div>
-            <span className="font-semibold text-white">Zavlo.ia</span>
+      <header className="relative z-10 border-b border-white/[0.06] bg-black/80 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white rounded-lg sm:rounded-xl flex items-center justify-center text-black font-bold text-sm sm:text-base">Z</div>
+            <span className="font-semibold text-white text-sm sm:text-base">Zavlo</span>
           </Link>
-          <Link href={`/checkout/confirm?plan=${planName}&cycle=${cycle}`} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-4 h-4" />
-            Voltar
+          <Link href={`/checkout/confirm?plan=${planName}&cycle=${cycle}`} className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Voltar</span>
           </Link>
         </div>
       </header>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-4 py-12">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className={`transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           {/* Title */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-white/10 text-sm px-4 py-1 rounded-full border border-white/20 mb-6 text-white">
-              <Lock className="w-4 h-4" />
-              Pagamento Seguro
+          <div className="text-center mb-8 sm:mb-12">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-white/[0.04] text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/[0.08] mb-4 sm:mb-6 text-gray-400">
+              <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <span>Pagamento Seguro</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold mb-2 text-white tracking-tight">
               Finalizar Pagamento
             </h1>
-            <p className="text-lg text-gray-400">Escolha a forma de pagamento</p>
+            <p className="text-sm sm:text-base text-gray-500">Escolha a forma de pagamento</p>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid lg:grid-cols-3 gap-6 sm:gap-8">
             {/* Payment Methods & Form */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6">
               {/* Method Selection */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-                <h2 className="font-bold text-xl mb-6 text-white">Método de Pagamento</h2>
-                <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-white/[0.02] backdrop-blur-sm border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6">
+                <h2 className="font-medium text-base sm:text-lg mb-4 sm:mb-6 text-white">Método de Pagamento</h2>
+                <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
                   {paymentMethods.map((method) => (
                     <button
                       key={method.id}
                       onClick={() => setPaymentMethod(method.id)}
-                      className={`relative p-6 rounded-xl border-2 transition-all hover:scale-105 ${
+                      className={`relative p-4 sm:p-6 rounded-xl border transition-all active:scale-95 sm:hover:scale-[1.02] ${
                         paymentMethod === method.id 
-                          ? 'border-blue-500 bg-blue-500/10' 
-                          : 'border-white/10 bg-white/5 hover:border-white/20'
+                          ? 'border-white/20 bg-white/[0.06]' 
+                          : 'border-white/[0.06] bg-white/[0.02]'
                       }`}
                     >
                       {paymentMethod === method.id && (
-                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                          <Check className="w-4 h-4 text-white" />
+                        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 sm:w-4 sm:h-4 text-black" />
                         </div>
                       )}
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${method.color} flex items-center justify-center mb-4 mx-auto`}>
-                        <method.Icon className="w-6 h-6 text-white" />
+                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br ${method.color} flex items-center justify-center mb-3 sm:mb-4 mx-auto`}>
+                        <method.Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                       </div>
                       <div className="text-center">
-                        <div className="font-semibold text-white mb-1">{method.title}</div>
-                        <div className="text-xs text-gray-400">{method.subtitle}</div>
+                        <div className="font-medium text-sm sm:text-base text-white mb-0.5 sm:mb-1">{method.title}</div>
+                        <div className="text-[10px] sm:text-xs text-gray-500">{method.subtitle}</div>
                       </div>
                     </button>
                   ))}
@@ -219,43 +215,43 @@ function PaymentContent() {
               </div>
 
               {/* Payment Form */}
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+              <div className="bg-white/[0.02] backdrop-blur-sm border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6">
                 {paymentMethod === 'checkout' && (
-                  <div className="text-center py-12">
-                    <CreditCard className="w-16 h-16 text-gray-400 mx-auto mb-6" />
-                    <p className="text-sm text-gray-300 mb-4">Você será redirecionado para o Mercado Pago</p>
-                    <div className="flex flex-wrap justify-center gap-3 mb-4">
-                      <div className="px-3 py-1 bg-white/10 rounded-lg text-xs text-gray-300">✓ Cartão de Crédito</div>
-                      <div className="px-3 py-1 bg-white/10 rounded-lg text-xs text-gray-300">✓ Cartão de Débito</div>
-                      <div className="px-3 py-1 bg-white/10 rounded-lg text-xs text-gray-300">✓ Boleto</div>
-                      <div className="px-3 py-1 bg-white/10 rounded-lg text-xs text-gray-300">✓ PIX</div>
+                  <div className="text-center py-8 sm:py-12">
+                    <CreditCard className="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 mx-auto mb-4 sm:mb-6" />
+                    <p className="text-xs sm:text-sm text-gray-400 mb-3 sm:mb-4">Você será redirecionado para o Mercado Pago</p>
+                    <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                      <div className="px-2 sm:px-3 py-1 bg-white/[0.04] rounded-lg text-[10px] sm:text-xs text-gray-400">✓ Cartão de Crédito</div>
+                      <div className="px-2 sm:px-3 py-1 bg-white/[0.04] rounded-lg text-[10px] sm:text-xs text-gray-400">✓ Cartão de Débito</div>
+                      <div className="px-2 sm:px-3 py-1 bg-white/[0.04] rounded-lg text-[10px] sm:text-xs text-gray-400">✓ Boleto</div>
+                      <div className="px-2 sm:px-3 py-1 bg-white/[0.04] rounded-lg text-[10px] sm:text-xs text-gray-400">✓ PIX</div>
                     </div>
-                    <p className="text-xs text-gray-500">Escolha seu método preferido na próxima tela</p>
+                    <p className="text-[10px] sm:text-xs text-gray-600">Escolha seu método preferido na próxima tela</p>
                   </div>
                 )}
 
                 {paymentMethod === 'pix' && (
-                  <div className="text-center py-12">
+                  <div className="text-center py-8 sm:py-12">
                     {pixData ? (
                       <>
-                        <div className="w-64 h-64 bg-white p-4 rounded-2xl mx-auto mb-6">
+                        <div className="w-48 h-48 sm:w-64 sm:h-64 bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl mx-auto mb-4 sm:mb-6">
                           <img src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code PIX" className="w-full h-full" />
                         </div>
-                        <div className="bg-white/10 rounded-xl p-4 mb-4">
-                          <p className="text-xs text-gray-400 mb-2">Código PIX Copia e Cola:</p>
-                          <p className="text-xs text-white font-mono break-all">{pixData.qr_code}</p>
+                        <div className="bg-white/[0.04] rounded-lg sm:rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
+                          <p className="text-[10px] sm:text-xs text-gray-500 mb-2">Código PIX Copia e Cola:</p>
+                          <p className="text-[10px] sm:text-xs text-white font-mono break-all">{pixData.qr_code}</p>
                           <button
                             onClick={() => {
                               navigator.clipboard.writeText(pixData.qr_code);
                               setModal({ type: 'success', title: 'Código Copiado!', message: 'Cole no seu app de pagamentos para finalizar.' });
                             }}
-                            className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition"
+                            className="mt-2 sm:mt-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-white text-black rounded-lg text-xs sm:text-sm font-medium hover:bg-gray-100 active:scale-95 transition-all"
                           >
                             Copiar Código
                           </button>
                         </div>
-                        <p className="text-sm text-gray-300 mb-2">Escaneie o QR Code ou copie o código</p>
-                        <p className="text-xs text-gray-500 mb-6">Válido por 30 minutos</p>
+                        <p className="text-xs sm:text-sm text-gray-400 mb-1 sm:mb-2">Escaneie o QR Code ou copie o código</p>
+                        <p className="text-[10px] sm:text-xs text-gray-600 mb-4 sm:mb-6">Válido por 30 minutos</p>
                         
                         <button
                           onClick={async () => {
@@ -322,7 +318,7 @@ function PaymentContent() {
                             }
                           }}
                           disabled={confirmingPayment}
-                          className="w-full max-w-md mx-auto py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/20 flex items-center justify-center gap-2"
+                          className="w-full max-w-md mx-auto py-3 sm:py-4 bg-white text-black rounded-lg sm:rounded-xl font-medium text-sm sm:text-base hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                           {confirmingPayment ? (
                             <>
@@ -339,11 +335,11 @@ function PaymentContent() {
                       </>
                     ) : (
                       <>
-                        <div className="w-48 h-48 bg-white/10 rounded-2xl mx-auto mb-6 flex items-center justify-center border border-white/20">
-                          <QrCode className="w-24 h-24 text-gray-400" />
+                        <div className="w-40 h-40 sm:w-48 sm:h-48 bg-white/[0.04] rounded-xl sm:rounded-2xl mx-auto mb-4 sm:mb-6 flex items-center justify-center border border-white/[0.06]">
+                          <QrCode className="w-16 h-16 sm:w-24 sm:h-24 text-gray-600" />
                         </div>
-                        <p className="text-sm text-gray-300 mb-2">QR Code será gerado após confirmar</p>
-                        <p className="text-xs text-gray-500">Válido por 30 minutos</p>
+                        <p className="text-xs sm:text-sm text-gray-400 mb-1 sm:mb-2">QR Code será gerado após confirmar</p>
+                        <p className="text-[10px] sm:text-xs text-gray-600">Válido por 30 minutos</p>
                       </>
                     )}
                   </div>
@@ -353,25 +349,25 @@ function PaymentContent() {
 
             {/* Order Summary */}
             <div className="lg:col-span-1">
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sticky top-24">
-                <h3 className="font-bold text-lg mb-6 text-white">Resumo do Pedido</h3>
+              <div className="bg-white/[0.02] backdrop-blur-sm border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:sticky lg:top-24">
+                <h3 className="font-medium text-base sm:text-lg mb-4 sm:mb-6 text-white">Resumo do Pedido</h3>
                 
-                <div className="space-y-4 mb-6">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Plano {planNames[planName]}</span>
-                    <span className="font-semibold text-white">R$ {finalPrice.toFixed(2)}</span>
+                <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+                  <div className="flex justify-between text-xs sm:text-sm">
+                    <span className="text-gray-500">Plano {planNames[planName]}</span>
+                    <span className="font-medium text-white">R$ {finalPrice.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Cobrança</span>
+                  <div className="flex justify-between text-xs sm:text-sm">
+                    <span className="text-gray-500">Cobrança</span>
                     <span className="text-white">{cycle === 'yearly' ? 'Anual' : 'Mensal'}</span>
                   </div>
                   {cycle === 'yearly' && (
-                    <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 px-3 py-2 rounded-lg">
-                      <Sparkles className="w-4 h-4" />
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-green-400 bg-green-500/10 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg">
+                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
                       Economize 16% no plano anual
                     </div>
                   )}
-                  <div className="border-t border-white/10 pt-4 flex justify-between font-bold text-xl">
+                  <div className="border-t border-white/[0.06] pt-3 sm:pt-4 flex justify-between font-semibold text-lg sm:text-xl">
                     <span className="text-white">Total</span>
                     <span className="text-white">R$ {finalPrice.toFixed(2)}</span>
                   </div>
@@ -380,22 +376,22 @@ function PaymentContent() {
                 <button
                   onClick={handlePayment}
                   disabled={processing}
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-6 shadow-lg shadow-blue-500/20"
+                  className="w-full py-3 sm:py-4 bg-white text-black rounded-lg sm:rounded-xl font-medium text-sm sm:text-base hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-4 sm:mb-6"
                 >
                   {processing ? 'Processando...' : 'Confirmar Pagamento'}
                 </button>
 
-                <div className="space-y-3 text-xs text-gray-400">
+                <div className="space-y-2 sm:space-y-3 text-xs sm:text-sm text-gray-500">
                   <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-green-400" />
-                    Pagamento 100% seguro
+                    <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    Pagamento seguro
                   </div>
                   <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-400" />
+                    <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     Garantia de 7 dias
                   </div>
                   <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-400" />
+                    <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     Cancele quando quiser
                   </div>
                 </div>
@@ -422,8 +418,8 @@ function PaymentContent() {
 export default function Payment() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#0B0B0F] flex items-center justify-center">
-        <div className="text-white">Carregando...</div>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     }>
       <PaymentContent />

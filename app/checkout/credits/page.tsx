@@ -106,52 +106,56 @@ function CreditsCheckoutContent() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0B0B0F] relative overflow-hidden">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-
-      <header className="relative z-10 border-b border-white/10 bg-black/20 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold">Z</div>
-            <span className="font-semibold text-white">Zavlo.ia</span>
+    <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Subtle gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-black to-zinc-950" />
+      
+      <header className="relative z-10 border-b border-white/[0.06] bg-black/80 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white rounded-lg sm:rounded-xl flex items-center justify-center text-black font-bold text-sm sm:text-base">Z</div>
+            <span className="font-semibold text-white text-sm sm:text-base">Zavlo</span>
           </Link>
-          <Link href="/plans" className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-4 h-4" />Voltar
+          <Link href="/plans" className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Voltar</span>
           </Link>
         </div>
       </header>
 
-      <main className="relative z-10 max-w-4xl mx-auto px-4 py-12">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 bg-white/10 text-sm px-4 py-1 rounded-full border border-white/20 mb-6 text-white">
-            <Lock className="w-4 h-4" />Pagamento Seguro
+      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <div className="text-center mb-8 sm:mb-12">
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-white/[0.04] text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/[0.08] mb-4 sm:mb-6 text-gray-400">
+            <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span>Pagamento Seguro</span>
           </div>
-          <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">Comprar Créditos</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold mb-2 text-white tracking-tight">Comprar Créditos</h1>
+          <p className="text-sm sm:text-base text-gray-500">Escolha como deseja pagar</p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-              <h2 className="font-bold text-xl mb-6 text-white">Método de Pagamento</h2>
-              <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid lg:grid-cols-3 gap-6 sm:gap-8">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+            <div className="bg-white/[0.02] backdrop-blur-sm border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6">
+              <h2 className="font-medium text-base sm:text-lg mb-4 sm:mb-6 text-white">Método de Pagamento</h2>
+              <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
                 {paymentMethods.map((method) => (
                   <button key={method.id} onClick={() => setPaymentMethod(method.id)}
-                    className={`relative p-6 rounded-xl border-2 transition-all hover:scale-105 ${paymentMethod === method.id ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}>
-                    {paymentMethod === method.id && <div className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center"><Check className="w-4 h-4 text-white" /></div>}
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${method.color} flex items-center justify-center mb-4 mx-auto`}><method.Icon className="w-6 h-6 text-white" /></div>
-                    <div className="text-center"><div className="font-semibold text-white mb-1">{method.title}</div><div className="text-xs text-gray-400">{method.subtitle}</div></div>
+                    className={`relative p-4 sm:p-6 rounded-xl border transition-all active:scale-95 sm:hover:scale-[1.02] ${paymentMethod === method.id ? 'border-white/20 bg-white/[0.06]' : 'border-white/[0.06] bg-white/[0.02]'}`}>
+                    {paymentMethod === method.id && <div className="absolute -top-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full flex items-center justify-center"><Check className="w-3 h-3 sm:w-4 sm:h-4 text-black" /></div>}
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br ${method.color} flex items-center justify-center mb-3 sm:mb-4 mx-auto`}><method.Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" /></div>
+                    <div className="text-center"><div className="font-medium text-sm sm:text-base text-white mb-0.5 sm:mb-1">{method.title}</div><div className="text-[10px] sm:text-xs text-gray-500">{method.subtitle}</div></div>
                   </button>
                 ))}
               </div>
             </div>
 
             {pixData && (
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-center">
-                <div className="w-64 h-64 bg-white p-4 rounded-2xl mx-auto mb-6">
+              <div className="bg-white/[0.02] backdrop-blur-sm border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center">
+                <div className="w-48 h-48 sm:w-64 sm:h-64 bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl mx-auto mb-4 sm:mb-6">
                   <img src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code" className="w-full h-full" />
                 </div>
                 <button onClick={() => { navigator.clipboard.writeText(pixData.qr_code); setModal({ type: 'success', title: 'Copiado!', message: 'Cole no app de pagamentos.' }); }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 mb-6">Copiar Código PIX</button>
+                  className="px-4 py-2.5 bg-white text-black rounded-lg text-xs sm:text-sm font-medium hover:bg-gray-100 active:scale-95 transition-all mb-4 sm:mb-6">Copiar Código PIX</button>
                 <button onClick={async () => {
                   setConfirmingPayment(true);
                   try {
@@ -169,7 +173,7 @@ function CreditsCheckoutContent() {
                     }
                   } finally { setConfirmingPayment(false); }
                 }} disabled={confirmingPayment}
-                  className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold">
+                  className="w-full py-3 sm:py-4 bg-white text-black rounded-lg sm:rounded-xl font-medium text-sm sm:text-base hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50">
                   {confirmingPayment ? 'Verificando...' : 'Já Fiz o Pagamento'}
                 </button>
               </div>
@@ -177,19 +181,29 @@ function CreditsCheckoutContent() {
           </div>
 
           <div className="lg:col-span-1">
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-              <h3 className="font-bold text-lg mb-6 text-white">Resumo</h3>
-              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-xl mb-4">
-                <Zap className="w-8 h-8 text-yellow-400" />
-                <div><p className="text-2xl font-black text-white">{credits}</p><p className="text-xs text-gray-300">Créditos</p></div>
+            <div className="bg-white/[0.02] backdrop-blur-sm border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:sticky lg:top-24">
+              <h3 className="font-medium text-base sm:text-lg mb-4 sm:mb-6 text-white">Resumo</h3>
+              <div className="flex items-center gap-3 p-3 sm:p-4 bg-white/[0.04] rounded-lg sm:rounded-xl mb-4">
+                <Zap className="w-7 h-7 sm:w-8 sm:h-8 text-yellow-400" />
+                <div><p className="text-xl sm:text-2xl font-bold text-white">{credits}</p><p className="text-[10px] sm:text-xs text-gray-500">Créditos</p></div>
               </div>
-              <div className="border-t border-white/10 pt-4 flex justify-between font-bold text-xl mb-6">
+              <div className="border-t border-white/[0.06] pt-4 flex justify-between font-semibold text-lg sm:text-xl mb-4 sm:mb-6">
                 <span className="text-white">Total</span><span className="text-white">R$ {price.toFixed(2)}</span>
               </div>
               <button onClick={handlePayment} disabled={processing || !!pixData}
-                className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:scale-105 transition-all disabled:opacity-50 mb-6">
+                className="w-full py-3 sm:py-4 bg-white text-black rounded-lg sm:rounded-xl font-medium text-sm sm:text-base hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-4 sm:mb-6">
                 {processing ? 'Processando...' : pixData ? 'QR Code Gerado' : 'Confirmar Pagamento'}
               </button>
+              <div className="space-y-2 text-xs sm:text-sm text-gray-500">
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>Pagamento seguro</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>Créditos instantâneos</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -202,7 +216,7 @@ function CreditsCheckoutContent() {
 
 export default function CreditsCheckout() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0B0B0F] flex items-center justify-center"><div className="text-white">Carregando...</div></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center"><div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>}>
       <CreditsCheckoutContent />
     </Suspense>
   );

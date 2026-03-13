@@ -121,7 +121,7 @@ export default function Auth() {
                   ? 'bg-green-500/20 text-green-300 border border-green-500/30' 
                   : 'bg-red-500/20 text-red-300 border border-red-500/30'
               }`}>
-                {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <span>⚠️</span>}
+                <CheckCircle className={`w-5 h-5 ${message.type === 'error' ? 'rotate-180' : ''}`} />
                 {message.text}
               </div>
             )}

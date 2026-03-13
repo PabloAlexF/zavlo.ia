@@ -83,71 +83,65 @@ function ConfirmPlanContent() {
   const savings = cycle === 'yearly' ? (plan.price * 12 - plan.yearlyPrice).toFixed(2) : '0';
 
   return (
-    <div className="min-h-screen bg-[#0B0B0F] relative overflow-hidden">
+    <div className="min-h-screen bg-black relative overflow-hidden">
       <Header />
       
-      {/* Background */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a2e12_1px,transparent_1px),linear-gradient(to_bottom,#1a1a2e12_1px,transparent_1px)] bg-[size:32px_32px]" />
-      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px]" />
+      {/* Subtle gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-black to-zinc-950" />
 
-      <main className="relative z-10 max-w-4xl mx-auto px-4 pt-24 pb-12">
+      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="text-center mb-12">
+          <div className="text-center mb-8 sm:mb-12">
             <motion.div 
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-full px-4 py-2 mb-6"
+              className="inline-flex items-center gap-1.5 sm:gap-2 bg-white/[0.04] border border-white/[0.08] rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-4 sm:mb-6"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: "spring" }}
             >
-              <Check className="w-4 h-4 text-green-400" />
-              <span className="text-sm text-green-300 font-medium">Excelente escolha!</span>
+              <Check className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+              <span className="text-xs sm:text-sm text-gray-400 font-medium">Excelente escolha!</span>
             </motion.div>
-            <h1 className="text-4xl md:text-5xl font-black mb-3 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold mb-2 sm:mb-3 text-white tracking-tight">
               Plano {plan.name}
             </h1>
-            <p className="text-lg text-gray-400">
+            <p className="text-sm sm:text-base text-gray-500">
               Você está a um passo de economizar muito dinheiro
             </p>
           </div>
 
-          <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-2 border-blue-500/30 rounded-2xl p-8 mb-8 backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl sm:rounded-2xl p-6 sm:p-8 mb-6 sm:mb-8 backdrop-blur-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0 mb-4 sm:mb-6">
               <div>
-                <div className="text-sm text-gray-400 mb-1">Cobrança {cycle === 'yearly' ? 'Anual' : 'Mensal'}</div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-5xl font-bold text-white">R$ {monthlyEquivalent.toFixed(2)}</span>
-                  <span className="text-gray-400">/mês</span>
+                <div className="text-xs sm:text-sm text-gray-500 mb-1">Cobrança {cycle === 'yearly' ? 'Anual' : 'Mensal'}</div>
+                <div className="flex items-baseline gap-1.5 sm:gap-2">
+                  <span className="text-3xl sm:text-4xl md:text-5xl font-semibold text-white">R$ {monthlyEquivalent.toFixed(2)}</span>
+                  <span className="text-sm sm:text-base text-gray-500">/mês</span>
                 </div>
                 {cycle === 'yearly' && (
-                  <div className="text-sm text-green-400 font-semibold mt-2">
-                    💰 Economize R$ {savings} por ano
+                  <div className="text-xs sm:text-sm text-green-400 font-medium mt-1.5 sm:mt-2">
+                    Economize R$ {savings} por ano
                   </div>
                 )}
               </div>
-              <div className="text-right">
-                <div className="text-sm text-gray-400 mb-1">Total {cycle === 'yearly' ? 'anual' : 'mensal'}</div>
-                <div className="text-3xl font-bold text-white">R$ {finalPrice.toFixed(2)}</div>
+              <div className="text-left sm:text-right">
+                <div className="text-xs sm:text-sm text-gray-500 mb-1">Total {cycle === 'yearly' ? 'anual' : 'mensal'}</div>
+                <div className="text-2xl sm:text-3xl font-semibold text-white">R$ {finalPrice.toFixed(2)}</div>
               </div>
             </div>
 
-            <div className="border-t border-white/10 pt-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2 text-white">
-                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+            <div className="border-t border-white/[0.06] pt-4 sm:pt-6">
+              <h3 className="font-medium text-sm sm:text-base mb-3 sm:mb-4 flex items-center gap-2 text-white">
+                <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                 Incluído no plano:
               </h3>
-              <ul className="space-y-3">
+              <ul className="space-y-2 sm:space-y-3">
                 {plan.features.map((feature, i) => (
-                  <li key={i} className="flex items-center gap-3 text-gray-300">
-                    <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    </svg>
+                  <li key={i} className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-400">
+                    <Check className="w-4 h-4 sm:w-5 sm:h-5 text-white flex-shrink-0" />
                     {feature}
                   </li>
                 ))}
@@ -155,49 +149,43 @@ function ConfirmPlanContent() {
             </div>
           </div>
 
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 mb-8">
-            <h3 className="text-2xl font-bold mb-6 flex items-center gap-2 text-white">
-              <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+          <div className="bg-white/[0.02] backdrop-blur-sm border border-white/[0.06] rounded-xl sm:rounded-2xl p-6 sm:p-8 mb-6 sm:mb-8">
+            <h3 className="text-lg sm:text-xl md:text-2xl font-semibold mb-4 sm:mb-6 flex items-center gap-2 text-white">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
               Benefícios exclusivos
             </h3>
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
               {plan.benefits.map((benefit, i) => (
-                <div key={i} className="flex items-start gap-3 bg-white/5 rounded-xl p-4 border border-white/10">
-                  <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-sm text-gray-300">{benefit}</span>
+                <div key={i} className="flex items-start gap-2 sm:gap-3 bg-white/[0.02] rounded-lg sm:rounded-xl p-3 sm:p-4 border border-white/[0.06]">
+                  <Check className="w-4 h-4 sm:w-5 sm:h-5 text-white mt-0.5 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm text-gray-400">{benefit}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 mb-8 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-4">
-              <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+          <div className="bg-white/[0.02] backdrop-blur-sm border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-6 sm:mb-8 text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-white/[0.04] rounded-full mb-3 sm:mb-4">
+              <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
-            <h3 className="font-bold text-lg mb-2 text-white">Garantia de 7 dias</h3>
-            <p className="text-gray-400 text-sm">
+            <h3 className="font-medium text-base sm:text-lg mb-1 sm:mb-2 text-white">Garantia de 7 dias</h3>
+            <p className="text-gray-500 text-xs sm:text-sm">
               Não gostou? Devolvemos 100% do seu dinheiro, sem perguntas.
             </p>
           </div>
 
           <motion.button
             onClick={() => router.push(`/checkout/payment?plan=${planName}&cycle=${cycle}`)}
-            className="w-full py-5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-bold text-lg transition-all shadow-xl flex items-center justify-center gap-2 group"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            className="w-full py-3 sm:py-4 md:py-5 bg-white text-black rounded-lg sm:rounded-xl font-medium text-sm sm:text-base md:text-lg transition-all flex items-center justify-center gap-2 group hover:bg-gray-100 active:scale-95"
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
           >
             Continuar para Pagamento
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
           </motion.button>
 
-          <p className="text-center text-sm text-gray-500 mt-4">
-            🔒 Pagamento seguro • ❌ Cancele quando quiser • 💯 Sem taxas ocultas
+          <p className="text-center text-xs sm:text-sm text-gray-600 mt-3 sm:mt-4">
+            Pagamento seguro • Cancele quando quiser • Sem taxas ocultas
           </p>
         </motion.div>
       </main>
@@ -207,7 +195,7 @@ function ConfirmPlanContent() {
 
 export default function ConfirmPlan() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-white">Carregando...</p></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center"><div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>}>
       <ConfirmPlanContent />
     </Suspense>
   );
