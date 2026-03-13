@@ -1,7 +1,11 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "next build",
   "outputDirectory": ".next",
   "framework": "nextjs",
+  "installCommand": "npm install",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://api.zavloia.com.br/api/v1"
+  },
   "rewrites": [
     {
       "source": "/(.*)",

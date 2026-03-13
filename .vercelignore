@@ -1,0 +1,30 @@
+# Backend files (NestJS)
+src/
+dist/
+nest-cli.json
+tsconfig.backend.json
+
+# Scripts
+scripts/
+
+# Build artifacts
+*.log
+build_*.txt
+*.bat
+*.sh
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Documentation
+*.md
+!README.md
+
+# Config files
+ecosystem.config.js
+Procfile
+render.yaml
+.hostinger.yml
+.render-buildpacks.json
