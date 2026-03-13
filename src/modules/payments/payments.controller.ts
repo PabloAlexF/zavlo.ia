@@ -73,15 +73,28 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   async createPixPayment(
     @CurrentUser() user: any,
-    @Body() body: { plan: string; amount: number },
+    @Body() body: { 
+      plan: string; 
+      amount: number;
+      userEmail?: string;
+      payer?: {
+        firstName?: string;
+        lastName?: string;
+        email?: string;
+        phone?: string;
+        cpf?: string;
+      };
+    },
   ) {
     const userId = user?.userId || user?.id;
     this.logger.log(`Criando PIX para usuário: ${userId}`);
+    this.logger.log(`Dados do pagador:`, body.payer);
     return this.paymentsService.createPixPayment({
       plan: body.plan,
       amount: body.amount,
       userId: userId,
-      userEmail: user.email,
+      userEmail: body.userEmail || body.payer?.email || user.email,
+      payer: body.payer,
     });
   }
 
