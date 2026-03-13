@@ -85,6 +85,18 @@ select:focus {
   header {
     height: 3.5rem !important;
   }
+  
+  /* Prevenir scroll jump ao enviar mensagem */
+  .overflow-y-auto {
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Garantir que mensagens não causem scroll indesejado */
+  .max-w-4xl {
+    scroll-margin-bottom: 100px;
+  }
 }
 
 /* Melhorar scroll em mobile */

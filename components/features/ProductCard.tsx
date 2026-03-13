@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useUser } from '@/contexts/UserContext';
 import { getUser } from '@/utils/auth';
 import { toast } from 'sonner';
-import { Heart, ExternalLink } from 'lucide-react';
+import { Heart, ExternalLink, Star, Package, CheckCircle } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -135,7 +135,7 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
 
   return (
     <div className="group transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/20">
-        <div className="relative w-full bg-gradient-to-br from-white/5 to-white/[0.02] rounded-2xl overflow-hidden mb-4 shadow-lg border border-white/10" style={{ height: '280px', position: 'relative' }}>
+        <div className="relative w-full bg-gradient-to-br from-white/5 to-white/[0.02] rounded-xl sm:rounded-2xl overflow-hidden mb-3 sm:mb-4 shadow-lg border border-white/10" style={{ height: '200px', position: 'relative' }}>
           {hasImage && !imageError ? (
             <>
               {/* Loading Skeleton */}
@@ -161,9 +161,9 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
                   <button
                     onClick={prevImage}
                     aria-label="Imagem anterior"
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 active:scale-90 z-20"
+                    className="absolute left-1.5 sm:left-2 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-8 sm:h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 active:scale-90 z-20"
                   >
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
@@ -171,20 +171,20 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
                   <button
                     onClick={nextImage}
                     aria-label="Próxima imagem"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 active:scale-90 z-20"
+                    className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-8 sm:h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 active:scale-90 z-20"
                   >
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
 
                   {/* Indicators */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-20" >
+                  <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 flex gap-1 sm:gap-1.5 z-20" >
                     {images.map((_, index) => (
                       <div
                         key={index}
-                        className={`h-1.5 rounded-full transition-all ${
-                          index === currentImageIndex ? 'bg-white w-4' : 'bg-white/50 w-1.5'
+                        className={`h-1 sm:h-1.5 rounded-full transition-all ${
+                          index === currentImageIndex ? 'bg-white w-3 sm:w-4' : 'bg-white/50 w-1 sm:w-1.5'
                         }`}
                       />
                     ))}
@@ -193,14 +193,14 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
               )}
 
               {/* Source Badge */}
-              <div className={`absolute top-3 right-3 px-3 py-1 bg-gradient-to-r ${getSourceColor(product.source)} rounded-full text-xs font-semibold text-white whitespace-nowrap shadow-lg z-20`}>
+              <div className={`absolute top-2 sm:top-3 right-2 sm:right-3 px-2 sm:px-3 py-0.5 sm:py-1 bg-gradient-to-r ${getSourceColor(product.source)} rounded-full text-[10px] sm:text-xs font-semibold text-white whitespace-nowrap shadow-lg z-20`}>
                 {getSourceName(product.source)}
               </div>
 
               {/* Favorite Button */}
               <button
                 onClick={toggleFavorite}
-                className={`absolute top-3 left-3 w-9 h-9 rounded-full backdrop-blur-md flex items-center justify-center transition-all z-20 ${
+                className={`absolute top-2 sm:top-3 left-2 sm:left-3 w-8 h-8 sm:w-9 sm:h-9 rounded-full backdrop-blur-md flex items-center justify-center transition-all z-20 ${
                   isFavorite 
                     ? 'bg-red-500/90 scale-110' 
                     : 'bg-black/40 hover:bg-black/60'
@@ -208,7 +208,7 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
                 aria-label="Favoritar"
               >
                 <Heart 
-                  className={`w-5 h-5 transition-all ${
+                  className={`w-4 h-4 sm:w-5 sm:h-5 transition-all ${
                     isFavorite ? 'fill-white text-white' : 'text-white'
                   }`}
                 />
@@ -216,44 +216,44 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
             </>
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-2 bg-white/5">
-              <svg className="w-16 h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-12 h-12 sm:w-16 sm:h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <p className="text-xs text-gray-500">Imagem indisponível</p>
+              <p className="text-[10px] sm:text-xs text-gray-500">Imagem indisponível</p>
             </div>
           )}
         </div>
         
-        <div className="mt-3 space-y-2">
-          <h3 className="font-medium text-white line-clamp-2 group-hover:text-purple-300 transition-colors text-sm sm:text-base">
+        <div className="mt-2 sm:mt-3 space-y-1.5 sm:space-y-2">
+          <h3 className="font-medium text-white line-clamp-2 group-hover:text-purple-300 transition-colors text-xs sm:text-sm leading-tight">
             {product.title}
           </h3>
           
           {/* Preço */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+          <div className="space-y-0.5 sm:space-y-1">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
                 R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               {product.percentOff && (
-                <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded-md text-xs font-semibold text-red-400">
+                <span className="px-1.5 sm:px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded text-[10px] sm:text-xs font-semibold text-red-400">
                   {product.percentOff}
                 </span>
               )}
             </div>
             {product.originalPrice && product.originalPrice > product.price && (
-              <p className="text-xs text-gray-500 line-through">
+              <p className="text-[10px] sm:text-xs text-gray-500 line-through">
                 De: R$ {product.originalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             )}
           </div>
           
           {/* Rating e Localização */}
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               {product.rating && product.rating > 0 && (
-                <div className="flex items-center gap-1">
-                  <span className="text-yellow-400">⭐</span>
+                <div className="flex items-center gap-0.5 sm:gap-1">
+                  <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-400 fill-yellow-400" />
                   <span className="text-white font-medium">{product.rating.toFixed(1)}</span>
                   {product.reviews && product.reviews > 0 && (
                     <span className="text-gray-500">({product.reviews})</span>
@@ -261,20 +261,24 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
                 </div>
               )}
             </div>
-            <span className="text-gray-500 text-right max-w-[100px] truncate">
+            <span className="text-gray-500 text-right max-w-[80px] sm:max-w-[100px] truncate">
               {location}
             </span>
           </div>
           
           {/* Badges: Condição */}
           {product.condition && (
-            <div className="flex flex-wrap gap-1.5">
-              <span className={`px-2 py-1 rounded-md text-xs font-medium ${
+            <div className="flex flex-wrap gap-1 sm:gap-1.5">
+              <span className={`flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium ${
                 product.condition === 'new' 
                   ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400' 
                   : 'bg-orange-500/10 border border-orange-500/30 text-orange-400'
               }`}>
-                {product.condition === 'new' ? '🆕 Novo' : '♻️ Usado'}
+                {product.condition === 'new' ? (
+                  <><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Novo</>
+                ) : (
+                  <><Package className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Usado</>
+                )}
               </span>
             </div>
           )}
@@ -285,10 +289,10 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="w-full mt-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-lg text-white text-sm font-medium flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-blue-500/20"
+            className="w-full mt-1.5 sm:mt-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-lg text-white text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 sm:gap-2 transition-all hover:shadow-lg hover:shadow-blue-500/20"
           >
             Ver Produto
-            <ExternalLink className="w-4 h-4" />
+            <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </a>
         </div>
       </div>
