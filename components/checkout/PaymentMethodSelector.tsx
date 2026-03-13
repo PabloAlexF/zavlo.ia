@@ -12,11 +12,10 @@ export function PaymentMethodSelector({ selected, onSelect }: PaymentMethodSelec
   const methods = [
     { id: 'card' as const, label: 'Cartão de Crédito', icon: CreditCard },
     { id: 'pix' as const, label: 'PIX', icon: QrCode },
-    { id: 'boleto' as const, label: 'Boleto', icon: FileText },
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 gap-4">
       {methods.map((method) => {
         const isSelected = selected === method.id;
         const Icon = method.icon;
@@ -41,9 +40,9 @@ export function PaymentMethodSelector({ selected, onSelect }: PaymentMethodSelec
               />
             )}
             
-            <div className="relative flex flex-col items-center gap-2">
-              <Icon className={`w-6 h-6 ${isSelected ? 'text-blue-400' : 'text-gray-400'}`} />
-              <span className={`text-xs font-medium ${isSelected ? 'text-white' : 'text-gray-400'}`}>
+            <div className="relative flex flex-col items-center gap-3">
+              <Icon className={`w-7 h-7 ${isSelected ? 'text-blue-400' : 'text-gray-400'}`} />
+              <span className={`text-sm font-medium ${isSelected ? 'text-white' : 'text-gray-400'}`}>
                 {method.label}
               </span>
             </div>

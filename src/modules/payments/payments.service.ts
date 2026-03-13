@@ -272,10 +272,30 @@ export class PaymentsService {
     amount: number;
     userId: string;
     userEmail: string;
+    payer?: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      phone?: string;
+      cpf?: string;
+    };
   }) {
     try {
       this.logger.log('[PIX] Starting payment creation...');
       this.logger.log('[PIX] Input data:', { plan: data.plan, amount: data.amount, userId: data.userId, email: data.userEmail });
+      this.logger.log('[PIX] Payer data:', data.payer);
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(data.userEmail)) {
+        this.logger.error('[PIX] Invalid email format:', data.userEmail);
+        return {
+          error: true,
+          statusCode: 400,
+          message: 'Email inválido',
+          details: 'O email fornecido não é válido',
+        };
+      }
       
       // Check if token is configured FIRST, before making any API calls
       if (!this.accessToken) {
@@ -301,19 +321,56 @@ export class PaymentsService {
       // Generate idempotency key
       const idempotencyKey = `${data.userId}-${data.plan}-${Date.now()}`;
       
+      // Clean and validate email one more time
+      const cleanEmail = data.userEmail.trim().toLowerCase();
+      
+      // Prepare payer object with all available data
+      const payerData: any = {
+        email: cleanEmail,
+        first_name: data.payer?.firstName || 'Cliente',
+        last_name: data.payer?.lastName || 'Zavlo',
+      };
+      
+      // Add CPF if provided (required for production)
+      if (data.payer?.cpf) {
+        const cpfClean = data.payer.cpf.replace(/\D/g, '');
+        payerData.identification = {
+          type: 'CPF',
+          number: cpfClean,
+        };
+      }
+      
+      // Add phone if provided
+      if (data.payer?.phone) {
+        const phoneClean = data.payer.phone.replace(/\D/g, '');
+        if (phoneClean.length >= 10) {
+          payerData.phone = {
+            area_code: phoneClean.substring(0, 2),
+            number: phoneClean.substring(2),
+          };
+        }
+      }
+      
       const payload = {
         transaction_amount: data.amount,
         description: `Plano ${data.plan} - Zavlo.ia`,
         payment_method_id: 'pix',
-        payer: {
-          email: data.userEmail,
-        },
+        payer: payerData,
         external_reference: `${data.userId}-${data.plan}`,
+        statement_descriptor: 'ZAVLO.IA',
+        notification_url: `${this.configService.get('API_URL') || 'https://zavlo-ia.onrender.com/api/v1'}/payments/webhook`,
       };
       
       this.logger.log('[PIX] Request payload:', JSON.stringify(payload, null, 2));
+      this.logger.log('[PIX] Payer object:', JSON.stringify(payerData, null, 2));
       this.logger.log('[PIX] Idempotency-Key:', idempotencyKey);
       this.logger.log('[PIX] Making request to Mercado Pago...');
+      this.logger.log('[PIX] URL:', 'https://api.mercadopago.com/v1/payments');
+      this.logger.log('[PIX] Headers:', {
+        Authorization: `Bearer ${this.accessToken.substring(0, 20)}...`,
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': idempotencyKey,
+      });
       
       const response = await axios.post(
         'https://api.mercadopago.com/v1/payments',
@@ -354,7 +411,7 @@ export class PaymentsService {
           statusCode: error.response.status,
           message: error.response.data?.message || 'Payment failed',
           details: error.response.data,
-          merchant_message: error.response.data?.cause?.[0]?.description || 'Unknown error',
+          merchant_message: error.response.data?.cause?.[0]?.description || error.response.data?.message || 'Unknown error',
         };
       } else if (error.request) {
         this.logger.error('[PIX] No response received:', error.request);

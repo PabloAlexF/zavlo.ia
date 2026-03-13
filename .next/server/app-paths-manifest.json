@@ -1,5 +1,7 @@
 {
   "/plans/page": "app/plans/page.js",
   "/checkout/confirm/page": "app/checkout/confirm/page.js",
-  "/checkout/payment/page": "app/checkout/payment/page.js"
+  "/checkout/payment/page": "app/checkout/payment/page.js",
+  "/page": "app/page.js",
+  "/auth/page": "app/auth/page.js"
 }
