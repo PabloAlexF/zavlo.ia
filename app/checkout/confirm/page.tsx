@@ -168,9 +168,15 @@ function ConfirmPlanContent() {
             <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-white/[0.04] rounded-full mb-3 sm:mb-4">
               <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
+<<<<<<< HEAD
             <h3 className="font-medium text-base sm:text-lg mb-1 sm:mb-2 text-white">Garantia de 7 dias</h3>
             <p className="text-gray-500 text-xs sm:text-sm">
               Não gostou? Devolvemos 100% do seu dinheiro, sem perguntas.
+=======
+            <h3 className="font-bold text-lg mb-2 text-white">Garantia de retorno</h3>
+            <p className="text-gray-400 text-sm">
+              Tenha resultados de busca pelo melhor preço em segundos !.
+>>>>>>> 15b082403b6873aa0431f97be60adbf49988bbbd
             </p>
           </div>
 
@@ -184,8 +190,13 @@ function ConfirmPlanContent() {
             <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
           </motion.button>
 
+<<<<<<< HEAD
           <p className="text-center text-xs sm:text-sm text-gray-600 mt-3 sm:mt-4">
             Pagamento seguro • Cancele quando quiser • Sem taxas ocultas
+=======
+          <p className="text-center text-sm text-gray-500 mt-4">
+            🔒 Pagamento seguro • ❗ Conta 100% segura • 💯 Sem taxas ocultas
+>>>>>>> 15b082403b6873aa0431f97be60adbf49988bbbd
           </p>
         </motion.div>
       </main>
