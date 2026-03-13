@@ -2,9 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Send, Sparkles, Loader2, X, Check, Coins, Menu, Plus, MessageSquare, Trash2, ChevronLeft, MapPin, Trophy, Flag, Bot, HelpCircle, Hash, Search, Globe, Zap, CheckCircle2, CreditCard, ArrowRight, Image as ImageIcon, Upload, ChevronDown, Smartphone, Headphones, Laptop, Tv, Shirt, Car, Home, Book } from 'lucide-react';
-import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { ChatSidebar } from '@/components/chat/ChatSidebar';
+import { ChatHeader } from '@/components/chat/ChatHeader';
+import { ChatInput } from '@/components/chat/ChatInput';
+import { ChatMessages } from '@/components/chat/ChatMessages';
+import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
 import { ProductCard } from '@/components/features/ProductCard';
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
@@ -94,7 +97,7 @@ export default function ChatPage() {
   const [userCredits, setUserCredits] = useState(0);
   
 // Sidebar states
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string>('');
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
@@ -378,6 +381,8 @@ const loadChatHistory = () => {
       setChatState('idle');
       setPendingSearch(null);
       contextManager.clear();
+      // Fecha sidebar no mobile ao selecionar conversa
+      if (window.innerWidth < 768) setSidebarOpen(false);
     }
   };
 
@@ -1714,968 +1719,101 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-[#0A0A0F] via-[#0F0F14] to-[#0A0A0F] flex overflow-hidden">
-      {/* Espaçador para o header global */}
-      <div className="h-14 sm:h-16 w-full fixed top-0 left-0 right-0 z-0" />
-      
-      {/* Sidebar */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.aside
-            initial={{ x: -280, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -280, opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-            className="w-72 border-r border-white/5 bg-black/40 backdrop-blur-2xl flex flex-col fixed md:relative z-[45]"
-            style={{ 
-              top: '3.5rem',
-              bottom: 0,
-              height: 'calc(100vh - 3.5rem)'
+    <div className="h-screen bg-[#0A0A12] flex overflow-hidden">
+      <ChatSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        chatHistory={chatHistory}
+        currentChatId={currentChatId}
+        userCredits={userCredits}
+        isCreatingNewChat={isCreatingNewChat}
+        onNewChat={createNewChat}
+        onLoadChat={loadChat}
+        onDeleteChat={deleteChat}
+      />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <ChatHeader
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          userCredits={userCredits}
+          onClearChat={createNewChat}
+        />
+
+        {messages.length === 1 && messages[0].type === 'ai' ? (
+          <QuickSuggestions
+            onSuggestionClick={(text) => {
+              setInput(text);
+              inputRef.current?.focus();
             }}
-          >
-            {/* Header da Sidebar */}
-            <div className="p-3 sm:p-4 border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-blue-400" />
-                <h2 className="text-sm font-semibold text-white">Conversas</h2>
-              </div>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="md:hidden p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4 text-gray-400" />
-              </button>
-            </div>
-
-            {/* New Chat Button */}
-            <div className="p-3">
-
-
-                <motion.button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    createNewChat();
-                  }}
-                  disabled={isCreatingNewChat}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={`w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border border-white/10 rounded-xl text-white transition-all text-xs sm:text-sm font-medium shadow-lg shadow-blue-500/5 ${isCreatingNewChat ? 'bg-gray-500/30 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20'}`}
-                >
-
-                  {isCreatingNewChat ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Criando...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      Nova conversa
-                    </>
-                  )}
-                </motion.button>
-
-            </div>
-
-            {/* Chat History */}
-            <div className="flex-1 overflow-y-auto px-3 py-2 custom-scrollbar">
-              {chatHistory.length === 0 ? (
-                <div className="text-center py-16 px-4">
-                  <motion.div 
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.3 }}
-                    className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-white/10"
-                  >
-                    <MessageSquare className="w-8 h-8 text-gray-500" />
-                  </motion.div>
-                  <p className="text-sm text-gray-500 font-medium mb-1">Nenhuma conversa</p>
-                  <p className="text-xs text-gray-600">Inicie uma nova busca!</p>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {chatHistory.map((chat, index) => (
-                    <motion.div
-                      key={chat.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      whileHover={{ x: 2 }}
-                      className={`group relative p-3 rounded-xl transition-all cursor-pointer ${
-                        currentChatId === chat.id
-                          ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-lg shadow-blue-500/10'
-                          : 'hover:bg-white/5 border border-transparent hover:border-white/10'
-                      }`}
-                      onClick={() => loadChat(chat.id)}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 transition-all ${
-                          currentChatId === chat.id 
-                            ? 'bg-blue-400 shadow-lg shadow-blue-400/50' 
-                            : 'bg-gray-600 group-hover:bg-gray-500'
-                        }`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-300 group-hover:text-white truncate transition-colors font-medium">
-                            {chat.title}
-                          </p>
-                          <p className="text-xs text-gray-600 mt-0.5">
-                            {chat.messages.length} mensagens
-                          </p>
-                        </div>
-                        <button
-                          onClick={(e) => deleteChat(chat.id, e)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-red-500/20 rounded-lg transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                          aria-label="Deletar conversa"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-gray-500 hover:text-red-400 transition-colors" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Footer da Sidebar */}
-            <div className="p-3 border-t border-white/5 bg-black/20">
-              <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                  <Coins className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500">Créditos</p>
-                  <p className="text-sm font-semibold text-white">{userCredits}</p>
-                </div>
-              </div>
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {/* Mobile Overlay */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed bg-black/80 backdrop-blur-sm z-[44] md:hidden"
-            style={{ 
-              top: '3.5rem',
-              left: 0,
-              right: 0,
-              bottom: 0
+            showMoreSuggestions={showMoreSuggestions}
+            onToggleMore={() => setShowMoreSuggestions(!showMoreSuggestions)}
+            isIntroduction={messages[0].content.includes('como posso te chamar')}
+          />
+        ) : (
+          <ChatMessages
+            messages={messages}
+            loading={loading}
+            userCredits={userCredits}
+            onSendMessage={handleSend}
+            onImageSearchReject={handleImageSearchReject}
+            onImagePriceSearch={handleImagePriceSearch}
+            onExecuteImageSearch={executeImageSearch}
+            onConfirmSearch={handleConfirmSearch}
+            onCancelSearch={handleCancelSearch}
+            isEditingQuery={isEditingQuery}
+            editedQuery={editedQuery}
+            onEditQueryChange={setEditedQuery}
+            onStartEditQuery={() => {
+              setIsEditingQuery(true);
+              const lastConfirmation = messages.findLast(m => m.type === 'confirmation');
+              if (lastConfirmation) setEditedQuery(lastConfirmation.content);
             }}
-            onClick={() => setSidebarOpen(false)}
+            onCancelEditQuery={() => {
+              setIsEditingQuery(false);
+              setEditedQuery('');
+            }}
+            onConfirmEditQuery={() => {
+              setMessages(prev => {
+                const updated = [...prev];
+                const idx = updated.findLastIndex(m => m.type === 'confirmation');
+                if (idx >= 0) updated[idx].content = editedQuery;
+                return updated;
+              });
+              setPendingSearch(prev => prev ? { ...prev, query: editedQuery } : prev);
+              setIsEditingQuery(false);
+              setEditedQuery('');
+            }}
+            onUpdateDetectedProduct={(messageId, newName) => {
+              setDetectedProductName(newName);
+              setMessages(prev => {
+                const updated = [...prev];
+                const idx = updated.findIndex(m => m.id === messageId);
+                if (idx >= 0 && updated[idx].detectedProduct) {
+                  updated[idx].detectedProduct = newName;
+                }
+                return updated;
+              });
+            }}
+            messagesEndRef={messagesEndRef}
           />
         )}
-      </AnimatePresence>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ marginTop: '3.5rem', height: 'calc(100dvh - 3.5rem)' }}>
-        {/* Header com Hamburguer - Logo abaixo do header global */}
-        <div className="border-b border-white/5 bg-black/95 backdrop-blur-2xl px-3 sm:px-4 md:px-6 h-14 sm:h-16 flex items-center justify-between flex-shrink-0 z-10">
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <motion.button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              className="p-2 sm:p-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 rounded-lg sm:rounded-xl flex-shrink-0 transition-all border-2 border-blue-500/30 hover:border-blue-500/50 shadow-xl shadow-blue-500/20"
-              aria-label="Toggle sidebar"
-            >
-              <motion.div
-                animate={{ rotate: sidebarOpen ? 180 : 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                {sidebarOpen ? (
-                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
-                ) : (
-                  <Menu className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
-                )}
-              </motion.div>
-            </motion.button>
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <Image 
-                src="/assets/icons/logo.ico" 
-                alt="Zavlo AI" 
-                width={32} 
-                height={32}
-                className="rounded-xl sm:rounded-2xl flex-shrink-0 shadow-lg shadow-purple-500/20 w-7 h-7 sm:w-9 sm:h-9"
-              />
-              <div className="min-w-0">
-                <h1 className="text-xs sm:text-sm font-semibold text-white truncate">Zavlo AI</h1>
-                <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Assistente de Compras</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0">
-            <motion.div 
-              whileHover={{ scale: 1.05 }}
-              className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-lg sm:rounded-xl shadow-lg shadow-yellow-500/5"
-            >
-              <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400" />
-              <span className="text-xs sm:text-sm font-semibold text-white">{userCredits}</span>
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div 
-          className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4 sm:py-6" 
-          style={{ 
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)'
+        <ChatInput
+          input={input}
+          onInputChange={setInput}
+          onSend={() => handleSend()}
+          onImageUpload={handleImageUpload}
+          onImageSearch={handleImageSearch}
+          uploadedImage={uploadedImage}
+          onRemoveImage={() => {
+            setUploadedImage(null);
+            setImageFile(null);
           }}
-        >
-          <div className="max-w-4xl mx-auto space-y-6">
-            {messages.length === 1 && messages[0].type === 'ai' && (
-              <div className="flex flex-col items-center gap-3 sm:gap-4 mt-4 sm:mt-8">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-purple-400" />
-                  <p className="text-sm sm:text-base font-semibold text-white">Sugestões Rápidas</p>
-                </div>
-                
-                {/* Sugestões de apresentação */}
-                {messages[0].content.includes('como posso te chamar') && (
-                  <div className="grid grid-cols-1 gap-2 w-full max-w-2xl">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        const name = prompt('👋 Qual é o seu nome?');
-                        if (name) {
-                          setInput(`Meu nome é ${name}`);
-                          inputRef.current?.focus();
-                        }
-                      }}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl text-white transition-all hover:shadow-lg"
-                    >
-                      <span className="text-sm sm:text-base font-medium">👤 Me apresentar</span>
-                    </motion.button>
-                    
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        setInput('Quero buscar um produto');
-                        inputRef.current?.focus();
-                      }}
-                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl text-white transition-all hover:shadow-lg"
-                    >
-                      <span className="text-sm sm:text-base font-medium">🛒 Começar a buscar</span>
-                    </motion.button>
-                  </div>
-                )}
-                
-                {/* Sugestões principais de produtos */}
-                {!messages[0].content.includes('como posso te chamar') && (
-                  <div className="grid grid-cols-2 gap-2 w-full max-w-2xl">
-                  {[
-                    { icon: <Smartphone className="w-4 h-4 sm:w-5 sm:h-5" />, text: 'iPhone 15 Pro', color: 'from-blue-500/20 to-purple-500/20 border-blue-500/30' },
-                    { icon: <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />, text: 'Fone até R$ 200', color: 'from-green-500/20 to-emerald-500/20 border-green-500/30' },
-                    { icon: <Laptop className="w-4 h-4 sm:w-5 sm:h-5" />, text: 'Notebook Gamer', color: 'from-purple-500/20 to-pink-500/20 border-purple-500/30' },
-                    { icon: <Tv className="w-4 h-4 sm:w-5 sm:h-5" />, text: 'Smart TV 50"', color: 'from-orange-500/20 to-red-500/20 border-orange-500/30' }
-                  ].map((suggestion, i) => (
-                    <motion.button
-                      key={i}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        setShowMoreSuggestions(false);
-                        setInput(suggestion.text);
-                        inputRef.current?.focus();
-                      }}
-                      className={`flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-3.5 bg-gradient-to-br ${suggestion.color} border rounded-xl text-white transition-all hover:shadow-lg`}
-                    >
-                      {suggestion.icon}
-                      <span className="truncate text-sm sm:text-base font-medium">{suggestion.text}</span>
-                    </motion.button>
-                  ))}
-                  </div>
-                )}
-
-                {/* Dropdown de mais sugestões */}
-                <div className="w-full max-w-2xl">
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={() => setShowMoreSuggestions(!showMoreSuggestions)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 sm:py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-colors"
-                  >
-                    <span className="text-sm sm:text-base font-medium">Mais sugestões</span>
-                    <motion.div
-                      animate={{ rotate: showMoreSuggestions ? 180 : 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <ChevronDown className="w-5 h-5" />
-                    </motion.div>
-                  </motion.button>
-
-                  <AnimatePresence>
-                    {showMoreSuggestions && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="mt-3 space-y-3">
-                          {/* Eletrônicos */}
-                          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Zap className="w-5 h-5 text-yellow-400" />
-                              <h3 className="text-sm font-semibold text-gray-300">Eletrônicos</h3>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { icon: <Smartphone className="w-4 h-4" />, text: 'Samsung Galaxy S24' },
-                                { icon: <Laptop className="w-4 h-4" />, text: 'MacBook Air M2' },
-                                { icon: <Headphones className="w-4 h-4" />, text: 'AirPods Pro' },
-                                { icon: <Tv className="w-4 h-4" />, text: 'PS5 Digital' }
-                              ].map((item, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => { setInput(item.text); setShowMoreSuggestions(false); inputRef.current?.focus(); }}
-                                  className="flex items-center gap-2 px-2.5 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors text-left"
-                                >
-                                  <div className="flex-shrink-0">{item.icon}</div>
-                                  <span className="text-xs sm:text-sm truncate">{item.text}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Moda */}
-                          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Shirt className="w-5 h-5 text-pink-400" />
-                              <h3 className="text-sm font-semibold text-gray-300">Moda</h3>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { text: 'Tênis Nike Air Max' },
-                                { text: 'Jaqueta de couro' },
-                                { text: 'Relógio Casio' },
-                                { text: 'Óculos Ray-Ban' }
-                              ].map((item, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => { setInput(item.text); setShowMoreSuggestions(false); inputRef.current?.focus(); }}
-                                  className="flex items-center gap-2 px-2.5 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors text-left"
-                                >
-                                  <Shirt className="w-4 h-4 flex-shrink-0" />
-                                  <span className="text-xs sm:text-sm truncate">{item.text}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Veículos */}
-                          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Car className="w-5 h-5 text-blue-400" />
-                              <h3 className="text-sm font-semibold text-gray-300">Veículos</h3>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { text: 'Honda Civic 2020' },
-                                { text: 'Moto Honda CG' },
-                                { text: 'Corolla 2019' },
-                                { text: 'Gol G7' }
-                              ].map((item, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => { setInput(item.text); setShowMoreSuggestions(false); inputRef.current?.focus(); }}
-                                  className="flex items-center gap-2 px-2.5 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors text-left"
-                                >
-                                  <Car className="w-4 h-4 flex-shrink-0" />
-                                  <span className="text-xs sm:text-sm truncate">{item.text}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Ajuda */}
-                          <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-xl p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <HelpCircle className="w-5 h-5 text-purple-400" />
-                              <h3 className="text-sm font-semibold text-gray-300">Comandos</h3>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { icon: <CreditCard className="w-4 h-4" />, text: 'meus créditos' },
-                                { icon: <Trophy className="w-4 h-4" />, text: 'planos' },
-                                { icon: <Bot className="w-4 h-4" />, text: 'como funciona' },
-                                { icon: <HelpCircle className="w-4 h-4" />, text: 'ajuda' }
-                              ].map((item, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => { setInput(item.text); setShowMoreSuggestions(false); inputRef.current?.focus(); }}
-                                  className="flex items-center gap-2 px-2.5 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors text-left"
-                                >
-                                  <div className="flex-shrink-0">{item.icon}</div>
-                                  <span className="text-xs sm:text-sm truncate">{item.text}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            )}
-            
-            <AnimatePresence>
-              {messages.map((message) => (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  {message.type === 'user' && (
-                    <motion.div 
-                      className="flex justify-end"
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                    >
-                      <div className="bg-blue-500/90 backdrop-blur-xl rounded-2xl rounded-tr-sm px-5 py-3.5 max-w-[85%] shadow-lg border border-blue-400/20">
-                        {message.imageData && (
-                          <div className="mb-3">
-                            <img 
-                              src={message.imageData} 
-                              alt="Imagem enviada" 
-                              className="rounded-xl max-w-[200px] border border-white/20"
-                            />
-                          </div>
-                        )}
-                        <p className="text-white whitespace-pre-wrap text-sm break-words">{message.content}</p>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {message.type === 'ai' && (
-                    <motion.div 
-                      className="flex justify-start gap-3"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                    >
-                      <div className="w-9 h-9 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <Sparkles className="w-4 h-4 text-blue-400" />
-                      </div>
-                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm px-5 py-4 max-w-[85%]">
-                        {message.content === 'searching_animation' ? (
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                              <motion.div
-                                animate={{ rotate: 360 }}
-                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                className="w-10 h-10 bg-blue-500/10 backdrop-blur-xl border border-blue-500/20 rounded-xl flex items-center justify-center"
-                              >
-                                <Search className="w-5 h-5 text-blue-400" />
-                              </motion.div>
-                              <div>
-                                <span className="text-white font-medium text-sm">Buscando produtos</span>
-                                <p className="text-gray-500 text-xs mt-0.5">Aguarde alguns instantes</p>
-                              </div>
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <motion.div 
-                                className="flex items-center gap-3 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.2 }}
-                              >
-                                <div className="w-2 h-2 bg-blue-400 rounded-full" />
-                                <span className="text-gray-300 text-sm">Analisando marketplaces</span>
-                              </motion.div>
-                              
-                              <motion.div 
-                                className="flex items-center gap-3 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.4 }}
-                              >
-                                <div className="w-2 h-2 bg-blue-400 rounded-full" />
-                                <span className="text-gray-300 text-sm">Comparando preços</span>
-                              </motion.div>
-                              
-                              <motion.div 
-                                className="flex items-center gap-3 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.6 }}
-                              >
-                                <div className="w-2 h-2 bg-blue-400 rounded-full" />
-                                <span className="text-gray-300 text-sm">Organizando resultados</span>
-                              </motion.div>
-                            </div>
-                          </div>
-                        ) : message.content === 'location_question' ? (
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-2.5">
-                              <MapPin className="w-4 h-4 text-blue-400" />
-                              <span className="text-white font-medium text-sm">Localização</span>
-                            </div>
-                            
-                            <p className="text-gray-300 text-sm">Quer buscar em alguma região específica?</p>
-                            
-                            <div className="space-y-2">
-                              <button
-                                onClick={() => handleSend('São Paulo')}
-                                className="w-full text-left px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
-                              >
-                                São Paulo
-                              </button>
-                              <button
-                                onClick={() => handleSend('Rio de Janeiro')}
-                                className="w-full text-left px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
-                              >
-                                Rio de Janeiro
-                              </button>
-                              <button
-                                onClick={() => handleSend('Minas Gerais')}
-                                className="w-full text-left px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
-                              >
-                                Minas Gerais
-                              </button>
-                            </div>
-                            
-                            <button
-                              onClick={() => handleSend('não')}
-                              className="w-full px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-white text-sm font-medium transition-colors"
-                            >
-                              Buscar em todo Brasil
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="text-gray-200 whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {message.type === 'category_question' && (
-                    <div className="flex justify-start">
-                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm p-5 max-w-lg w-full">
-                        <div className="flex items-center gap-2.5 mb-4">
-                          <Bot className="w-4 h-4 text-blue-400" />
-                          <span className="text-white font-medium text-sm">{message.content}</span>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          {message.categoryQuestion?.options?.map((option, i) => (
-                            <motion.button
-                              key={i}
-                              onClick={() => handleSend(option)}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: i * 0.05 }}
-                              whileHover={{ scale: 1.01 }}
-                              whileTap={{ scale: 0.99 }}
-                              className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm text-left transition-colors"
-                            >
-                              {option}
-                            </motion.button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {message.type === 'image_confirmation' && (
-                    <div className="flex justify-start">
-                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm p-5 max-w-lg w-full">
-                        <div className="flex items-center gap-2.5 mb-4">
-                          <Sparkles className="w-4 h-4 text-blue-400" />
-                          <span className="text-white font-medium text-sm">Produto identificado</span>
-                        </div>
-                        
-                        <div className="mb-4 p-4 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl">
-                          <input
-                            type="text"
-                            defaultValue={message.detectedProduct}
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              e.stopPropagation();
-                              if (e.key === 'Enter') {
-                                const newName = (e.target as HTMLInputElement).value;
-                                setDetectedProductName(newName);
-                                setMessages(prev => {
-                                  const updated = [...prev];
-                                  const idx = updated.findIndex(m => m.id === message.id);
-                                  if (idx >= 0 && updated[idx].detectedProduct) {
-                                    updated[idx].detectedProduct = newName;
-                                  }
-                                  return updated;
-                                });
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            className="w-full bg-transparent text-white text-sm outline-none border-b border-white/10 focus:border-blue-400/50 pb-2 transition-colors"
-                            placeholder="Edite o nome do produto..."
-                          />
-                          <p className="text-gray-500 text-xs mt-2">Pressione Enter para salvar</p>
-                        </div>
-                        
-                        <div className="space-y-2 mb-4 p-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-400">Identificação</span>
-
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-400">Busca de preços</span>
-                            <span className="text-white">+1 crédito</span>
-                          </div>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleImageSearchReject}
-                            disabled={loading || chatState === 'searching'}
-                            className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
-                          >
-                            Não
-                          </button>
-                          <button
-                            onClick={handleImagePriceSearch}
-                            disabled={loading || chatState === 'searching'}
-                            className="flex-1 px-4 py-2.5 bg-blue-500/90 hover:bg-blue-500 backdrop-blur-xl border border-blue-400/20 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
-                          >
-                            Sim, buscar
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {message.type === 'sort_question' && (
-                    <div className="flex justify-start">
-                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm p-5 max-w-lg w-full">
-                        <div className="flex items-center gap-2.5 mb-4">
-                          <Sparkles className="w-4 h-4 text-blue-400" />
-                          <span className="text-white font-medium text-sm">{message.content}</span>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <button
-                            onClick={() => executeImageSearch('BEST_MATCH')}
-                            disabled={loading}
-                            className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-left transition-colors disabled:opacity-50"
-                          >
-                            <div className="text-white text-sm font-medium">Maior relevância</div>
-                            <div className="text-gray-500 text-xs mt-0.5">Produtos mais relacionados</div>
-                          </button>
-                          
-                          <button
-                            onClick={() => executeImageSearch('LOWEST_PRICE')}
-                            disabled={loading}
-                            className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-left transition-colors disabled:opacity-50"
-                          >
-                            <div className="text-white text-sm font-medium">Menor preço</div>
-                            <div className="text-gray-500 text-xs mt-0.5">Do mais barato ao mais caro</div>
-                          </button>
-                          
-                          <button
-                            onClick={() => executeImageSearch('HIGHEST_PRICE')}
-                            disabled={loading}
-                            className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-left transition-colors disabled:opacity-50"
-                          >
-                            <div className="text-white text-sm font-medium">Maior preço</div>
-                            <div className="text-gray-500 text-xs mt-0.5">Do mais caro ao mais barato</div>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {message.type === 'confirmation' && (
-                    <div className="flex justify-start">
-                      <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-2xl rounded-tl-sm p-5 max-w-lg w-full">
-                        <div className="flex items-center gap-2.5 mb-4">
-                          <Search className="w-4 h-4 text-blue-400" />
-                          <span className="text-white font-medium text-sm">Confirmar busca</span>
-                        </div>
-                        
-                        <div className="mb-4 p-4 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl">
-                          <input
-                            type="text"
-                            value={isEditingQuery ? editedQuery : message.content}
-                            disabled={!isEditingQuery}
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              if (isEditingQuery) {
-                                setEditedQuery(e.target.value);
-                              }
-                            }}
-                            className={`w-full bg-transparent text-white text-base outline-none border-b pb-2 transition-colors ${
-                              isEditingQuery 
-                                ? 'border-blue-400/50 cursor-text' 
-                                : 'border-white/10 cursor-default opacity-80'
-                            }`}
-                            placeholder="Edite a busca..."
-                          />
-                          <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
-                            <CreditCard className="w-3.5 h-3.5" />
-                            <span>Custo: 1 crédito</span>
-                          </div>
-                        </div>
-                        
-                        {!isEditingQuery ? (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleCancelSearch}
-                              className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
-                            >
-                              Cancelar
-                            </button>
-                            <button
-                              onClick={() => {
-                                setIsEditingQuery(true);
-                                setEditedQuery(message.content);
-                              }}
-                              className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-white text-sm font-medium transition-colors"
-                            >
-                              Editar busca
-                            </button>
-                            <button
-                              onClick={handleConfirmSearch}
-                              disabled={loading || chatState === 'searching'}
-                              className="flex-1 px-4 py-2.5 bg-blue-500/90 hover:bg-blue-500 backdrop-blur-xl border border-blue-400/20 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
-                            >
-                              Confirmar
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setIsEditingQuery(false);
-                                setEditedQuery('');
-                              }}
-                              className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
-                            >
-                              Cancelar edição
-                            </button>
-                            <button
-                              onClick={() => {
-                                // Atualizar a mensagem com a query editada
-                                setMessages(prev => {
-                                  const updated = [...prev];
-                                  const idx = updated.findIndex(m => m.id === message.id);
-                                  if (idx >= 0) updated[idx].content = editedQuery;
-                                  return updated;
-                                });
-                                // Atualizar pendingSearch com a query editada
-                                setPendingSearch(prev => {
-                                  if (!prev) return prev;
-                                  return { ...prev, query: editedQuery };
-                                });
-                                setIsEditingQuery(false);
-                                setEditedQuery('');
-                              }}
-                              disabled={!editedQuery.trim()}
-                              className="flex-1 px-4 py-2.5 bg-green-500/90 hover:bg-green-500 backdrop-blur-xl border border-green-400/20 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
-                            >
-                              Confirmar edição
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {message.type === 'products' && (
-                    <div className="space-y-3 sm:space-y-4">
-                      {message.products && message.products.length > 0 && (
-                        <>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                            {/* Ordenar produtos por preço antes de renderizar */}
-                            {[...message.products]
-                              .sort((a, b) => a.price - b.price)
-                              .map((product, idx) => (
-                                <ProductCard key={product.id || idx} product={product} />
-                              ))}
-                          </div>
-                          
-                          {/* Success Message */}
-                          <div className="flex justify-center">
-                            <div className="bg-gradient-to-r from-green-500/10 via-emerald-500/10 to-teal-500/10 border border-green-500/30 rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl w-full">
-                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
-                                <div className="flex items-center gap-2 sm:gap-3">
-                                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500/20 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
-                                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
-                                  </div>
-                                  <div>
-                                    <h3 className="text-white font-semibold text-sm sm:text-base">Busca concluída!</h3>
-                                    <p className="text-gray-400 text-xs sm:text-sm">Encontramos {message.products.length} produtos para você</p>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-black/20 rounded-lg sm:rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 gap-3 sm:gap-0">
-                                <div className="flex items-center gap-2 sm:gap-3">
-                                  <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 flex-shrink-0" />
-                                  <div>
-                                    <p className="text-gray-400 text-[10px] sm:text-xs">Créditos utilizados</p>
-                                    <p className="text-white font-semibold text-xs sm:text-base">-1 crédito</p>
-                                  </div>
-                                </div>
-                                <div className="h-px w-full sm:h-8 sm:w-px bg-white/10" />
-                                <div className="flex items-center gap-2 sm:gap-3">
-                                  <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0" />
-                                  <div>
-                                    <p className="text-gray-400 text-[10px] sm:text-xs">Saldo restante</p>
-                                    <p className="text-white font-semibold text-xs sm:text-base">{message.content.match(/Restantes: (\d+)/)?.[1] || userCredits} créditos</p>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-gray-300 text-xs sm:text-sm">
-                                <Search className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400 flex-shrink-0" />
-                                <span className="text-[11px] sm:text-sm">Quer buscar outro produto?</span>
-                                <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 hidden sm:block" />
-                                <span className="text-white font-medium text-[11px] sm:text-sm">Digite agora!</span>
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </motion.div>
-              ))}
-            </AnimatePresence>
-
-            {loading && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-                <div className="bg-white/5 border border-white/10 rounded-2xl px-6 py-3">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                    <span className="text-gray-400 text-sm">Processando...</span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-        {/* Input */}
-        <div 
-          ref={inputContainerRef}
-          className="input-container-mobile border-t border-white/5 bg-black/95 backdrop-blur-2xl p-3 sm:p-4 flex-shrink-0 fixed bottom-0 left-0 right-0 z-50"
-          style={{
-            paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)'
-          }}
-        >
-          <div className="max-w-4xl mx-auto">
-            <AnimatePresence>
-              {uploadedImage && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
-                  className="mb-2"
-                >
-                  <div className="relative inline-block">
-                    <img 
-                      src={uploadedImage} 
-                      alt="Preview" 
-                      className="h-16 w-16 sm:h-20 sm:w-20 object-cover rounded-xl border-2 border-blue-500/50 shadow-lg shadow-blue-500/20"
-                    />
-                    <motion.button
-                      onClick={() => {
-                        setUploadedImage(null);
-                        setImageFile(null);
-                      }}
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      className="absolute -top-1 -right-1 p-1 bg-red-500 rounded-full hover:bg-red-600 transition shadow-lg"
-                    >
-                      <X className="w-3 h-3 text-white" />
-                    </motion.button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-              <motion.button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={loading}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="p-3 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-white disabled:opacity-50 transition-all flex-shrink-0 shadow-lg"
-                title="Buscar por imagem"
-              >
-                <ImageIcon className="w-5 h-5" />
-              </motion.button>
-              
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                onFocus={() => {
-                  setIsKeyboardOpen(true);
-                  setTimeout(() => {
-                    inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                  }, 300);
-                }}
-                onBlur={() => {
-                  setTimeout(() => setIsKeyboardOpen(false), 100);
-                }}
-                placeholder={uploadedImage ? "Ou digite..." : "Digite um produto..."}
-                className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 outline-none focus:border-blue-500/50 focus:bg-white/10 text-sm transition-all backdrop-blur-xl min-w-0"
-                disabled={loading}
-              />
-              
-              {uploadedImage ? (
-                <motion.button
-                  onClick={handleImageSearch}
-                  disabled={loading}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl text-white disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-500/30 flex-shrink-0 font-medium"
-                >
-                  <Search className="w-5 h-5" />
-                  <span className="text-sm hidden sm:inline">Buscar</span>
-                </motion.button>
-              ) : (
-                <motion.button
-                  onClick={() => handleSend()}
-                  disabled={loading || !input.trim()}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl text-white disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-500/30 flex-shrink-0 font-medium"
-                >
-                  <Send className="w-5 h-5" />
-                  <span className="text-sm hidden sm:inline">Enviar</span>
-                </motion.button>
-              )}
-            </div>
-          </div>
-        </div>
+          loading={loading}
+          inputRef={inputRef}
+          fileInputRef={fileInputRef}
+        />
       </div>
     </div>
   );

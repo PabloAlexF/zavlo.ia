@@ -4,11 +4,10 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QrCode as QrCodeIcon, Copy, Check, Clock, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { FileText, Copy, Check, Clock, AlertCircle, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import { QRCodeSVG } from 'qrcode.react';
 
-function PixPaymentContent() {
+function BoletoPaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [copied, setCopied] = useState(false);
@@ -17,15 +16,16 @@ function PixPaymentContent() {
   const [cancelling, setCancelling] = useState(false);
 
   const paymentId = searchParams.get('paymentId');
-  const qrCode = searchParams.get('qrCode');
+  const barcode = searchParams.get('barcode');
+  const ticketUrl = searchParams.get('ticketUrl');
   const amount = searchParams.get('amount');
   const plan = searchParams.get('plan');
 
   const copyToClipboard = () => {
-    if (qrCode) {
-      navigator.clipboard.writeText(qrCode);
+    if (barcode) {
+      navigator.clipboard.writeText(barcode);
       setCopied(true);
-      toast.success('Código PIX copiado!');
+      toast.success('Código de barras copiado!');
       setTimeout(() => setCopied(false), 2000);
     }
   };
@@ -68,24 +68,9 @@ function PixPaymentContent() {
   const cancelPayment = async () => {
     setCancelling(true);
     try {
-      const user = localStorage.getItem('zavlo_user');
-      if (!user) return;
-
-      const userData = JSON.parse(user);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
-
-      await fetch(`${API_URL}/payments/pix/${paymentId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userData.token}`,
-        },
-      });
-
       toast.success('Pagamento cancelado');
       router.push('/checkout/confirm');
     } catch (error) {
-      console.error('Erro ao cancelar:', error);
       toast.error('Erro ao cancelar pagamento');
     } finally {
       setCancelling(false);
@@ -96,7 +81,7 @@ function PixPaymentContent() {
   useEffect(() => {
     const interval = setInterval(() => {
       checkPaymentStatus();
-    }, 5000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [paymentId]);
@@ -114,12 +99,12 @@ function PixPaymentContent() {
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center">
-              <QrCodeIcon className="w-5 h-5 text-blue-400" />
+            <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center">
+              <FileText className="w-5 h-5 text-orange-400" />
             </div>
             <div>
               <h1 className="text-xl font-medium text-white">
-                Pagamento PIX
+                Pagamento Boleto
               </h1>
               <p className="text-sm text-gray-500">
                 Plano {plan} • R$ {amount}
@@ -135,86 +120,68 @@ function PixPaymentContent() {
         </motion.div>
 
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* QR Code Section */}
           <motion.div
             className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <div className="bg-white rounded-xl p-8 flex items-center justify-center mb-4">
-              {qrCode ? (
-                <QRCodeSVG 
-                  value={qrCode}
-                  size={240}
-                  level="H"
-                  includeMargin={true}
-                />
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
-                  <p className="text-sm text-gray-600">
-                    Gerando QR Code...
-                  </p>
-                </div>
-              )}
+            <h3 className="text-sm font-medium text-white mb-4">Código de Barras</h3>
+            
+            <div className="bg-white/[0.04] border border-white/[0.06] rounded-lg p-4 mb-4">
+              <p className="text-xs font-mono text-white break-all">
+                {barcode || 'Gerando código...'}
+              </p>
             </div>
-            <p className="text-center text-sm text-gray-400">
-              Escaneie com o app do seu banco
-            </p>
+
+            <button
+              onClick={copyToClipboard}
+              disabled={!barcode}
+              className="w-full py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-orange-600/50 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 mb-4"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Código Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copiar Código de Barras
+                </>
+              )}
+            </button>
+
+            {ticketUrl && (
+              <a
+                href={ticketUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Baixar Boleto PDF
+              </a>
+            )}
           </motion.div>
 
-          {/* Instructions & Copy Section */}
           <motion.div
             className="space-y-6"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
           >
-            {/* Copy Code */}
-            <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6">
-              <label className="block text-sm font-medium text-white mb-3">
-                Código PIX Copia e Cola
-              </label>
-              <div className="relative mb-4">
-                <input
-                  type="text"
-                  value={qrCode || ''}
-                  readOnly
-                  className="w-full px-4 py-3 bg-black/40 border border-white/[0.06] rounded-lg text-white text-xs font-mono pr-12 focus:outline-none focus:border-blue-500/50"
-                />
-                <button
-                  onClick={copyToClipboard}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
-                >
-                  {copied ? (
-                    <Check className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <Copy className="w-4 h-4 text-gray-400" />
-                  )}
-                </button>
-              </div>
-              <button
-                onClick={copyToClipboard}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <Copy className="w-4 h-4" />
-                {copied ? 'Código Copiado!' : 'Copiar Código PIX'}
-              </button>
-            </div>
-
-            {/* Status */}
             <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-blue-400" />
+                <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-orange-400" />
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-medium text-white">
                     Aguardando pagamento
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Verificando a cada 5 segundos
+                    Pode levar até 3 dias úteis
                   </p>
                 </div>
               </div>
@@ -227,20 +194,20 @@ function PixPaymentContent() {
               </button>
             </div>
 
-            {/* Instructions */}
             <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6">
               <h3 className="text-sm font-medium text-white mb-4">
                 Como pagar
               </h3>
               <ol className="space-y-3">
                 {[
-                  'Abra o app do seu banco',
-                  'Escolha pagar com PIX',
-                  'Escaneie o QR Code ou cole o código',
-                  'Confirme o pagamento'
+                  'Copie o código de barras acima',
+                  'Acesse o app ou site do seu banco',
+                  'Escolha "Pagar com código de barras"',
+                  'Cole o código e confirme o pagamento',
+                  'Ou baixe o PDF e pague em qualquer banco/lotérica'
                 ].map((step, i) => (
                   <li key={i} className="flex gap-3 text-sm text-gray-400">
-                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center text-xs font-medium">
+                    <span className="flex-shrink-0 w-6 h-6 bg-orange-500/10 text-orange-400 rounded-full flex items-center justify-center text-xs font-medium">
                       {i + 1}
                     </span>
                     <span className="pt-0.5">{step}</span>
@@ -248,10 +215,23 @@ function PixPaymentContent() {
                 ))}
               </ol>
             </div>
+
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+              <div className="flex gap-3">
+                <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-yellow-400 font-medium mb-1">
+                    Atenção
+                  </p>
+                  <p className="text-xs text-yellow-400/80">
+                    O boleto vence em 3 dias. Após o pagamento, pode levar até 2 dias úteis para compensação.
+                  </p>
+                </div>
+              </div>
+            </div>
           </motion.div>
         </div>
 
-        {/* Cancel Modal */}
         <AnimatePresence>
           {showCancelModal && (
             <motion.div
@@ -277,7 +257,7 @@ function PixPaymentContent() {
                       Cancelar pagamento?
                     </h3>
                     <p className="text-sm text-gray-400">
-                      O código PIX será invalidado e você precisará gerar um novo para concluir a compra.
+                      O boleto será invalidado e você precisará gerar um novo para concluir a compra.
                     </p>
                   </div>
                 </div>
@@ -305,14 +285,14 @@ function PixPaymentContent() {
   );
 }
 
-export default function PixPaymentPage() {
+export default function BoletoPaymentPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     }>
-      <PixPaymentContent />
+      <BoletoPaymentContent />
     </Suspense>
   );
 }

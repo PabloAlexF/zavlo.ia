@@ -12,10 +12,11 @@ export function PaymentMethodSelector({ selected, onSelect }: PaymentMethodSelec
   const methods = [
     { id: 'card' as const, label: 'Cartão de Crédito', icon: CreditCard },
     { id: 'pix' as const, label: 'PIX', icon: QrCode },
+    { id: 'boleto' as const, label: 'Boleto Bancário', icon: FileText },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-3 gap-4">
       {methods.map((method) => {
         const isSelected = selected === method.id;
         const Icon = method.icon;
