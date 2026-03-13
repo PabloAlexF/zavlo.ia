@@ -81,7 +81,7 @@ export class GoogleShoppingService {
       }
 
       // Mapear para formato Zavlo.ia
-      return filtered.map((item: any, index: number) => ({
+      const mapped = filtered.map((item: any, index: number) => ({
         id: item.offerId || item.productId || `product-${index}`,
         title: item.productTitle,
         price: this.parsePrice(item.price),
@@ -95,7 +95,49 @@ export class GoogleShoppingService {
         condition: this.detectCondition(item),
         category: 'geral',
         scrapedAt: new Date().toISOString(),
+        
+        // Campos que a API realmente retorna
+        storeRating: item.storeRating || null,
+        storeReviews: item.storeReviewCount || null,
+        
+        // Shipping (se existir)
+        shipping: item.shipping ? {
+          price: 0,
+          time: item.shipping,
+          free: this.isFreeShipping(item)
+        } : null,
+        
+        // Campos que podem não existir
+        originalPrice: item.originalPrice ? this.parsePrice(item.originalPrice) : null,
+        onSale: item.onSale || false,
+        percentOff: item.percentOff || null,
+        
+        // Especificações (se existirem)
+        brand: item.brand || null,
+        description: item.productDescription || null,
+        
+        // Disponibilidade
+        inStock: item.productCondition !== 'out_of_stock',
+        
+        // Confiabilidade
+        verified: false, // API não retorna isso
+        
+        // Ofertas
+        numOffers: item.productNumOffers || null,
       }));
+      
+      // Ordenar manualmente se necessário (garantia)
+      if (sortBy === 'LOWEST_PRICE') {
+        mapped.sort((a, b) => a.price - b.price);
+        this.logger.log('✅ Ordenado manualmente por MENOR PREÇO');
+        this.logger.log(`Primeiros 3 preços: ${mapped.slice(0, 3).map(p => `R$ ${p.price.toFixed(2)}`).join(', ')}`);
+      } else if (sortBy === 'HIGHEST_PRICE') {
+        mapped.sort((a, b) => b.price - a.price);
+        this.logger.log('✅ Ordenado manualmente por MAIOR PREÇO');
+        this.logger.log(`Primeiros 3 preços: ${mapped.slice(0, 3).map(p => `R$ ${p.price.toFixed(2)}`).join(', ')}`);
+      }
+      
+      return mapped;
     } catch (error) {
       this.logger.error(`Erro no Google Shopping: ${error.message}`);
       return [];
@@ -128,5 +170,26 @@ export class GoogleShoppingService {
     // Remove R$, pontos e converte vírgula para ponto
     const cleaned = priceStr.replace(/[R$\s.]/g, '').replace(',', '.');
     return parseFloat(cleaned) || 0;
+  }
+  
+  private isFreeShipping(item: any): boolean {
+    const shipping = (item.shipping || '').toLowerCase();
+    const shippingPrice = item.shippingPrice || '';
+    
+    return shipping.includes('grátis') || 
+           shipping.includes('free') || 
+           shippingPrice === '0' || 
+           shippingPrice === 'R$ 0,00';
+  }
+  
+  private calculateDiscount(currentPrice: string, originalPrice: string): number {
+    if (!currentPrice || !originalPrice) return 0;
+    
+    const current = this.parsePrice(currentPrice);
+    const original = this.parsePrice(originalPrice);
+    
+    if (original <= current) return 0;
+    
+    return Math.round(((original - current) / original) * 100);
   }
 }
