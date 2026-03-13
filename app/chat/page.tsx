@@ -1459,37 +1459,36 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
     const priceMax = categoryAnswers?.price_max;
     const storage = categoryAnswers?.storage;
     const sortBy = categoryAnswers?.sort_by;
-    const condition = overrideCondition || pendingSearch.condition; // ✅ Usar override se fornecido
+    const condition = overrideCondition || pendingSearch.condition;
     
     console.log(`🔍 buildFinalQuery - condition: "${condition}"`);
     
     const result = buildSearchQuery(
       parseProductQuery(pendingSearch.query),
-      condition, // ✅ Usar a condição correta
+      condition,
       pendingSearch.location,
-      undefined, // gender
+      undefined,
       priceMax,
       storage,
       sortBy
     );
     
-    console.log(`✅ buildFinalQuery - result.query: "${result.query}"`);
-    
-    console.log(`✅ buildFinalQuery - result.query: "${result.query}"`);
+    console.log(`✅ buildFinalQuery - result:`, result);
     
     return {
-      ...result,
+      query: result.query || '',
+      sortBy: result.sortBy || 'RELEVANCE',
       ...(pendingSearch.limit !== undefined && { limit: pendingSearch.limit }),
+      ...(result.minPrice !== undefined && { minPrice: result.minPrice }),
+      ...(result.maxPrice !== undefined && { maxPrice: result.maxPrice }),
       ...(pendingSearch.minPrice !== undefined && { minPrice: pendingSearch.minPrice }),
       ...(pendingSearch.maxPrice !== undefined && { maxPrice: pendingSearch.maxPrice })
     };
   };
 
   const buildCategoryQuery = (baseQuery: string, answers: CategoryAnswers, location?: string): { query: string; sortBy: string; minPrice?: number; maxPrice?: number } => {
-    // Parse do produto
     const parsed = parseProductQuery(baseQuery);
     
-    // Extrai dados das respostas
     const condition = answers?.condition;
     const priceMax = answers?.price_max;
     const storage = answers?.storage;
@@ -1507,7 +1506,6 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
       sortBy
     });
     
-    // Usa buildSearchQuery com Google Query Builder
     const result = buildSearchQuery(
       parsed,
       condition,
@@ -1519,7 +1517,12 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
     );
     
     console.log('🎯 Query final gerada:', result);
-    return result;
+    return {
+      query: result.query || '',
+      sortBy: result.sortBy || 'RELEVANCE',
+      ...(result.minPrice !== undefined && { minPrice: result.minPrice }),
+      ...(result.maxPrice !== undefined && { maxPrice: result.maxPrice })
+    };
   };
 
   const handleConfirmSearch = async () => {
@@ -2236,20 +2239,22 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                           <span className="text-white font-medium text-sm">{message.content}</span>
                         </div>
                         
-
-                                  <motion.button
-                                    key={i}
-                                    onClick={() => handleSend(option)}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.05 }}
-                                    whileHover={{ scale: 1.01 }}
-                                    whileTap={{ scale: 0.99 }}
-                                    className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm text-left transition-colors"
-                                  >
-                                    {option}
-                                  </motion.button>
-                                ))}
+                        <div className="space-y-2">
+                          {message.categoryQuestion?.options?.map((option, i) => (
+                            <motion.button
+                              key={i}
+                              onClick={() => handleSend(option)}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.05 }}
+                              whileHover={{ scale: 1.01 }}
+                              whileTap={{ scale: 0.99 }}
+                              className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm text-left transition-colors"
+                            >
+                              {option}
+                            </motion.button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   )}
