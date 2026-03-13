@@ -319,11 +319,30 @@ export function optimizeQueryOrder(parts) {
         }
     }
     // 4. ATRIBUTOS (256gb, preto, gamer)
-    if (parts.attributes) {
-        for (const attr of parts.attributes) {
-            // Só adiciona atributos que não estão no modelo
-            if (!parts.model || !parts.model.toLowerCase().includes(attr.toLowerCase())) {
-                ordered.push(attr);
+    if (parts.attributes && parts.attributes.length > 0) {
+        // Procura por palavras que são produtos (hd, ssd, mouse, teclado, etc)
+        const productKeywords = ['hd', 'ssd', 'mouse', 'teclado', 'monitor', 'webcam', 'headset', 'microfone', 'cabo', 'pen drive', 'pendrive', 'carregador', 'fonte', 'memoria', 'memória'];
+        const foundProduct = parts.attributes.find(attr => 
+            productKeywords.some(kw => attr.toLowerCase() === kw || attr.toLowerCase().startsWith(kw + ' '))
+        );
+        
+        if (foundProduct) {
+            // Coloca o produto primeiro (se ainda não foi adicionado)
+            if (!ordered.includes(foundProduct)) {
+                ordered.push(foundProduct);
+            }
+            // Adiciona os outros atributos depois
+            for (const attr of parts.attributes) {
+                if (attr !== foundProduct && (!parts.model || !parts.model.toLowerCase().includes(attr.toLowerCase()))) {
+                    ordered.push(attr);
+                }
+            }
+        } else {
+            // Sem produto detectado, adiciona atributos normalmente
+            for (const attr of parts.attributes) {
+                if (!parts.model || !parts.model.toLowerCase().includes(attr.toLowerCase())) {
+                    ordered.push(attr);
+                }
             }
         }
     }
