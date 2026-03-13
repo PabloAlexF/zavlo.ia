@@ -111,14 +111,17 @@ export function extractProductInfo(query) {
             break;
         }
     }
-    // Resto são atributos (remove condições)
+    // Resto são atributos (remove condições e preços, mas mantém especificações como "1tb", "256gb")
     const CONDITION_WORDS = new Set(['novo', 'nova', 'novos', 'novas', 'usado', 'usada', 'usados', 'usadas', 'seminovo', 'seminova']);
-    attributes = words.filter(word => !STOP_WORDS.has(word) &&
+    const PRICE_WORDS = new Set(['ate', 'até', 'abaixo', 'menor', 'maximo', 'máximo', 'reais', 'real']);
+    
+    attributes = words.filter(word => 
+        !STOP_WORDS.has(word) &&
         !CONDITION_WORDS.has(word) &&
+        !PRICE_WORDS.has(word) &&
         word !== brand &&
         word !== product &&
-        word !== model &&
-        !/\d+/.test(word) // Remove números de preço
+        word !== model
     );
     return {
         original: query,
