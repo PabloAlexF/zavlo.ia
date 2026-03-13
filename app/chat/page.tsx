@@ -108,14 +108,13 @@ export default function ChatPage() {
   const inputContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    // Foca no input apenas se nenhum outro input está focado
-    setTimeout(() => {
-      if (document.activeElement?.tagName !== 'INPUT') {
-        inputRef.current?.focus();
-      }
-    }, 100);
-  }, [messages]);
+    // Scroll suave apenas quando há nova mensagem (não no mount inicial)
+    if (messages.length > 1) {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      });
+    }
+  }, [messages.length]);
 
   // Detecta teclado virtual no mobile
   useEffect(() => {
@@ -135,8 +134,15 @@ export default function ChatPage() {
 
     const handleFocus = () => {
       setIsKeyboardOpen(true);
+      // Prevenir scroll automático indesejado
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        const container = document.querySelector('.overflow-y-auto');
+        if (container) {
+          const scrollHeight = container.scrollHeight;
+          const clientHeight = container.clientHeight;
+          const maxScroll = scrollHeight - clientHeight;
+          container.scrollTop = maxScroll;
+        }
       }, 300);
     };
     
@@ -798,6 +804,11 @@ const loadChatHistory = () => {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setLoading(true);
+    
+    // Scroll imediato após enviar mensagem
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 50);
 
     // NOVO: Detecta mudança de contexto APENAS quando idle E sem busca pendente
     if (!isInternal && chatState === 'idle' && !pendingSearch) {
@@ -2483,10 +2494,13 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                     <div className="space-y-3 sm:space-y-4">
                       {message.products && message.products.length > 0 && (
                         <>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                            {message.products.map((product, idx) => (
-                              <ProductCard key={product.id || idx} product={product} />
-                            ))}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                            {/* Ordenar produtos por preço antes de renderizar */}
+                            {[...message.products]
+                              .sort((a, b) => a.price - b.price)
+                              .map((product, idx) => (
+                                <ProductCard key={product.id || idx} product={product} />
+                              ))}
                           </div>
                           
                           {/* Success Message */}
