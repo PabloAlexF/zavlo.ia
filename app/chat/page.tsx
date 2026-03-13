@@ -2204,24 +2204,20 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                           <span className="text-white font-medium text-sm">{message.content}</span>
                         </div>
                         
-                        {message.categoryQuestion?.options && (
-                          <div className="space-y-2">
-                            {message.categoryQuestion.options.map((option, i) => (
-                              <motion.button
-                                key={i}
-                                onClick={() => handleSend(option)}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: i * 0.05 }}
-                                whileHover={{ scale: 1.01 }}
-                                whileTap={{ scale: 0.99 }}
-                                className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm text-left transition-colors"
-                              >
-                                {option}
-                              </motion.button>
-                            ))}
-                          </div>
-                        )}
+{['10 produtos', '20 produtos'].map((option, i) => (
+                                  <motion.button
+                                    key={i}
+                                    onClick={() => handleSend(option)}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.05 }}
+                                    whileHover={{ scale: 1.01 }}
+                                    whileTap={{ scale: 0.99 }}
+                                    className="w-full px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm text-left transition-colors"
+                                  >
+                                    {option}
+                                  </motion.button>
+                                ))}
                       </div>
                     </div>
                   )}
