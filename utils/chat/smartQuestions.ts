@@ -31,16 +31,20 @@ export function detectProvidedInfo(query: string, category?: string): Record<str
     console.log('✅ Detectou gênero: Unissex');
   }
   
-  // Detecta armazenamento APENAS para smartphone e notebook (valores válidos apenas)
-  if (category === 'smartphone' || category === 'notebook') {
-    const STORAGE_PATTERN = /\b(64|128|256|512|1024)\s*gb\b/i;
-    const match = normalized.match(STORAGE_PATTERN);
+  // Detecta armazenamento (para qualquer categoria, não apenas smartphone/notebook)
+  const STORAGE_PATTERN = /\b(64|128|256|512|1024|1|2|4)\s*(gb|tb)\b/i;
+  const match = normalized.match(STORAGE_PATTERN);
+  
+  if (match) {
+    const size = match[1];
+    const unit = match[2].toLowerCase();
     
-    if (match) {
-      const size = match[1];
+    if (unit === 'tb') {
+      provided.storage = size === '1' ? '1TB' : `${size}TB`;
+    } else {
       provided.storage = size === '1024' ? '1TB' : `${size}GB`;
-      console.log('✅ Detectou armazenamento:', provided.storage);
     }
+    console.log('✅ Detectou armazenamento:', provided.storage);
   }
   
   // Detecta tipo de móvel (genérico e escalável)
