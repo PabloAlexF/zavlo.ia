@@ -105,11 +105,17 @@ export function extractProductInfo(query) {
     // Detecta modelo (números + letras, mas NÃO especificações de armazenamento)
     const MODEL_BLACKLIST = new Set(['gamer', 'barato', 'novo', 'usado', 'seminovo', 'ultra', 'nova', 'novos', 'novas', 'usada', 'usados', 'usadas']);
     const STORAGE_PATTERN = /^\d+(gb|tb|mb)$/i; // Padrão de armazenamento: 1tb, 256gb, etc
+    const STORAGE_NUMBER_PATTERN = /^(64|128|256|512|1024|1|2|4)$/; // Números comuns de armazenamento
     const modelPattern = /\b(\d+[a-z]*|[a-z]+\d+|pro|max|mini|plus|se|note)\b/i;
     
     for (const word of words) {
         // Pula se for especificação de armazenamento
         if (STORAGE_PATTERN.test(word)) {
+            continue;
+        }
+        
+        // Pula se for número isolado de armazenamento (64, 128, 256, 512, 1024)
+        if (STORAGE_NUMBER_PATTERN.test(word)) {
             continue;
         }
         

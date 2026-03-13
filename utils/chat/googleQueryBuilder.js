@@ -38,11 +38,20 @@ export function buildGoogleSearchQuery(baseQuery, filters) {
     // 1. Base query (produto + marca + modelo)
     const cleanBase = baseQuery.trim();
     parts.push(cleanBase);
-    // 2. Adiciona condição (remove acentos)
+    // 2. Adiciona condição (APENAS se não estiver na query base)
     if (filters.condition && filters.condition !== 'Tanto faz') {
         const normalizedCondition = removeAccents(filters.condition.toLowerCase());
-        console.log(`🏷️ Condição adicionada à query: "${filters.condition}" → "${normalizedCondition}"`);
-        parts.push(normalizedCondition);
+        const queryLower = parts.join(' ').toLowerCase();
+        
+        // Verifica se já tem condição na query
+        const hasCondition = /\b(novo|nova|usado|usada|seminovo|lacrado|zero|0km)\b/i.test(queryLower);
+        
+        if (!hasCondition) {
+            parts.push(normalizedCondition);
+            console.log(`🏷️ Condição adicionada à query: "${filters.condition}" → "${normalizedCondition}"`);
+        } else {
+            console.log(`⚠️ Condição já presente na query, não adicionando novamente`);
+        }
     }
     // 3. PREÇO NÃO VAI NA QUERY - Extrair para filtro separado
     let minPrice;
@@ -62,9 +71,20 @@ export function buildGoogleSearchQuery(baseQuery, filters) {
     if (filters.location && filters.location !== 'não' && filters.location !== 'nao') {
         parts.push(removeAccents(filters.location));
     }
-    // 5. Adiciona armazenamento
+    // 5. Adiciona armazenamento (APENAS se não estiver na query base)
     if (filters.storage && filters.storage !== 'Tanto faz') {
-        parts.push(filters.storage);
+        const storageLower = filters.storage.toLowerCase();
+        const queryLower = parts.join(' ').toLowerCase();
+        
+        // Verifica se já tem armazenamento na query
+        const hasStorage = /\b(64|128|256|512|1024|1|2|4)\s*(gb|tb)\b/i.test(queryLower);
+        
+        if (!hasStorage) {
+            parts.push(filters.storage);
+            console.log(`💾 Armazenamento adicionado: ${filters.storage}`);
+        } else {
+            console.log(`⚠️ Armazenamento já presente na query, não adicionando novamente`);
+        }
     }
     // 6. Adiciona gênero (remove acentos)
     if (filters.gender) {
