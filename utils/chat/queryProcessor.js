@@ -85,11 +85,17 @@ export function extractProductInfo(query) {
             break;
         }
     }
+    // Lista de produtos conhecidos de 2 letras
+    const SHORT_PRODUCTS = new Set(['hd', 'tv', 'pc', 'ar']);
+    
     // Detecta produto principal (primeira palavra não-stop)
     for (const word of words) {
-        if (!STOP_WORDS.has(word) && word !== brand && word.length > 2) {
-            product = word;
-            break;
+        if (!STOP_WORDS.has(word) && word !== brand) {
+            // Aceita palavras com 3+ caracteres OU produtos conhecidos de 2 letras
+            if (word.length > 2 || SHORT_PRODUCTS.has(word)) {
+                product = word;
+                break;
+            }
         }
     }
     // Se não encontrou produto, usa a primeira palavra

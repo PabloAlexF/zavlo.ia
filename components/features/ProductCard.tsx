@@ -54,7 +54,10 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
   const images = product.images || [];
   const hasImage = images.length > 0;
   const hasMultipleImages = images.length > 1;
-  const location = typeof product.location === 'string' ? product.location : `${product.location?.city || ''}, ${product.location?.state || ''}`;
+  // Normalizar location com fallback seguro
+  const location = typeof product.location === 'string' 
+    ? product.location 
+    : [product.location?.city, product.location?.state].filter(Boolean).join(', ') || 'Brasil';
 
   const currentImageUrl = hasImage ? images[currentImageIndex] : null;
 
@@ -131,8 +134,7 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
   }, [currentUser, product, images, isFavorite]);
 
   return (
-    <Link href={`/product/${product.id}`}>
-      <div className="group cursor-pointer transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/20">
+    <div className="group transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/20">
         <div className="relative w-full bg-gradient-to-br from-white/5 to-white/[0.02] rounded-2xl overflow-hidden mb-4 shadow-lg border border-white/10" style={{ height: '280px', position: 'relative' }}>
           {hasImage && !imageError ? (
             <>
@@ -237,19 +239,18 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
           </div>
 
           {/* Action Button */}
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              window.open(product.sourceUrl, '_blank');
-            }}
+          <a
+            href={product.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="w-full mt-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-lg text-white text-sm font-medium flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-blue-500/20"
           >
             Ver Produto
             <ExternalLink className="w-4 h-4" />
-          </button>
+          </a>
         </div>
       </div>
-    </Link>
   );
 });
 

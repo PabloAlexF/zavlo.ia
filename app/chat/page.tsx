@@ -88,6 +88,8 @@ export default function ChatPage() {
   const [categoryAnswers, setCategoryAnswers] = useState<CategoryAnswers>({});
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
+  const [isEditingQuery, setIsEditingQuery] = useState(false);
+  const [editedQuery, setEditedQuery] = useState('');
 
   const [userCredits, setUserCredits] = useState(0);
   
@@ -926,7 +928,7 @@ const loadChatHistory = () => {
         timestamp: new Date(),
         categoryQuestion: {
           id: 'limit',
-          options: ['10 produtos', '20 produtos', '50 produtos', '100 produtos'],
+          options: ['10 produtos', '20 produtos'],
           category: 'limit'
         }
       };
@@ -940,15 +942,11 @@ const loadChatHistory = () => {
     if (chatState === 'awaiting_limit') {
       const limitInput = currentInput.trim().toLowerCase();
       
-      let limit = 50;
+      let limit = 10;
       if (limitInput.includes('10') || limitInput === '1') {
         limit = 10;
       } else if (limitInput.includes('20') || limitInput === '2') {
         limit = 20;
-      } else if (limitInput.includes('50') || limitInput === '3') {
-        limit = 50;
-      } else if (limitInput.includes('100') || limitInput === '4') {
-        limit = 100;
       }
       
       console.log(`🔢 Mapeamento limit: "${currentInput}" → ${limit}`);
@@ -2376,18 +2374,20 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                         <div className="mb-4 p-4 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-xl">
                           <input
                             type="text"
-                            defaultValue={message.content}
+                            value={isEditingQuery ? editedQuery : message.content}
+                            disabled={!isEditingQuery}
                             onClick={(e) => e.stopPropagation()}
                             onKeyDown={(e) => e.stopPropagation()}
                             onChange={(e) => {
-                              setMessages(prev => {
-                                const updated = [...prev];
-                                const idx = updated.findIndex(m => m.id === message.id);
-                                if (idx >= 0) updated[idx].content = e.target.value;
-                                return updated;
-                              });
+                              if (isEditingQuery) {
+                                setEditedQuery(e.target.value);
+                              }
                             }}
-                            className="w-full bg-transparent text-white text-base outline-none border-b border-white/10 focus:border-blue-400/50 pb-2 transition-colors"
+                            className={`w-full bg-transparent text-white text-base outline-none border-b pb-2 transition-colors ${
+                              isEditingQuery 
+                                ? 'border-blue-400/50 cursor-text' 
+                                : 'border-white/10 cursor-default opacity-80'
+                            }`}
                             placeholder="Edite a busca..."
                           />
                           <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
@@ -2396,21 +2396,66 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                           </div>
                         </div>
                         
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleCancelSearch}
-                            className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={handleConfirmSearch}
-                            disabled={loading || chatState === 'searching'}
-                            className="flex-1 px-4 py-2.5 bg-blue-500/90 hover:bg-blue-500 backdrop-blur-xl border border-blue-400/20 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
-                          >
-                            Confirmar
-                          </button>
-                        </div>
+                        {!isEditingQuery ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleCancelSearch}
+                              className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => {
+                                setIsEditingQuery(true);
+                                setEditedQuery(message.content);
+                              }}
+                              className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-white text-sm font-medium transition-colors"
+                            >
+                              Editar busca
+                            </button>
+                            <button
+                              onClick={handleConfirmSearch}
+                              disabled={loading || chatState === 'searching'}
+                              className="flex-1 px-4 py-2.5 bg-blue-500/90 hover:bg-blue-500 backdrop-blur-xl border border-blue-400/20 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                              Confirmar
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setIsEditingQuery(false);
+                                setEditedQuery('');
+                              }}
+                              className="flex-1 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 text-sm transition-colors"
+                            >
+                              Cancelar edição
+                            </button>
+                            <button
+                              onClick={() => {
+                                // Atualizar a mensagem com a query editada
+                                setMessages(prev => {
+                                  const updated = [...prev];
+                                  const idx = updated.findIndex(m => m.id === message.id);
+                                  if (idx >= 0) updated[idx].content = editedQuery;
+                                  return updated;
+                                });
+                                // Atualizar pendingSearch com a query editada
+                                setPendingSearch(prev => {
+                                  if (!prev) return prev;
+                                  return { ...prev, query: editedQuery };
+                                });
+                                setIsEditingQuery(false);
+                                setEditedQuery('');
+                              }}
+                              disabled={!editedQuery.trim()}
+                              className="flex-1 px-4 py-2.5 bg-green-500/90 hover:bg-green-500 backdrop-blur-xl border border-green-400/20 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                              Confirmar edição
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
