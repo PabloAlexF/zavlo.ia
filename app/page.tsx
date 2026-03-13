@@ -161,25 +161,17 @@ export default function Home() {
 
   return (
     <>
-      {/* Subtle background noise texture */}
-      <div className="fixed inset-0 bg-[#050409] pointer-events-none" />
-      <div className="fixed inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\'/%3E%3C/svg%3E")' }} />
+      {/* Subtle background */}
+      <div className="fixed inset-0 bg-black pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-to-b from-zinc-950 via-black to-zinc-950 pointer-events-none" />
 
-      {/* Very subtle warm glow — top center only */}
+      {/* Very subtle glow */}
       <motion.div
         className="fixed top-[-20%] left-1/2 -translate-x-1/2 w-[70vw] h-[50vw] max-w-[900px] max-h-[600px] rounded-full pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse, rgba(59, 130, 246, 0.08) 0%, transparent 70%)',
+          background: 'radial-gradient(ellipse, rgba(59, 130, 246, 0.04) 0%, transparent 70%)',
           x: orb1X,
           y: orb1Y,
-        }}
-      />
-      <motion.div
-        className="fixed bottom-[-20%] right-[-20%] w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse, rgba(249, 115, 22, 0.05) 0%, transparent 70%)',
-          x: orb2X,
-          y: orb2Y,
         }}
       />
 
@@ -197,38 +189,37 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
               >
-                {/* Eyebrow pill */}
                 <Link href="/chat" className="inline-block">
                   <motion.div
-                  className="inline-flex items-center gap-2 border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 px-4 py-1.5 rounded-full mb-8 transition-colors"
+                  className="inline-flex items-center gap-2 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06] px-3 sm:px-4 py-1.5 rounded-full mb-6 sm:mb-8 transition-colors"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.1 }}
                 >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                    <span className="text-xs font-medium text-blue-300 tracking-wide">Nova busca por imagem com IA generativa</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-blue-500" />
+                    <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-400" />
+                    <span className="text-[10px] sm:text-xs font-medium text-gray-400 tracking-wide">Nova busca por imagem com IA</span>
+                    <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
                   </motion.div>
                 </Link>
 
                 <motion.h1
-                  className="text-[clamp(2.5rem,7vw,4.5rem)] font-bold mb-6 leading-[1.1] tracking-[-0.04em]"
+                  className="text-[clamp(2rem,6vw,4rem)] font-semibold mb-4 sm:mb-6 leading-[1.1] tracking-tight"
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <span className="text-white">A busca inteligente pelo <span className="text-blue-400">menor preço</span>.</span>
+                  <span className="text-white">Encontre o <span className="text-blue-400">menor preço</span> em segundos.</span>
                 </motion.h1>
 
                 <motion.p
-                  className="text-[clamp(1rem,2vw,1.2rem)] text-gray-500 mb-10 max-w-lg mx-auto lg:mx-0 leading-relaxed"
+                  className="text-sm sm:text-base md:text-lg text-gray-500 mb-8 sm:mb-10 max-w-lg mx-auto lg:mx-0 leading-relaxed"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.25 }}
                 >
-                  A plataforma busca em{' '}
-                  <span className="text-gray-300 font-medium">todos os marketplaces do Brasil</span>{' '}
-                  automaticamente.
+                  Busca automática em{' '}
+                  <span className="text-gray-300 font-medium">todos os marketplaces</span>{' '}
+                  do Brasil.
                 </motion.p>
 
                 <motion.div
@@ -239,7 +230,7 @@ export default function Home() {
                 >
                   <Link href={user ? "/chat" : "/auth"} className="w-full sm:w-auto">
                     <motion.button
-                      className="w-full sm:w-auto group px-8 py-3.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-semibold text-white text-sm transition-colors duration-200 shadow-lg shadow-blue-600/20"
+                      className="w-full sm:w-auto group px-6 sm:px-8 py-3 sm:py-3.5 bg-white text-black hover:bg-gray-100 rounded-lg sm:rounded-xl font-medium text-sm transition-all"
                       whileTap={{ scale: 0.98 }}
                     >
                       <span className="flex items-center justify-center gap-2">
@@ -254,7 +245,7 @@ export default function Home() {
 
                   <Link href="#como-funciona" className="w-full sm:w-auto">
                     <motion.button
-                      className="w-full sm:w-auto px-8 py-3.5 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl font-medium text-sm text-gray-300 transition-colors duration-200"
+                      className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-3.5 border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] rounded-lg sm:rounded-xl font-medium text-sm text-gray-400 transition-all"
                       whileTap={{ scale: 0.98 }}
                     >
                       <span className="flex items-center justify-center gap-2">
@@ -265,16 +256,15 @@ export default function Home() {
                   </Link>
                 </motion.div>
 
-                {/* Trust row */}
                 <motion.div
-                  className="flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 text-xs text-gray-600"
+                  className="flex flex-wrap items-center justify-center lg:justify-start gap-x-4 sm:gap-x-5 gap-y-2 text-[10px] sm:text-xs text-gray-600"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.45 }}
                 >
-                  <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-green-500" />Plano gratuito</span>
-                  <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-blue-400" />Resultados em segundos</span>
-                  <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-blue-400/70" />100% seguro</span>
+                  <span className="flex items-center gap-1 sm:gap-1.5"><Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />Plano gratuito</span>
+                  <span className="flex items-center gap-1 sm:gap-1.5"><Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />Resultados em segundos</span>
+                  <span className="flex items-center gap-1 sm:gap-1.5"><Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />Seguro</span>
                 </motion.div>
               </motion.div>
 
@@ -291,19 +281,18 @@ export default function Home() {
         <AnimatedSection className="container mx-auto px-4 py-10 sm:py-20">
           <div className="max-w-7xl mx-auto grid lg:grid-cols-[1.3fr_1fr] gap-5">
 
-            {/* Comparison */}
             <motion.div
-              className="bg-gradient-to-b from-white/5 to-transparent border border-white/10 rounded-2xl p-7 sm:p-10 flex flex-col justify-between"
+              className="bg-white/[0.02] border border-white/[0.06] rounded-xl sm:rounded-2xl p-5 sm:p-7 md:p-10 flex flex-col justify-between"
               initial={{ opacity: 0, x: -16 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
             >
-              <div className="mb-8">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-orange-500/[0.08] border border-orange-500/20 rounded-full text-xs font-medium text-orange-400 mb-5">
+              <div className="mb-6 sm:mb-8">
+                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 bg-white/[0.04] border border-white/[0.06] rounded-full text-[10px] sm:text-xs font-medium text-gray-400 mb-4 sm:mb-5">
                   <Zap className="w-3 h-3" />
                   Antes vs Agora
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-bold leading-tight text-white">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold leading-tight text-white">
                   Pare de perder{' '}
                   <span className="text-red-400">tempo</span>{' '}
                   e{' '}
@@ -311,7 +300,7 @@ export default function Home() {
                 </h2>
               </div>
 
-              <div className="space-y-4 mb-8">
+              <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                 {[
                   { old: { icon: MousePointer, value: '15+ abas abertas', color: 'text-red-400' }, new: { icon: Sparkles, value: '1 busca inteligente', color: 'text-blue-300' } },
                   { old: { icon: Clock, value: 'Horas procurando', color: 'text-red-400' }, new: { icon: Zap, value: 'Segundos para o resultado', color: 'text-blue-300' } },
@@ -377,8 +366,7 @@ export default function Home() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
             >
-              {/* Stats */}
-              <div className="bg-gradient-to-b from-white/5 to-transparent border border-white/10 rounded-2xl p-6">
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6">
                 <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-widest mb-5">Plataforma</p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
@@ -400,8 +388,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Features */}
-              <div className="bg-gradient-to-b from-white/5 to-transparent border border-white/10 rounded-2xl p-6 flex-1">
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl sm:rounded-2xl p-4 sm:p-6 flex-1">
                 <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-widest mb-5">Recursos</p>
                 <div className="space-y-2">
                   {[
@@ -435,11 +422,11 @@ export default function Home() {
         {/* ─── MARKETPLACES ─── */}
         <AnimatedSection className="container mx-auto px-4 py-16 sm:py-24">
           <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
+            <div className="text-center mb-10 sm:mb-12">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-white mb-2 sm:mb-3">
                 Conectado aos maiores marketplaces
               </h2>
-              <p className="text-gray-500 text-sm sm:text-base max-w-xl mx-auto">Buscamos em tempo real para você economizar, cobrindo desde eletrônicos e moda até veículos e imóveis.</p>
+              <p className="text-gray-500 text-xs sm:text-sm md:text-base max-w-xl mx-auto">Buscamos em tempo real para você economizar</p>
             </div>
 
             <div className="flex flex-wrap justify-center gap-2.5">
@@ -456,7 +443,7 @@ export default function Home() {
               ].map((m) => (
                 <motion.span
                   key={m.name}
-                  className="px-5 py-2.5 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-gray-400 hover:text-white hover:border-white/20 transition-colors cursor-default"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 bg-white/[0.02] border border-white/[0.06] rounded-full text-xs sm:text-sm font-medium text-gray-400 hover:text-white hover:border-white/[0.12] transition-colors cursor-default"
                   whileHover={{ y: -2 }}
                 >
                   {m.name}
@@ -469,11 +456,11 @@ export default function Home() {
         {/* ─── HOW IT WORKS ─── */}
         <AnimatedSection id="como-funciona" className="container mx-auto px-4 py-16 sm:py-24">
           <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-16">
-              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
+            <div className="text-center mb-12 sm:mb-16">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-white mb-2 sm:mb-3">
                 Como funciona?
               </h2>
-              <p className="text-gray-500 text-sm sm:text-base">Em três passos simples, você vai do desejo à economia.</p>
+              <p className="text-gray-500 text-xs sm:text-sm md:text-base">Em três passos simples</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
@@ -510,15 +497,15 @@ export default function Home() {
                     <div className="hidden md:block absolute top-8 left-[calc(50%+60px)] right-[-50%] h-px bg-white/[0.06]" />
                   )}
 
-                  <div className="bg-gradient-to-b from-white/5 to-transparent border border-white/10 rounded-2xl p-7 hover:border-white/20 transition-colors group h-full">
-                    <div className="flex items-start justify-between mb-6">
-                      <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center">
-                        <item.icon className="w-5 h-5 text-blue-400" />
+                  <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl sm:rounded-2xl p-5 sm:p-7 hover:border-white/[0.12] transition-colors group h-full">
+                    <div className="flex items-start justify-between mb-4 sm:mb-6">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/[0.04] border border-white/[0.08] rounded-lg sm:rounded-xl flex items-center justify-center">
+                        <item.icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                       </div>
-                      <span className="text-4xl font-black text-white/10 group-hover:text-white/20 transition-colors select-none">{item.step}</span>
+                      <span className="text-3xl sm:text-4xl font-black text-white/[0.06] group-hover:text-white/[0.12] transition-colors select-none">{item.step}</span>
                     </div>
-                    <h3 className="text-base font-semibold text-white mb-2">{item.title}</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
+                    <h3 className="text-sm sm:text-base font-medium text-white mb-1.5 sm:mb-2">{item.title}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">{item.desc}</p>
                   </div>
                 </motion.div>
               ))}
@@ -528,21 +515,20 @@ export default function Home() {
 
         <LimitedOfferSection />
 
-        {/* ─── FOOTER ─── */}
-        <footer className="container mx-auto px-4 py-10 border-t border-white/10">
-          <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5">
+        <footer className="container mx-auto px-4 py-8 sm:py-10 border-t border-white/[0.06]">
+          <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-2.5">
               <Image
                 src="/assets/icons/logo.ico"
-                alt="Zavlo.ia Logo"
-                width={28}
-                height={28}
-                className="rounded-lg opacity-90"
+                alt="Zavlo Logo"
+                width={24}
+                height={24}
+                className="rounded-lg opacity-90 sm:w-7 sm:h-7"
               />
-              <span className="text-base font-semibold text-white">Zavlo.ia</span>
+              <span className="text-sm sm:text-base font-medium text-white">Zavlo</span>
             </div>
-            <p className="text-xs text-gray-700">
-              © {new Date().getFullYear()} Zavlo.ia · Todos os direitos reservados
+            <p className="text-[10px] sm:text-xs text-gray-700">
+              © {new Date().getFullYear()} Zavlo • Todos os direitos reservados
             </p>
           </div>
         </footer>
