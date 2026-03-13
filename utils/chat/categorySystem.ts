@@ -22,12 +22,13 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
     name: 'Smartphone',
     keywords: ['iphone', 'samsung', 'xiaomi', 'motorola', 'celular', 'smartphone', 'telefone', 'galaxy', 'redmi', 'cel', 'cell', 'android', 'ios'],
     patterns: [
-      /\biphone\s?\d+/i, 
-      /\bgalaxy\s?(s\d+|note|a\d+|j\d+)/i, 
-      /\bredmi\s?(note|\d+)/i, 
-      /\bmoto\s?g\d+/i, 
-      /\bcelular\b/i,
-      /\bsmartphone\b/i
+      // IMPORTANTE: Não matchar se tiver palavra de acessório antes
+      /(?<!capa\s)(?<!capinha\s)(?<!case\s)(?<!cover\s)(?<!carregador\s)(?<!pel[ií]cula\s)(?<!protetor\s)\biphone\s?\d+/i, 
+      /(?<!capa\s)(?<!capinha\s)(?<!case\s)(?<!cover\s)(?<!carregador\s)(?<!pel[ií]cula\s)(?<!protetor\s)\bgalaxy\s?(s\d+|note|a\d+|j\d+)/i, 
+      /(?<!capa\s)(?<!capinha\s)(?<!case\s)(?<!cover\s)(?<!carregador\s)(?<!pel[ií]cula\s)(?<!protetor\s)\bredmi\s?(note|\d+)/i, 
+      /(?<!capa\s)(?<!capinha\s)(?<!case\s)(?<!cover\s)(?<!carregador\s)(?<!pel[ií]cula\s)(?<!protetor\s)\bmoto\s?g\d+/i, 
+      /(?<!capa\s)(?<!capinha\s)(?<!case\s)(?<!cover\s)(?<!carregador\s)(?<!pel[ií]cula\s)(?<!protetor\s)\bcelular\b/i,
+      /(?<!capa\s)(?<!capinha\s)(?<!case\s)(?<!cover\s)(?<!carregador\s)(?<!pel[ií]cula\s)(?<!protetor\s)\bsmartphone\b/i
     ],
     questions: [
       {
@@ -206,8 +207,32 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
 
   acessorio: {
     name: 'Acessório',
-    keywords: ['oculos', 'óculos', 'luz azul', 'anti luz', 'óculos de grau', 'óculos solar', 'relogio', 'relógio', 'bolsa', 'mochila', 'carteira', 'cinto', 'bone', 'boné', 'chapeu', 'chapéu', 'luva', 'cachecol', 'gravata', 'pulseira', 'colar', 'brinco', 'anel'],
+    keywords: [
+      // Acessórios de moda
+      'oculos', 'óculos', 'luz azul', 'anti luz', 'óculos de grau', 'óculos solar', 
+      'relogio', 'relógio', 'bolsa', 'mochila', 'carteira', 'cinto', 
+      'bone', 'boné', 'chapeu', 'chapéu', 'luva', 'cachecol', 'gravata', 
+      'pulseira', 'colar', 'brinco', 'anel',
+      // Acessórios de eletrônicos (PRIORIDADE)
+      'capa', 'capinha', 'case', 'cover', 'carcaça', 'carcaca',
+      'carregador', 'fonte', 'adaptador', 'powerbank',
+      'pelicula', 'película', 'protetor', 'vidro',
+      'cabo', 'fio', 'usb',
+      'suporte', 'base', 'tripé', 'tripe',
+      'fone', 'fones', 'earphone', 'earphones', 'earbud', 'earbuds',
+      'headphone', 'headphones', 'headset',
+      'mouse', 'mousepad', 'teclado', 'keyboard'
+    ],
     patterns: [
+      // Acessórios de eletrônicos (ALTA PRIORIDADE)
+      /\b(capa|capinha|case|cover)\s+(de\s+)?(celular|iphone|samsung|galaxy|xiaomi|redmi|motorola|smartphone)/i,
+      /\b(capa|capinha|case|cover)\s+(para\s+)?(celular|iphone|samsung|galaxy|xiaomi|redmi|motorola|smartphone)/i,
+      /\b(carregador|fonte|adaptador)\s+(de\s+|para\s+)?(celular|iphone|samsung|notebook|laptop)/i,
+      /\b(pel[ií]cula|protetor|vidro)\s+(de\s+|para\s+)?(celular|iphone|samsung|tela)/i,
+      /\b(cabo|fio)\s+(usb|lightning|tipo\s?c|type\s?c)/i,
+      /\b(fone|headphone|headset|earphone|earbud)\s*(de\s+ouvido|bluetooth|sem\s+fio)?/i,
+      /\b(mouse|teclado|mousepad)\s*(gamer|sem\s+fio|bluetooth)?/i,
+      // Acessórios de moda
       /\b[oó]culos\b.*?(luz\s+azul|anti\s+luz|grau|sol|degrau)/i,
       /\banti[- ]?luz\b/i,
       /\b[lL]uz\s+[aA]zul\b/i,
@@ -282,29 +307,29 @@ const PRODUCT_MODEL_PATTERNS: Record<string, RegExp[]> = {
 
 // Objetos que SEMPRE indicam acessório (override forte)
 const HARD_ACCESSORY_OBJECTS = new Set([
-  'capa', 'case', 'capinha', 'cover',
-  'carregador', 'fonte', 'adaptador',
-  'pelicula', 'película', 'protetor',
-  'cabo', 'fio',
-  'suporte', 'base'
+  'capa', 'case', 'capinha', 'cover', 'carcaça', 'carcaca',
+  'carregador', 'fonte', 'adaptador', 'powerbank',
+  'pelicula', 'película', 'protetor', 'vidro',
+  'cabo', 'fio', 'usb',
+  'suporte', 'base', 'tripé', 'tripe',
+  'fone', 'fones', 'earphone', 'earphones', 'earbud', 'earbuds',
+  'headphone', 'headphones', 'headset',
+  'mouse', 'mousepad', 'teclado', 'keyboard'
 ]);
 
 // Dispositivos que podem ser eletrônicos OU acessórios (não forçar override)
-const DEVICE_ACCESSORIES = new Set([
-  'mouse', 'teclado', 'mousepad',
-  'fone', 'headset', 'earphone'
-]);
+// REMOVIDO: agora mouse, teclado e fone são SEMPRE acessórios via HARD_ACCESSORY_OBJECTS
 
 // Pré-filtro: tokens que indicam categoria (performance)
 const CATEGORY_TOKEN_HINTS: Record<string, Set<string>> = {
   smartphone: new Set(['iphone', 'celular', 'galaxy', 'redmi', 'smartphone', 'telefone', 'android', 'ios']),
   notebook: new Set(['notebook', 'laptop', 'macbook', 'thinkpad', 'inspiron']),
   calcado_roupa: new Set(['tenis', 'sapato', 'bota', 'sandalia', 'chinelo', 'camisa', 'calça', 'cloudrunner', 'airmax', 'air', 'max', 'ultraboost', 'pegasus', 'revolution', 'react']),
-  eletronico: new Set(['tv', 'televisao', 'monitor', 'playstation', 'xbox', 'nintendo', 'airpods', 'ipad', 'mouse', 'teclado', 'fone', 'headset']),
+  eletronico: new Set(['tv', 'televisao', 'monitor', 'playstation', 'xbox', 'nintendo', 'airpods', 'ipad']),
   eletrodomestico: new Set(['geladeira', 'fogao', 'microondas', 'secadora', 'freezer']),
   movel: new Set(['sofa', 'mesa', 'cadeira', 'cama', 'guarda', 'armario', 'estante', 'rack']),
   veiculo: new Set(['carro', 'moto', 'bicicleta', 'bike', 'automovel', 'veiculo']),
-  acessorio: new Set(['oculos', 'relogio', 'bolsa', 'mochila', 'carteira', 'cinto', 'bone', 'capa', 'carregador', 'pelicula', 'cabo'])
+  acessorio: new Set(['oculos', 'relogio', 'bolsa', 'mochila', 'carteira', 'cinto', 'bone', 'capa', 'capinha', 'case', 'cover', 'carregador', 'pelicula', 'película', 'protetor', 'cabo', 'fone', 'fones', 'headphone', 'headset', 'mouse', 'teclado', 'mousepad'])
 };
 
 // Marcas que não devem pontuar sozinhas (exceto samsung/lg que são fortemente eletrônicos)
@@ -369,6 +394,14 @@ export function detectProductCategoryWithRanking(query: string): Array<{category
   }
   
   // PRIORIDADE 1: Override para objetos de acessório HARD (após entity)
+  // Verifica primeiro token (mais importante) e depois todos
+  const firstToken = tokens[0];
+  if (firstToken && HARD_ACCESSORY_OBJECTS.has(firstToken)) {
+    if (DEBUG) console.log('⭐ Hard accessory object detected (first token):', firstToken);
+    return [{ category: 'acessorio', score: 100 }];
+  }
+  
+  // Verifica todos os tokens
   for (const token of tokens) {
     if (HARD_ACCESSORY_OBJECTS.has(token)) {
       if (DEBUG) console.log('⭐ Hard accessory object detected:', token);
@@ -466,13 +499,6 @@ export function detectProductCategoryWithRanking(query: string): Array<{category
         if (PRODUCT_NOUNS.has(keyword)) {
           hasProductNoun = true;
           if (DEBUG) console.log('✅ Product noun match:', keyword);
-        }
-        // Check if it's a device accessory (bonus for eletronico)
-        else if (DEVICE_ACCESSORIES.has(keyword)) {
-          if (categoryId === 'eletronico') {
-            score += 3;
-            if (DEBUG) console.log('✅ Device accessory bonus for eletronico:', keyword);
-          }
         }
         
         // Verifica se é apenas marca sem contexto
