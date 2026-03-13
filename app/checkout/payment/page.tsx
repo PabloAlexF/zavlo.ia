@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { CheckoutForm } from '@/components/checkout/CheckoutForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
-import { OrderSummary } from '@/components/checkout/OrderSummary';
+import { OrderSummary, calculateTotalWithFee } from '@/components/checkout/OrderSummary';
 import { CreditCardPreview } from '@/components/checkout/CreditCardPreview';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
@@ -58,7 +58,11 @@ function CheckoutContent() {
     console.log('🔵 Iniciando processo de pagamento...');
     console.log('📋 Dados do formulário:', formData);
     console.log('💳 Método de pagamento:', paymentMethod);
-    console.log('📦 Plano:', planName, '| Ciclo:', cycle, '| Preço:', price);
+    console.log('📦 Plano:', planName, '| Ciclo:', cycle, '| Preço base:', price);
+
+    // Calcular valor total com taxa
+    const totalWithFee = calculateTotalWithFee(price, paymentMethod);
+    console.log('💰 Valor com taxa:', totalWithFee);
 
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
       console.log('❌ Campos de contato incompletos');
@@ -86,6 +90,15 @@ function CheckoutContent() {
       if (!formData.cardNumber || !formData.cardName || !formData.expiryDate || !formData.cvv) {
         console.log('❌ Dados do cartão incompletos');
         toast.error('Preencha todos os dados do cartão');
+        return;
+      }
+    }
+
+    if (paymentMethod === 'boleto') {
+      console.log('💰 Validando dados para boleto...');
+      if (!formData.address || !formData.number || !formData.neighborhood || !formData.city || !formData.state || !formData.zipCode) {
+        console.log('❌ Endereço incompleto');
+        toast.error('Preencha o endereço completo para boleto');
         return;
       }
     }
@@ -160,10 +173,10 @@ function CheckoutContent() {
 
         console.log('✅ Token do cartão criado:', token.id);
 
-        // Enviar pagamento para backend
+        // Enviar pagamento para backend com valor atualizado
         const paymentPayload = {
           plan: planName,
-          amount: price,
+          amount: totalWithFee,  // Valor com taxa incluída
           cardToken: token.id,
           installments: 1,
           payer: {
@@ -246,7 +259,7 @@ function CheckoutContent() {
         
         const pixPayload = {
           plan: planName,
-          amount: price,
+          amount: totalWithFee,  // Valor com taxa incluída
           userId: userData.userId,
           userEmail: emailToUse,
           payer: {
@@ -283,11 +296,70 @@ function CheckoutContent() {
         if (data.qr_code) {
           console.log('✅ QR Code PIX gerado!');
           toast.success('QR Code PIX gerado!');
-          router.push(`/checkout/pix?paymentId=${data.id}&qrCode=${encodeURIComponent(data.qr_code)}`);
+          router.push(`/checkout/pix?paymentId=${data.id}&qrCode=${encodeURIComponent(data.qr_code)}&amount=${totalWithFee.toFixed(2)}&plan=${planName}`);
           return;
         } else {
           console.log('❌ QR Code não retornado:', data);
           throw new Error('QR Code não foi gerado. Tente novamente.');
+        }
+      }
+
+      // PAGAMENTO COM BOLETO
+      if (paymentMethod === 'boleto') {
+        console.log('💰 Processando pagamento com Boleto...');
+        
+        const boletoPayload = {
+          plan: planName,
+          amount: totalWithFee,  // Valor com taxa incluída
+          userId: userData.userId,
+          userEmail: formData.email || userData.email,
+          payer: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone,
+            cpf: formData.cpf,
+            address: {
+              zipCode: formData.zipCode,
+              street: formData.address,
+              number: formData.number,
+              complement: formData.complement || '',
+              neighborhood: formData.neighborhood,
+              city: formData.city,
+              state: formData.state,
+            },
+          },
+        };
+
+        console.log('📤 Enviando requisição Boleto:', boletoPayload);
+
+        const response = await fetch(`${API_URL}/payments/boleto`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userData.token}`,
+          },
+          body: JSON.stringify(boletoPayload),
+        });
+
+        console.log('📥 Resposta Boleto - Status:', response.status);
+
+        const data = await response.json();
+        console.log('📥 Resposta Boleto - Data:', data);
+
+        if (!response.ok) {
+          console.log('❌ Erro na resposta Boleto:', data);
+          throw new Error(data.message || data.merchant_message || 'Erro ao processar pagamento');
+        }
+
+        if (data.barcode || data.ticket_url) {
+          console.log('✅ Boleto gerado!');
+          toast.success('Boleto gerado!');
+          router.push(`/checkout/boleto?paymentId=${data.id}&barcode=${encodeURIComponent(data.barcode || '')}&ticketUrl=${encodeURIComponent(data.ticket_url || '')}&amount=${totalWithFee.toFixed(2)}&plan=${planName}`);
+          return;
+        } else {
+          console.log('❌ Boleto não retornado:', data);
+          throw new Error('Boleto não foi gerado. Tente novamente.');
         }
       }
 
@@ -387,6 +459,7 @@ function CheckoutContent() {
               cycle={cycle as 'monthly' | 'yearly'}
               loading={loading}
               onConfirm={handleConfirmPayment}
+              paymentMethod={paymentMethod}
             />
           </div>
         </div>

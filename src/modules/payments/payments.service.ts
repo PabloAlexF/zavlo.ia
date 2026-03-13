@@ -533,6 +533,134 @@ export class PaymentsService {
     }
   }
 
+  async createBoletoPayment(data: {
+    plan: string;
+    amount: number;
+    userId: string;
+    userEmail: string;
+    payer: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+      cpf: string;
+      address: {
+        zipCode: string;
+        street: string;
+        number: string;
+        complement?: string;
+        neighborhood: string;
+        city: string;
+        state: string;
+      };
+    };
+  }) {
+    try {
+      this.logger.log('[BOLETO] Starting payment creation...');
+      this.logger.log('[BOLETO] Input data:', { plan: data.plan, amount: data.amount, userId: data.userId });
+      
+      if (!this.accessToken) {
+        return {
+          error: true,
+          statusCode: 503,
+          message: 'Payment gateway is not configured',
+        };
+      }
+
+      // Limpar e formatar dados
+      const cpfClean = data.payer.cpf.replace(/\D/g, '');
+      const phoneClean = data.payer.phone.replace(/\D/g, '');
+      const zipCodeClean = data.payer.address.zipCode.replace(/\D/g, '');
+
+      // Data de expiração: 3 dias úteis
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 3);
+
+      const payload = {
+        transaction_amount: data.amount,
+        description: `Plano ${data.plan} - Zavlo.ia`,
+        payment_method_id: 'bolbradesco',
+        payer: {
+          email: data.payer.email,
+          first_name: data.payer.firstName,
+          last_name: data.payer.lastName,
+          identification: {
+            type: 'CPF',
+            number: cpfClean,
+          },
+          address: {
+            zip_code: zipCodeClean,
+            street_name: data.payer.address.street,
+            street_number: data.payer.address.number,
+            neighborhood: data.payer.address.neighborhood,
+            city: data.payer.address.city,
+            federal_unit: data.payer.address.state,
+          },
+        },
+        external_reference: `${data.userId}-${data.plan}`,
+        statement_descriptor: 'ZAVLO.IA',
+        date_of_expiration: expirationDate.toISOString(),
+        notification_url: `${this.configService.get('API_URL') || 'https://zavlo-ia.onrender.com/api/v1'}/payments/webhook`,
+      };
+
+      // Adicionar telefone se fornecido
+      if (phoneClean.length >= 10) {
+        payload.payer['phone'] = {
+          area_code: phoneClean.substring(0, 2),
+          number: phoneClean.substring(2),
+        };
+      }
+
+      this.logger.log('[BOLETO] Request payload:', JSON.stringify(payload, null, 2));
+
+      const response = await axios.post(
+        'https://api.mercadopago.com/v1/payments',
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': `${data.userId}-${data.plan}-${Date.now()}`,
+          },
+        }
+      );
+
+      this.logger.log('[BOLETO] Success! Payment ID:', response.data.id);
+      this.logger.log('[BOLETO] Response status:', response.data.status);
+
+      return {
+        id: response.data.id,
+        payment_id: response.data.id,
+        status: response.data.status,
+        barcode: response.data.barcode?.content,
+        ticket_url: response.data.transaction_details?.external_resource_url,
+        pdf_url: response.data.transaction_details?.external_resource_url,
+        expiration_date: response.data.date_of_expiration,
+      };
+    } catch (error) {
+      this.logger.error('[BOLETO] ERROR OCCURRED!');
+      this.logger.error('[BOLETO] Error message:', error.message);
+      
+      if (error.response) {
+        this.logger.error('[BOLETO] HTTP Status:', error.response.status);
+        this.logger.error('[BOLETO] Response Data:', JSON.stringify(error.response.data, null, 2));
+        
+        return {
+          error: true,
+          statusCode: error.response.status,
+          message: error.response.data?.message || 'Payment failed',
+          details: error.response.data,
+        };
+      }
+      
+      return {
+        error: true,
+        statusCode: 500,
+        message: error.message || 'Internal payment error',
+      };
+    }
+  }
+
   async confirmPixPayment(paymentId: string, userId: string) {
     try {
       this.logger.log(`[PIX CONFIRM] Checking payment ${paymentId} for user ${userId}`);

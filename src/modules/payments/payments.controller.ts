@@ -110,6 +110,53 @@ export class PaymentsController {
     return this.paymentsService.confirmPixPayment(paymentId, userId);
   }
 
+  @Post('pix/:paymentId/cancel')
+  @UseGuards(JwtAuthGuard)
+  async cancelPixPayment(
+    @CurrentUser() user: any,
+  ) {
+    const userId = user?.userId || user?.id;
+    this.logger.log(`Cancelando PIX para usuário: ${userId}`);
+    return { success: true, message: 'Pagamento cancelado' };
+  }
+
+  @Post('boleto')
+  @UseGuards(JwtAuthGuard)
+  async createBoletoPayment(
+    @CurrentUser() user: any,
+    @Body() body: { 
+      plan: string; 
+      amount: number;
+      userEmail?: string;
+      payer: {
+        firstName: string;
+        lastName: string;
+        email: string;
+        phone: string;
+        cpf: string;
+        address: {
+          zipCode: string;
+          street: string;
+          number: string;
+          complement?: string;
+          neighborhood: string;
+          city: string;
+          state: string;
+        };
+      };
+    },
+  ) {
+    const userId = user?.userId || user?.id;
+    this.logger.log(`Criando Boleto para usuário: ${userId}`);
+    return this.paymentsService.createBoletoPayment({
+      plan: body.plan,
+      amount: body.amount,
+      userId: userId,
+      userEmail: body.userEmail || body.payer.email || user.email,
+      payer: body.payer,
+    });
+  }
+
   @Post('pix-test')
   async createPixPaymentTest(
     @Body() body: { plan: string; amount: number },

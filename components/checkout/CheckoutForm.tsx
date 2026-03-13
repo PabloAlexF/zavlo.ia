@@ -20,6 +20,14 @@ export function CheckoutForm({ paymentMethod, onFormChange }: CheckoutFormProps)
     cardName: '',
     expiryDate: '',
     cvv: '',
+    // Campos de endereço para boleto
+    zipCode: '',
+    address: '',
+    number: '',
+    complement: '',
+    neighborhood: '',
+    city: '',
+    state: '',
   });
 
   const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -267,6 +275,150 @@ export function CheckoutForm({ paymentMethod, onFormChange }: CheckoutFormProps)
                     whileFocus={{ scale: 1.01 }}
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Address Information - Only for Boleto */}
+      {paymentMethod === 'boleto' && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <h3 className="text-lg font-semibold text-white mb-4">Endereço de Cobrança</h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">CEP</label>
+                <motion.input
+                  type="text"
+                  value={formData.zipCode}
+                  onChange={(e) => handleChange('zipCode', e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  onFocus={() => setFocusedField('zipCode')}
+                  onBlur={() => setFocusedField(null)}
+                  className={`w-full px-4 py-3 bg-white/[0.02] border rounded-xl text-white placeholder-gray-600 transition-all focus:outline-none ${
+                    focusedField === 'zipCode'
+                      ? 'border-blue-500 bg-white/[0.04]'
+                      : 'border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
+                  placeholder="00000000"
+                  maxLength={8}
+                  whileFocus={{ scale: 1.01 }}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-400 mb-2">Endereço</label>
+                <motion.input
+                  type="text"
+                  value={formData.address}
+                  onChange={(e) => handleChange('address', e.target.value)}
+                  onFocus={() => setFocusedField('address')}
+                  onBlur={() => setFocusedField(null)}
+                  className={`w-full px-4 py-3 bg-white/[0.02] border rounded-xl text-white placeholder-gray-600 transition-all focus:outline-none ${
+                    focusedField === 'address'
+                      ? 'border-blue-500 bg-white/[0.04]'
+                      : 'border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
+                  placeholder="Rua Exemplo"
+                  whileFocus={{ scale: 1.01 }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Número</label>
+                <motion.input
+                  type="text"
+                  value={formData.number}
+                  onChange={(e) => handleChange('number', e.target.value)}
+                  onFocus={() => setFocusedField('number')}
+                  onBlur={() => setFocusedField(null)}
+                  className={`w-full px-4 py-3 bg-white/[0.02] border rounded-xl text-white placeholder-gray-600 transition-all focus:outline-none ${
+                    focusedField === 'number'
+                      ? 'border-blue-500 bg-white/[0.04]'
+                      : 'border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
+                  placeholder="123"
+                  whileFocus={{ scale: 1.01 }}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-400 mb-2">Complemento (opcional)</label>
+                <motion.input
+                  type="text"
+                  value={formData.complement}
+                  onChange={(e) => handleChange('complement', e.target.value)}
+                  onFocus={() => setFocusedField('complement')}
+                  onBlur={() => setFocusedField(null)}
+                  className={`w-full px-4 py-3 bg-white/[0.02] border rounded-xl text-white placeholder-gray-600 transition-all focus:outline-none ${
+                    focusedField === 'complement'
+                      ? 'border-blue-500 bg-white/[0.04]'
+                      : 'border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
+                  placeholder="Apto 101"
+                  whileFocus={{ scale: 1.01 }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Bairro</label>
+              <motion.input
+                type="text"
+                value={formData.neighborhood}
+                onChange={(e) => handleChange('neighborhood', e.target.value)}
+                onFocus={() => setFocusedField('neighborhood')}
+                onBlur={() => setFocusedField(null)}
+                className={`w-full px-4 py-3 bg-white/[0.02] border rounded-xl text-white placeholder-gray-600 transition-all focus:outline-none ${
+                  focusedField === 'neighborhood'
+                    ? 'border-blue-500 bg-white/[0.04]'
+                    : 'border-white/[0.06] hover:border-white/[0.12]'
+                }`}
+                placeholder="Centro"
+                whileFocus={{ scale: 1.01 }}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-400 mb-2">Cidade</label>
+                <motion.input
+                  type="text"
+                  value={formData.city}
+                  onChange={(e) => handleChange('city', e.target.value)}
+                  onFocus={() => setFocusedField('city')}
+                  onBlur={() => setFocusedField(null)}
+                  className={`w-full px-4 py-3 bg-white/[0.02] border rounded-xl text-white placeholder-gray-600 transition-all focus:outline-none ${
+                    focusedField === 'city'
+                      ? 'border-blue-500 bg-white/[0.04]'
+                      : 'border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
+                  placeholder="São Paulo"
+                  whileFocus={{ scale: 1.01 }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Estado</label>
+                <motion.input
+                  type="text"
+                  value={formData.state}
+                  onChange={(e) => handleChange('state', e.target.value.toUpperCase().slice(0, 2))}
+                  onFocus={() => setFocusedField('state')}
+                  onBlur={() => setFocusedField(null)}
+                  className={`w-full px-4 py-3 bg-white/[0.02] border rounded-xl text-white placeholder-gray-600 transition-all focus:outline-none uppercase ${
+                    focusedField === 'state'
+                      ? 'border-blue-500 bg-white/[0.04]'
+                      : 'border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
+                  placeholder="SP"
+                  maxLength={2}
+                  whileFocus={{ scale: 1.01 }}
+                />
               </div>
             </div>
           </div>

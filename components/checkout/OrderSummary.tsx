@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, Info } from 'lucide-react';
 
 interface OrderSummaryProps {
   planName: string;
@@ -9,11 +9,30 @@ interface OrderSummaryProps {
   cycle: 'monthly' | 'yearly';
   loading?: boolean;
   onConfirm: () => void;
+  paymentMethod: 'card' | 'pix' | 'boleto';
 }
 
-export function OrderSummary({ planName, price, cycle, loading, onConfirm }: OrderSummaryProps) {
+// Taxas do Mercado Pago
+const PAYMENT_FEES = {
+  pix: { percentage: 0.99, fixed: 0 },
+  card: { percentage: 4.99, fixed: 0.40 },
+  boleto: { percentage: 3.49, fixed: 2.00 },
+};
+
+const PAYMENT_METHOD_LABELS = {
+  pix: 'PIX',
+  card: 'Cartão de Crédito',
+  boleto: 'Boleto Bancário',
+};
+
+export function OrderSummary({ planName, price, cycle, loading, onConfirm, paymentMethod }: OrderSummaryProps) {
   const monthlyPrice = cycle === 'yearly' ? price / 12 : price;
   const savings = cycle === 'yearly' ? (monthlyPrice * 12 - price).toFixed(2) : '0';
+
+  // Calcular taxa do método de pagamento
+  const fee = PAYMENT_FEES[paymentMethod];
+  const feeAmount = (price * fee.percentage / 100) + fee.fixed;
+  const totalWithFee = price + feeAmount;
 
   return (
     <motion.div
@@ -50,14 +69,28 @@ export function OrderSummary({ planName, price, cycle, loading, onConfirm }: Ord
         )}
       </div>
 
-      <div className="border-t border-white/[0.06] pt-4 mb-6">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm text-gray-400">Subtotal</span>
+      <div className="border-t border-white/[0.06] pt-4 mb-6 space-y-3">
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-400">Valor do plano</span>
           <span className="text-sm text-white">R$ {price.toFixed(2)}</span>
         </div>
+        
         <div className="flex justify-between items-center">
-          <span className="text-base font-medium text-white">Total</span>
-          <span className="text-2xl font-bold text-white">R$ {price.toFixed(2)}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm text-gray-400">Taxa {PAYMENT_METHOD_LABELS[paymentMethod]}</span>
+            <div className="group relative">
+              <Info className="w-3.5 h-3.5 text-gray-600 cursor-help" />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-gray-900 border border-white/[0.1] rounded-lg text-xs text-gray-300 z-10">
+                {fee.percentage}% + R$ {fee.fixed.toFixed(2)} por transação
+              </div>
+            </div>
+          </div>
+          <span className="text-sm text-orange-400">+ R$ {feeAmount.toFixed(2)}</span>
+        </div>
+
+        <div className="border-t border-white/[0.06] pt-3 flex justify-between items-center">
+          <span className="text-base font-medium text-white">Total a pagar</span>
+          <span className="text-2xl font-bold text-white">R$ {totalWithFee.toFixed(2)}</span>
         </div>
       </div>
 
@@ -83,4 +116,11 @@ export function OrderSummary({ planName, price, cycle, loading, onConfirm }: Ord
       </p>
     </motion.div>
   );
+}
+
+// Exportar função para calcular total com taxa
+export function calculateTotalWithFee(price: number, paymentMethod: 'card' | 'pix' | 'boleto'): number {
+  const fee = PAYMENT_FEES[paymentMethod];
+  const feeAmount = (price * fee.percentage / 100) + fee.fixed;
+  return price + feeAmount;
 }
