@@ -10,9 +10,14 @@ export function detectProvidedInfo(query: string, category?: string): Record<str
   console.log('🔍 Analisando query para informações:', normalized);
   console.log('🎯 Categoria:', category || 'não fornecida');
   
-  // NÃO detecta condição automaticamente - sempre perguntar
-  // Isso evita confusão quando o usuário digita "tenis nike air max 97 novo"
-  // e o sistema pula a pergunta de condição
+  // Detecta condição (novo/usado)
+  if (/\b(novo|nova|novos|novas|lacrado|lacrada|zero|0km)\b/i.test(normalized)) {
+    provided.condition = 'novo';
+    console.log('✅ Detectou condição: novo');
+  } else if (/\b(usado|usada|usados|usadas|seminovo|seminova|segunda\s*m[ãa]o)\b/i.test(normalized)) {
+    provided.condition = 'usado';
+    console.log('✅ Detectou condição: usado');
+  }
   
   // Detecta gênero
   if (/\b(masculino|masculina|homem|para homem|men)\b/i.test(normalized)) {
