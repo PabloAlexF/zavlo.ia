@@ -1060,20 +1060,20 @@ const loadChatHistory = () => {
         setMessages(prev => [...prev, questionMessage]);
         setLoading(false);
         return;
-      } else {
-        // Todas as perguntas respondidas, perguntar localização
-        console.log('✅ Todas as perguntas de categoria respondidas');
-        const aiMessage: Message = {
-          id: crypto.randomUUID(),
-          type: 'ai',
-          content: 'location_question',
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, aiMessage]);
-        setChatState('awaiting_location');
-        setLoading(false);
-        return;
       }
+      
+      // ✅ FIX: Todas as perguntas respondidas, perguntar localização
+      console.log('✅ Todas as perguntas de categoria respondidas');
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'ai',
+        content: 'location_question',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      setChatState('awaiting_location');
+      setLoading(false);
+      return;
     }
 
     // Estado: aguardando condição
@@ -1486,7 +1486,7 @@ const loadChatHistory = () => {
       setLoading(false);
   };
 
-const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: string; limit?: number; minPrice?: number; maxPrice?: number } => {
+const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: string; limit?: number } => {
     if (!pendingSearch) return { query: '', sortBy: 'RELEVANCE' };
     
     const priceMax = categoryAnswers?.price_max;
@@ -1511,15 +1511,11 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
     return {
       query: result.query || '',
       sortBy: result.sortBy || 'RELEVANCE',
-      ...(pendingSearch.limit !== undefined && { limit: pendingSearch.limit }),
-      ...(result.minPrice !== undefined && { minPrice: result.minPrice }),
-      ...(result.maxPrice !== undefined && { maxPrice: result.maxPrice }),
-      ...(pendingSearch.minPrice !== undefined && { minPrice: pendingSearch.minPrice }),
-      ...(pendingSearch.maxPrice !== undefined && { maxPrice: pendingSearch.maxPrice })
+      ...(pendingSearch.limit !== undefined && { limit: pendingSearch.limit })
     };
   };
 
-  const buildCategoryQuery = (baseQuery: string, answers: CategoryAnswers, location?: string): { query: string; sortBy: string; minPrice?: number; maxPrice?: number } => {
+  const buildCategoryQuery = (baseQuery: string, answers: CategoryAnswers, location?: string): { query: string; sortBy: string; limit?: number } => {
     const parsed = parseProductQuery(baseQuery);
     
     const condition = answers?.condition;
@@ -1553,8 +1549,7 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
     return {
       query: result.query || '',
       sortBy: result.sortBy || 'RELEVANCE',
-      ...(result.minPrice !== undefined && { minPrice: result.minPrice }),
-      ...(result.maxPrice !== undefined && { maxPrice: result.maxPrice })
+      ...(pendingSearch?.limit !== undefined && { limit: pendingSearch.limit })
     };
   };
 
@@ -1591,17 +1586,9 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
       // Construir URL com parâmetros
       const params = new URLSearchParams({
         query: searchParams.query,
-        limit: String(searchParams.limit || 50), // ✅ Usar limit do pendingSearch
+        limit: String(searchParams.limit || 50),
         sortBy: searchParams.sortBy
       });
-      
-      // ✅ Usar !== undefined ao invés de truthy check
-      if (searchParams.minPrice !== undefined) {
-        params.append('minPrice', String(searchParams.minPrice));
-      }
-      if (searchParams.maxPrice !== undefined) {
-        params.append('maxPrice', String(searchParams.maxPrice));
-      }
       
       const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
         method: 'GET',

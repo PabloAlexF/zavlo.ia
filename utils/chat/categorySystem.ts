@@ -138,7 +138,7 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
 
   eletronico: {
     name: 'Eletrônico',
-    keywords: ['televisao', 'monitor', 'fone', 'headset', 'mouse', 'teclado', 'camera', 'playstation', 'xbox', 'nintendo', 'airpods', 'ipad'],
+    keywords: ['televisao', 'monitor', 'fone', 'headset', 'mouse', 'teclado', 'camera', 'playstation', 'xbox', 'nintendo', 'airpods', 'ipad', 'hd', 'ssd', 'pendrive', 'pen drive', 'memoria', 'ram', 'placa', 'processador', 'cooler', 'gabinete', 'fonte pc', 'impressora', 'scanner', 'webcam', 'microfone', 'caixa de som', 'soundbar', 'chromecast', 'fire stick', 'alexa', 'google home', 'smart speaker', 'roteador', 'modem', 'switch', 'repetidor'],
     patterns: [
       /\b(tv|televisao)\s?\d{2}/i, 
       /\bmonitor\s?\d{2}/i,
@@ -146,7 +146,19 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
       /\b(playstation|xbox|nintendo)\b/i,
       /\b(airpods|ipad)\b/i,
       /\btv\b/i,
-      /\bmonitor\b/i
+      /\bmonitor\b/i,
+      /\b(hd|ssd)\s*(externo|interno)?/i,
+      /\b(pen\s?drive|pendrive)\b/i,
+      /\bmem[oó]ria\s*(ram|ddr)?/i,
+      /\bplaca\s*(de\s+)?v[ií]deo/i,
+      /\bprocessador\b/i,
+      /\bimpressora\b/i,
+      /\bwebcam\b/i,
+      /\bcaixa\s+de\s+som/i,
+      /\bsoundbar\b/i,
+      /\b(chromecast|fire\s?stick)\b/i,
+      /\b(alexa|google\s+home)\b/i,
+      /\broteador\b/i
     ],
     questions: [
       {
@@ -168,7 +180,7 @@ export const PRODUCT_CATEGORIES: Record<string, ProductCategory> = {
 
   calcado_roupa: {
     name: 'Calçado/Roupa',
-    keywords: ['tenis', 'tênis', 'sapato', 'bota', 'sandalia', 'chinelo', 'camisa', 'camiseta', 'calça', 'jaqueta', 'blusa', 'vestido', 'saia', 'shorts', 'corrida', 'esporte', 'cloudrunner', 'waterproof', 'running', 'trail', 'casual', 'chuteira', 'sapatilha'],
+    keywords: ['tenis', 'tênis', 'sapato', 'bota', 'sandalia', 'chinelo', 'camisa', 'camiseta', 'calça', 'jaqueta', 'blusa', 'vestido', 'saia', 'shorts', 'corrida', 'esporte', 'cloudrunner', 'waterproof', 'running', 'trail', 'casual', 'chuteira', 'sapatilha', 'meia', 'meias', 'cueca', 'calcinha', 'sutiã', 'sutia', 'lingerie', 'pijama', 'roupa intima'],
     patterns: [
       /\bt[eê]nis\b/i,
       /\bt[eê]nis\s+(de\s+)?(corrida|esporte|caminhada|treino)/i,
@@ -324,8 +336,8 @@ const HARD_ACCESSORY_OBJECTS = new Set([
 const CATEGORY_TOKEN_HINTS: Record<string, Set<string>> = {
   smartphone: new Set(['iphone', 'celular', 'galaxy', 'redmi', 'smartphone', 'telefone', 'android', 'ios']),
   notebook: new Set(['notebook', 'laptop', 'macbook', 'thinkpad', 'inspiron']),
-  calcado_roupa: new Set(['tenis', 'sapato', 'bota', 'sandalia', 'chinelo', 'camisa', 'calça', 'cloudrunner', 'airmax', 'air', 'max', 'ultraboost', 'pegasus', 'revolution', 'react']),
-  eletronico: new Set(['tv', 'televisao', 'monitor', 'playstation', 'xbox', 'nintendo', 'airpods', 'ipad']),
+  calcado_roupa: new Set(['tenis', 'sapato', 'bota', 'sandalia', 'chinelo', 'camisa', 'calça', 'cloudrunner', 'airmax', 'air', 'max', 'ultraboost', 'pegasus', 'revolution', 'react', 'meia', 'meias', 'cueca', 'calcinha', 'sutia', 'sutiã', 'lingerie', 'pijama', 'roupa']),
+  eletronico: new Set(['tv', 'televisao', 'monitor', 'playstation', 'xbox', 'nintendo', 'airpods', 'ipad', 'hd', 'ssd', 'pendrive', 'pen', 'drive', 'memoria', 'ram', 'placa', 'processador', 'impressora', 'webcam', 'microfone', 'caixa', 'som', 'soundbar', 'chromecast', 'fire', 'stick', 'alexa', 'google', 'home', 'roteador', 'modem']),
   eletrodomestico: new Set(['geladeira', 'fogao', 'microondas', 'secadora', 'freezer']),
   movel: new Set(['sofa', 'mesa', 'cadeira', 'cama', 'guarda', 'armario', 'estante', 'rack']),
   veiculo: new Set(['carro', 'moto', 'bicicleta', 'bike', 'automovel', 'veiculo']),
@@ -339,10 +351,10 @@ const BRAND_ONLY_KEYWORDS = new Set([
 
 // Substantivos de produto (peso maior que marcas)
 const PRODUCT_NOUNS = new Set([
-  'tenis', 'sapato', 'bota', 'sandalia', 'chinelo',
+  'tenis', 'sapato', 'bota', 'sandalia', 'chinelo', 'meia', 'meias',
   'celular', 'smartphone', 'telefone',
   'notebook', 'laptop',
-  'tv', 'televisao', 'monitor',
+  'tv', 'televisao', 'monitor', 'hd', 'ssd', 'pendrive', 'memoria', 'impressora',
   'geladeira', 'fogao', 'microondas',
   'sofa', 'mesa', 'cadeira', 'cama',
   'carro', 'moto', 'bicicleta', 'bike',
@@ -377,23 +389,7 @@ export function detectProductCategoryWithRanking(query: string): Array<{category
   
   const DEBUG = process.env.NODE_ENV === 'development';
   
-  // PRIORIDADE 0: Detecta categoria via entity (iPhone, PS5, MacBook)
-  const entity = detectProductEntity(query);
-  if (entity.category) {
-    const categoryMap: Record<string, string> = {
-      'smartphone': 'smartphone',
-      'laptop': 'notebook',
-      'tablet': 'eletronico',
-      'console': 'eletronico'
-    };
-    const mappedCategory = categoryMap[entity.category];
-    if (mappedCategory) {
-      if (DEBUG) console.log('⭐ Entity category detected:', mappedCategory);
-      return [{ category: mappedCategory, score: 100 }];
-    }
-  }
-  
-  // PRIORIDADE 1: Override para objetos de acessório HARD (após entity)
+  // PRIORIDADE 0: Override para objetos de acessório HARD (ANTES de entity)
   // Verifica primeiro token (mais importante) e depois todos
   const firstToken = tokens[0];
   if (firstToken && HARD_ACCESSORY_OBJECTS.has(firstToken)) {
@@ -406,6 +402,22 @@ export function detectProductCategoryWithRanking(query: string): Array<{category
     if (HARD_ACCESSORY_OBJECTS.has(token)) {
       if (DEBUG) console.log('⭐ Hard accessory object detected:', token);
       return [{ category: 'acessorio', score: 100 }];
+    }
+  }
+  
+  // PRIORIDADE 1: Detecta categoria via entity (iPhone, PS5, MacBook)
+  const entity = detectProductEntity(query);
+  if (entity.category) {
+    const categoryMap: Record<string, string> = {
+      'smartphone': 'smartphone',
+      'laptop': 'notebook',
+      'tablet': 'eletronico',
+      'console': 'eletronico'
+    };
+    const mappedCategory = categoryMap[entity.category];
+    if (mappedCategory) {
+      if (DEBUG) console.log('⭐ Entity category detected:', mappedCategory);
+      return [{ category: mappedCategory, score: 100 }];
     }
   }
   
