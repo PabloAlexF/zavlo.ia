@@ -1,8 +1,4 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/chat/page": "app/chat/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/checkout/confirm/page": "app/checkout/confirm/page.js",
-  "/auth/page": "app/auth/page.js",
-  "/plans/page": "app/plans/page.js"
+  "/page": "app/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js"
 }
