@@ -31,11 +31,11 @@ export function detectProvidedInfo(query: string, category?: string): Record<str
     console.log('✅ Detectou gênero: Unissex');
   }
   
-  // Detecta armazenamento (para qualquer categoria, não apenas smartphone/notebook)
+  // Detecta armazenamento APENAS para categorias relevantes (sem acessório)
   const STORAGE_PATTERN = /\b(64|128|256|512|1024|1|2|4)\s*(gb|tb)\b/i;
   const match = normalized.match(STORAGE_PATTERN);
   
-  if (match) {
+  if ((category === 'smartphone' || category === 'notebook' || category === 'tablet') && match) {
     const size = match[1];
     const unit = match[2].toLowerCase();
     
@@ -88,3 +88,4 @@ export function needsGenderQuestion(query: string): boolean {
 export function filterQuestions(questions: CategoryQuestion[], providedInfo: Record<string, string>): CategoryQuestion[] {
   return questions.filter(question => !providedInfo[question.id]);
 }
+
