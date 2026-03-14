@@ -8,6 +8,62 @@ function normalize(str: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+// ✅ NORMALIZAÇÃO DE STORAGE - CORREÇÃO CRÍTICA
+export function normalizeStorage(input: string): string {
+  let normalized = input.toLowerCase();
+  
+  // Unidades por extenso → abreviação (1 tera → 1tb, 500 giga → 500gb)
+  normalized = normalized
+    .replace(/(\d+(?:\.\d+)?)\s*(tera(s?bytes?)?|tb?)/gi, '$1tb')
+    .replace(/(\d+(?:\.\d+)?)\s*(giga(s?bytes?)?|gb?)/gi, '$1gb')
+    .replace(/(\d+(?:\.\d+)?)\s*(mega(s?bytes?)?|mb?)/gi, '$1mb')
+    .replace(/(\d+(?:\.\d+)?)\s*(kilo(s?bytes?)?|kb?)/gi, '$1kb');
+  
+  // Remove espaços extras e padroniza case (1TB → 1tb)
+  return normalized.replace(/\s+/g, ' ').trim();
+}
+
+// ✅ DEDUPLICAÇÃO DE TOKENS - CORREÇÃO CRÍTICA
+export function deduplicateTokens(tokens: string[]): string[] {
+  const normalized = tokens.map(t => normalize(t));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  
+  for (let i = 0; i < normalized.length; i++) {
+    const normToken = normalized[i];
+    const originalToken = tokens[i];
+    
+    // Skip se já visto (case insensitive)
+    if (seen.has(normToken)) continue;
+    
+    seen.add(normToken);
+    result.push(originalToken);
+  }
+  
+  return result;
+}
+
+// ✅ OTIMIZAÇÃO DE ORDEM DE PALAVRAS (produto + specs)
+export function optimizeWordOrder(tokens: string[]): string[] {
+  const normalizedTokens = tokens.map(t => normalize(t));
+  
+  // 1. Identifica produto principal (não é spec técnica)
+  const productCandidates = tokens.filter((_, i) => 
+    !/^(tb|gb|mb|kb|hz|pol|polegadas|"|')$/i.test(tokens[i]) &&
+    !/^\d+$/.test(tokens[i])
+  );
+  
+  // 2. Identifica specs técnicas (tb, gb, números)
+  const specs = tokens.filter(t => 
+    /tb|gb|hz|pol|polegadas/i.test(t) || /^\d+\.?\d*$/.test(t)
+  );
+  
+  // 3. Prioridade: produto primeiro → specs → resto
+  return [...productCandidates.slice(0, 2), ...specs, ...tokens.filter(t => 
+    !productCandidates.includes(t) && !specs.includes(t)
+  )];
+}
+
 // Padrões de intenção de compra que devem ser removidos
 const PURCHASE_INTENT_PATTERNS = [
   /^(eu\s+)?(estou|to|tou)\s+(querendo|buscando|procurando|interessado|interessada)\s+/i,
@@ -103,6 +159,9 @@ const CHEAP_WORDS = new Set(['barato', 'economico', 'promocao', 'oferta']);
 export function cleanProductQuery(query: string): string {
   let cleaned = query.toLowerCase().trim();
   
+  // ✅ APLICA NORMALIZAÇÃO DE STORAGE PRIMEIRO
+  cleaned = normalizeStorage(cleaned);
+  
   for (const pattern of PURCHASE_INTENT_PATTERNS) {
     cleaned = cleaned.replace(pattern, '');
   }
@@ -115,6 +174,11 @@ export function cleanProductQuery(query: string): string {
   
   cleaned = cleaned.replace(/[^\w\s+\-$áàâãéèêíïóôõöúçñ]/g, ' ');
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  // ✅ DEDUPLICA TOKENS na limpeza
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  const dedupedTokens = deduplicateTokens(tokens);
+  cleaned = dedupedTokens.join(' ');
   
   const result = cleaned.trim();
   return result || query.toLowerCase().trim();
@@ -138,7 +202,9 @@ export function suggestQueryImprovements(query: string): string[] {
 }
 
 export function extractProductInfo(query: string) {
-  const cleaned = cleanProductQuery(query);
+  // ✅ NORMALIZA STORAGE PRIMEIRO
+  const normalizedQuery = normalizeStorage(query);
+  const cleaned = cleanProductQuery(normalizedQuery);
   const normalized = normalize(cleaned);
   const words = normalized.split(/\s+/).filter(word => word.length > 0);
   
@@ -160,7 +226,7 @@ export function extractProductInfo(query: string) {
   let attributes: string[] = [];
   
   // ✅ Detecta faixa de preço (entre 2.5k e 4k)
-  const priceRangeMatch = query.match(PRICE_RANGE_REGEX);
+  const priceRangeMatch = normalizedQuery.match(PRICE_RANGE_REGEX);
   if (priceRangeMatch) {
     let min = priceRangeMatch[2];
     let max = priceRangeMatch[6];
@@ -180,7 +246,7 @@ export function extractProductInfo(query: string) {
   
   // ✅ Detecta preço máximo (até 3k, R$ 2.5k)
   if (!priceMax) {
-    const priceMatch = query.match(PRICE_REGEX);
+    const priceMatch = normalizedQuery.match(PRICE_REGEX);
     if (priceMatch) {
       let price = priceMatch[5];
       if (price.endsWith('k')) {
@@ -192,13 +258,12 @@ export function extractProductInfo(query: string) {
   }
   
   // ✅ Detecta intenção de preço baixo (normalizado)
-  const normalizedQuery = normalize(query);
   if (CHEAP_INTENT_REGEX.test(normalizedQuery)) {
     sortByPrice = true;
   }
   
   // ✅ Detecta condição do produto
-  const conditionMatch = query.match(CONDITION_REGEX);
+  const conditionMatch = normalizedQuery.match(CONDITION_REGEX);
   if (conditionMatch) {
     const cond = conditionMatch[1].toLowerCase();
     if (['novo', 'nova', 'lacrado', 'lacrada'].includes(cond)) {
@@ -211,31 +276,31 @@ export function extractProductInfo(query: string) {
   }
   
   // ✅ Detecta atributo gamer
-  if (GAMER_REGEX.test(query)) {
+  if (GAMER_REGEX.test(normalizedQuery)) {
     isGamer = true;
   }
   
-  const storageMatch = query.match(STORAGE_REGEX);
-  if (storageMatch && !query.match(RAM_REGEX)) {
+  const storageMatch = normalizedQuery.match(STORAGE_REGEX);
+  if (storageMatch && !normalizedQuery.match(RAM_REGEX)) {
     storage = storageMatch[0];
   }
   
-  const ramMatch = query.match(RAM_REGEX);
+  const ramMatch = normalizedQuery.match(RAM_REGEX);
   if (ramMatch) {
     ram = ramMatch[0];
   }
   
-  const refreshMatch = query.match(REFRESH_RATE_REGEX);
+  const refreshMatch = normalizedQuery.match(REFRESH_RATE_REGEX);
   if (refreshMatch) {
     refreshRate = refreshMatch[0];
   }
   
-  const resolutionMatch = query.match(RESOLUTION_REGEX);
+  const resolutionMatch = normalizedQuery.match(RESOLUTION_REGEX);
   if (resolutionMatch) {
     resolution = resolutionMatch[0];
   }
   
-  const screenMatch = query.match(SCREEN_SIZE_REGEX);
+  const screenMatch = normalizedQuery.match(SCREEN_SIZE_REGEX);
   if (screenMatch) {
     screenSize = screenMatch[0];
   }
@@ -258,7 +323,7 @@ export function extractProductInfo(query: string) {
     }
   }
   
-  const genderMatch = query.match(GENDER_REGEX);
+  const genderMatch = normalizedQuery.match(GENDER_REGEX);
   if (genderMatch) {
     gender = genderMatch[1];
   }
@@ -308,7 +373,7 @@ export function extractProductInfo(query: string) {
   }
   
   if (!product && filteredWords.length > 0) {
-    product = filteredWords[0];
+        product = filteredWords[0];
   }
   
   // ✅ Mapeia categoria implícita
@@ -327,10 +392,11 @@ export function extractProductInfo(query: string) {
     }
   }
   
-  // ✅ Filtra atributos (normalizado)
+  // ✅ Filtra atributos (DEDUPLICADOS)
+  const dedupedWords = deduplicateTokens(filteredWords);
   const CONDITION_WORDS = new Set(['novo', 'nova', 'novos', 'novas', 'usado', 'usada', 'usados', 'usadas', 'seminovo', 'seminova', 'lacrado', 'lacrada']);
   
-  attributes = filteredWords.filter(word => {
+  attributes = dedupedWords.filter(word => {
     const norm = normalize(word);
     return !STOP_WORDS.has(norm) && 
       !CONDITION_WORDS.has(norm) &&
@@ -371,3 +437,4 @@ export function extractProductInfo(query: string) {
     isGeneric: !brand && !product && attributes.length === 0
   };
 }
+

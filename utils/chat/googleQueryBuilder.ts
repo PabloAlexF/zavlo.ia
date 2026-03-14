@@ -68,16 +68,24 @@ function isMinPriceFilter(priceFilter: string): boolean {
 }
 
 /**
- * ✅ Normaliza storage (256 gb → 256gb, 1 tb → 1tb)
+ * ✅ Normaliza storage e capacidade (256 gb → 256gb, 1 tera → 1tb, 500 giga → 500gb)
  */
-function normalizeStorage(storage: string): string {
-  return storage.toLowerCase().replace(/\s+/g, '');
+export function normalizeStorage(storage: string): string {
+  let normalized = storage.toLowerCase().replace(/\s+/g, '');
+  
+  // Normaliza unidades por extenso
+  normalized = normalized
+    .replace(/(\d+)\s*tera(s|bytes?)?/gi, '$1tb')
+    .replace(/(\d+)\s*giga(s|bytes?)?/gi, '$1gb')
+    .replace(/(\d+)\s*mega(s|bytes?)?/gi, '$1mb');
+  
+  return normalized;
 }
 
 /**
  * ✅ BUG FIX: Limpa localização (normaliza antes de remover UF)
  */
-function cleanLocation(location: string): string {
+export function cleanLocation(location: string): string {
   const normalized = removeAccents(location);
   return normalized
     .split(/\s+/)
@@ -123,8 +131,9 @@ export function buildGoogleSearchQuery(
 ): { query: string; sortBy: 'BEST_MATCH' | 'LOWEST_PRICE' | 'HIGHEST_PRICE'; minPrice?: number; maxPrice?: number } {
   const parts: string[] = [];
   
-  // 1. ✅ BUG FIX: Normaliza base query (lowercase + sem acentos)
-  const cleanBase = removeAccents(baseQuery.trim());
+  // 1. ✅ Normaliza base query (lowercase + sem acentos + normaliza capacidades)
+  let cleanBase = removeAccents(baseQuery.trim());
+  cleanBase = normalizeStorage(cleanBase); // Normaliza "1 tera" → "1tb"
   parts.push(cleanBase);
   
   // 2. ✅ Adiciona armazenamento normalizado (ANTES da condição)
@@ -167,23 +176,43 @@ export function buildGoogleSearchQuery(
     parts.push(removeAccents(filters.gender.toLowerCase()));
   }
   
-  // ✅ Remove duplicatas
+  // ✅ Remove duplicatas de parts
   const uniqueParts = [...new Set(parts)];
   
-  // ✅ BUG FIX: Remove palavras ruins, não parts inteiros
+  // ✅ Remove palavras ruins de cada part
   const cleanedParts = uniqueParts.map(part => {
     const words = part.split(/\s+/);
     const filtered = words.filter(w => !BAD_KEYWORDS.has(removeAccents(w)));
     return filtered.join(' ');
-  }).filter(Boolean); // Remove strings vazias
+  }).filter(Boolean);
   
-  // ✅ Limita a 6 tokens (Google funciona melhor) + dedupe de tokens
-  const allTokens = cleanedParts.join(' ').split(/\s+/);
-  const uniqueTokens = [...new Set(allTokens)].slice(0, 6);
+// ✅ FINAL DEDUPLICAÇÃO INTEGRADA (deduplica usando normalize local)
+  const allTokens = cleanedParts.join(' ').split(/\s+/).filter(Boolean);
+  const seenTokens = new Set<string>();
+  const uniqueTokens: string[] = [];
+  
+  for (const token of allTokens) {
+    const normalized = removeAccents(token);
+    if (!seenTokens.has(normalized)) {
+      seenTokens.add(normalized);
+      uniqueTokens.push(token);
+    }
+  }
+  
+  for (const token of allTokens) {
+    const normalized = removeAccents(token);
+    if (!seenTokens.has(normalized)) {
+      seenTokens.add(normalized);
+      uniqueTokens.push(token);
+    }
+  }
+  
+  // Limita a 6 tokens (Google funciona melhor)
+  const finalTokens = uniqueTokens.slice(0, 6);
   
   // ✅ Query fallback: se vazia, usa base query
-  const finalQuery = uniqueTokens.length > 0 
-    ? uniqueTokens.join(' ').trim()
+  const finalQuery = finalTokens.length > 0 
+    ? finalTokens.join(' ').trim()
     : cleanBase;
   
   return {

@@ -1,5 +1,5 @@
 import { BRAND_SET, GENERIC_PRODUCTS, NON_PRODUCT_WORDS, COMMON_NON_PRODUCTS, MODEL_DICTIONARY, TokenWithPosition } from './constants';
-import { cleanProductQuery, extractProductInfo } from './queryProcessor';
+import { cleanProductQuery, extractProductInfo, normalizeStorage, deduplicateTokens } from './queryProcessor';
 import { enrichProductQuery, optimizeQueryOrder } from './brandDetector';
 import { buildGoogleSearchQuery } from './googleQueryBuilder';
 
@@ -232,22 +232,40 @@ function findClosestBrand(word: string): { brand: string; score: number } | null
 }
 
 export function parseProductQuery(query: string): ParsedProduct {
-  // ✅ Tokeniza query original (robusta)
-  const tokens = tokenize(query);
+  // ✅ MELHORIA: Normalizar storage e deduplicar ANTES do parse
+  const normalizedQuery = normalizeStorage(query);
+  const tokens = tokenize(normalizedQuery);
+  
+  // Deduplicar tokens logo no início
+  const dedupedTokens = deduplicateTokens(tokens);
+  const dedupedQuery = dedupedTokens.join(' ');
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔧 [PARSER] Original → Deduped:', {
+      original: query,
+      normalized: normalizedQuery,
+      dedupedQuery,
+      tokens: dedupedTokens.length
+    });
+  }
+// ✅ Tokens já deduplicados do pré-processamento (tokens originais preservados)
+  const tokens = dedupedTokens;
   
   // Normalizar tokens UMA VEZ (performance)
   const normalizedTokens = tokens.map(t => normalize(t));
   
   // Remover stop words
+  // Normalizar tokens UMA VEZ (performance) - dedupedTokens já limpos
+  const normalizedTokens = tokens.map(t => normalize(t));
   const filteredTokens = normalizedTokens.filter(t => !STOP_WORDS.has(t));
   
   // ✅ Gera n-grams para melhor detecção de modelos (usa tokens filtrados)
   const ngrams = generateNGrams(filteredTokens, 4);
   
-  const enrichment = enrichProductQuery(query);
-  const info = extractProductInfo(query);
+  const enrichment = enrichProductQuery(dedupedQuery);
+  const info = extractProductInfo(dedupedQuery);
   
-  const originalLower = query.toLowerCase();
+  const originalLower = dedupedQuery.toLowerCase();
   let condition: 'new' | 'used' | undefined;
   if (NEW_CONDITION_REGEX.test(originalLower)) {
     condition = 'new';
@@ -256,7 +274,7 @@ export function parseProductQuery(query: string): ParsedProduct {
   }
   
   let brand = enrichment.detectedBrand || info.brand;
-  let model = enrichment.detectedModel || info.model;
+  let model = enrichment.detectedModel || info.brand;
   let brandScore = 0;
   let modelScore = 0;
   
@@ -291,10 +309,8 @@ export function parseProductQuery(query: string): ParsedProduct {
     modelScore = 1.0;
   }
   
-  // ✅ Extrai atributos numéricos
+  // ✅ Extrai atributos numéricos (já deduplicados)
   let attributes = info.attributes;
-  const numericAttributes = tokens.filter(isNumericAttribute);
-  attributes = [...new Set([...attributes, ...numericAttributes])];
   
   if (model) {
     const modelLower = normalize(model);
@@ -313,13 +329,14 @@ export function parseProductQuery(query: string): ParsedProduct {
   
   const isGeneric = !!(product && GENERIC_PRODUCTS[product as keyof typeof GENERIC_PRODUCTS] && !brand && !model && attributes.length === 0);
   
-  // ✅ Confidence com fórmula matemática consistente
+  // ✅ Confidence PENALIZA duplicatas detectadas
+  const dedupPenalty = (tokens.length - dedupedTokens.length) * 0.1;
   const attributeScore = Math.min(attributes.length * 0.1, 0.2);
   let confidence = (
     brandScore * 0.4 +
     modelScore * 0.4 +
     attributeScore
-  );
+  ) - dedupPenalty;
   
   // Penalizar se não detectou nada
   if (!brand && !model) confidence *= 0.5;
@@ -338,7 +355,7 @@ export function parseProductQuery(query: string): ParsedProduct {
     condition,
     isGeneric,
     needsLocation,
-    query: enrichment.enrichedQuery,
+    query: enrichment.enrichedQuery || dedupedQuery,
     tokens,
     confidence,
     brandScore,
