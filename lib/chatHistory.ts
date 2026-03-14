@@ -29,11 +29,18 @@ export const chatHistoryService = {
         userId,
         chatId,
         title: title.slice(0, 50),
-        messages: messages.slice(-50).map(m => ({
-          ...m,
-          timestamp: m.timestamp.toISOString(),
-          products: m.products?.slice(0, 6)
-        })),
+        messages: messages.slice(-50).map(m => {
+          const msg: any = {
+            id: m.id,
+            type: m.type,
+            content: m.content,
+            timestamp: m.timestamp.toISOString()
+          };
+          if (m.products) msg.products = m.products.slice(0, 6);
+          if (m.searchType) msg.searchType = m.searchType;
+          if (m.creditCost !== undefined) msg.creditCost = m.creditCost;
+          return msg;
+        }),
         updatedAt: new Date().toISOString()
       };
 

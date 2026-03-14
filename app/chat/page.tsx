@@ -1023,9 +1023,14 @@ const loadChatHistory = async () => {
       
       const aiMessage: Message = {
         id: crypto.randomUUID(),
-        type: 'ai',
-        content: 'Produto novo ou usado?',
+        type: 'category_question',
+        content: 'Produto novo, seminovo ou usado?',
         timestamp: new Date(),
+        categoryQuestion: {
+          id: 'condition',
+          options: ['Novo', 'Seminovo', 'Usado', 'Tanto faz'],
+          category: 'condition'
+        }
       };
       setMessages(prev => [...prev, aiMessage]);
       setChatState('awaiting_condition');
@@ -1508,9 +1513,14 @@ const loadChatHistory = async () => {
       });
       const aiMessage: Message = {
         id: crypto.randomUUID(),
-        type: 'ai',
-        content: 'Produto novo ou usado?',
+        type: 'category_question',
+        content: 'Produto novo, seminovo ou usado?',
         timestamp: new Date(),
+        categoryQuestion: {
+          id: 'condition',
+          options: ['Novo', 'Seminovo', 'Usado', 'Tanto faz'],
+          category: 'condition'
+        }
       };
       setMessages(prev => [...prev, aiMessage]);
       setChatState('awaiting_condition');
