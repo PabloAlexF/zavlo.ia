@@ -1,6 +1,7 @@
-import { Injectable, UnauthorizedException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, InternalServerErrorException, ForbiddenException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { FirebaseService } from '@config/firebase.service';
+import { RedisService } from '@config/redis.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 
@@ -11,15 +12,37 @@ export class AuthService {
   constructor(
     private firebaseService: FirebaseService,
     private jwtService: JwtService,
+    private redisService: RedisService,
   ) {}
 
-  async register(registerDto: RegisterDto) {
+  async register(registerDto: RegisterDto, ip: string) {
     try {
       const { email, password, name, phone, location } = registerDto;
-      const hashedPassword = await bcrypt.hash(password, 10);
 
+      // Verificar se o IP já criou uma conta — Redis primeiro, Firestore como fallback
+      const ipKey = `register:ip:${ip}`;
+      const ipUsed = await this.redisService.get(ipKey);
+      if (ipUsed) {
+        this.logger.warn(`[AUTH] IP ${ip} tentou criar segunda conta (Redis)`);
+        throw new ForbiddenException(
+          'Este dispositivo já possui uma conta cadastrada. Faça login ou entre em contato com o suporte.',
+        );
+      }
+
+      // Fallback: checar Firestore caso Redis tenha perdido a chave
       const firestore = this.firebaseService.getFirestore();
       const usersRef = firestore.collection('users');
+      const ipInFirestore = await usersRef.where('registrationIp', '==', ip).limit(1).get();
+      if (!ipInFirestore.empty) {
+        this.logger.warn(`[AUTH] IP ${ip} tentou criar segunda conta (Firestore fallback)`);
+        // Restaurar chave no Redis para evitar consultas futuras ao Firestore
+        await this.redisService.set(ipKey, ipInFirestore.docs[0].id, 31536000);
+        throw new ForbiddenException(
+          'Este dispositivo já possui uma conta cadastrada. Faça login ou entre em contato com o suporte.',
+        );
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
 
       const existingUser = await usersRef.where('email', '==', email).get();
       if (!existingUser.empty) {
@@ -36,39 +59,39 @@ export class AuthService {
         name,
         phone: phone || null,
         location: location || null,
-        // Plano inicial
+        registrationIp: ip,
         plan: 'free',
         billingCycle: 'monthly',
         planStartedAt: now,
         planExpiresAt: null,
-        // Créditos iniciais
         credits: 1,
         freeTrialUsed: false,
-        // Contadores de uso
         textSearchesToday: 0,
         imageSearchesToday: 0,
         textSearchesThisMonth: 0,
         imageSearchesThisMonth: 0,
         lastUsageDate: today,
         lastMonthKey: monthKey,
-        // Timestamps
         createdAt: now,
         updatedAt: now,
       });
 
-      this.logger.log(`Novo usuário cadastrado: ${email}`);
+      // Marcar IP como usado — expira em 1 ano
+      await this.redisService.set(ipKey, userDoc.id, 31536000);
+
+      this.logger.log(`Novo usuário cadastrado: ${email} (IP: ${ip})`);
 
       const tokens = await this.generateTokens(userDoc.id, email);
-      return { 
+      return {
         userId: userDoc.id,
         email,
         name,
         plan: 'free',
         credits: 1,
-        ...tokens 
+        ...tokens,
       };
     } catch (error) {
-      if (error instanceof ConflictException) {
+      if (error instanceof ConflictException || error instanceof ForbiddenException) {
         throw error;
       }
       this.logger.error('Erro ao cadastrar usuário:', error);
