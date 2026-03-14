@@ -1,8 +1,9 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, MapPin, Loader2, User, Edit2 } from 'lucide-react';
+import { Sparkles, MapPin, Loader2, User, Edit2, CreditCard } from 'lucide-react';
 import { ProductCard } from '@/components/features/ProductCard';
+import Link from 'next/link';
 
 interface Message {
   id: string;
@@ -185,6 +186,20 @@ export function ChatMessages({
                               Todo o Brasil
                             </OptionButton>
                           </div>
+                        </div>
+                      ) : message.content.includes('Créditos insuficientes') ? (
+                        <div className="space-y-4">
+                          <p className="whitespace-pre-wrap text-slate-200">{message.content}</p>
+                          <Link href="/plans">
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-shadow hover:shadow-violet-500/40"
+                            >
+                              <CreditCard className="h-4 w-4" />
+                              Ver Planos e Preços
+                            </motion.button>
+                          </Link>
                         </div>
                       ) : (
                         <p className="whitespace-pre-wrap text-slate-200">{message.content}</p>

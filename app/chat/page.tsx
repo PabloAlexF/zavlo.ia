@@ -33,6 +33,7 @@ import {
 } from '@/utils/chat/smartBot';
 import { extractSmartFilters, getMissingFilters, generateFilterConfirmation } from '@/utils/chat/smartFilter';
 import { executeStateHandler } from '@/utils/chat/stateHandlers';
+import { chatHistoryService } from '@/lib/chatHistory';
 
 interface Message {
   id: string;
@@ -223,7 +224,7 @@ export default function ChatPage() {
     }
   };
 
-const loadChatHistory = () => {
+const loadChatHistory = async () => {
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) {
@@ -233,6 +234,22 @@ const loadChatHistory = () => {
       
       const userData = JSON.parse(user);
       const userId = userData.userId;
+      
+      // Tentar carregar do Firestore primeiro
+      try {
+        const firestoreHistory = await chatHistoryService.load(userId);
+        if (firestoreHistory.length > 0) {
+          setChatHistory(firestoreHistory);
+          // Atualizar localStorage com dados do Firestore
+          localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(firestoreHistory));
+          console.log(`✅ Loaded ${firestoreHistory.length} chats from Firestore`);
+          return;
+        }
+      } catch (firestoreError) {
+        console.warn('Firestore indisponível, usando localStorage:', firestoreError);
+      }
+      
+      // Fallback para localStorage
       const saved = localStorage.getItem(`zavlo_chat_history_${userId}`);
       
       if (!saved) {
@@ -323,7 +340,7 @@ const loadChatHistory = () => {
     }
   };
 
-  const saveChatToHistory = () => {
+  const saveChatToHistory = async () => {
     setChatHistory(prevHistory => {
       try {
         const user = localStorage.getItem('zavlo_user');
@@ -364,7 +381,14 @@ const loadChatHistory = () => {
           updatedHistory = [chatData, ...prevHistory];
         }
         
+        // Salvar no localStorage (backup local)
         localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(updatedHistory));
+        
+        // Salvar no Firestore (persistência na nuvem)
+        chatHistoryService.save(userId, currentChatId, chatTitle, cleanedMessages).catch(err => {
+          console.warn('Falha ao salvar no Firestore (continuando com localStorage):', err);
+        });
+        
         return updatedHistory;
       } catch (error) {
         console.error('Erro ao salvar chat:', error);
@@ -418,7 +442,7 @@ const loadChatHistory = () => {
   };
 
 
-  const deleteChat = (chatId: string, e: React.MouseEvent) => {
+  const deleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updatedHistory = chatHistory.filter(c => c.id !== chatId);
     setChatHistory(updatedHistory);
@@ -427,7 +451,14 @@ const loadChatHistory = () => {
     if (user) {
       const userData = JSON.parse(user);
       const userId = userData.userId;
+      
+      // Deletar do localStorage
       localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(updatedHistory));
+      
+      // Deletar do Firestore
+      chatHistoryService.delete(userId, chatId).catch(err => {
+        console.warn('Falha ao deletar do Firestore:', err);
+      });
     }
     
     if (currentChatId === chatId) {
@@ -1107,7 +1138,7 @@ const loadChatHistory = () => {
         const errorMessage: Message = {
           id: crypto.randomUUID(),
           type: 'ai',
-          content: '💳 Créditos insuficientes!\n\nVocê precisa de pelo menos 1 crédito para fazer buscas.\n\n📊 Nossos Planos:\n• Básico: R$ 9,90/mês (50 buscas)\n• Pro: R$ 19,90/mês (150 buscas)\n• Premium: R$ 39,90/mês (ilimitadas)\n\n👆 Acesse Plans no menu para assinar!',
+          content: '💳 Créditos insuficientes!\n\nVocê precisa de pelo menos 1 crédito para fazer buscas.\n\n📊 Nossos Planos:\n• Básico: R$ 27,00/mês (15 comparações/mês)\n• Pro: R$ 77,00/mês (48 análises/mês)\n• Business: R$ 197,00/mês (200 análises/mês)\n\n👆 Acesse Plans no menu para assinar!',
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, errorMessage]);
@@ -1253,7 +1284,7 @@ const loadChatHistory = () => {
         const aiMessage: Message = {
           id: crypto.randomUUID(),
           type: 'ai',
-          content: '📊 Nossos Planos:\n\n🌱 Básico - R$ 9,90/mês\n• 50 buscas mensais\n• Suporte por email\n\n🚀 Pro - R$ 19,90/mês\n• 150 buscas mensais\n• Suporte prioritário\n• Alertas de preço\n\n👑 Premium - R$ 39,90/mês\n• Buscas ilimitadas\n• Suporte 24/7\n• Alertas avançados\n• API access\n\n👆 Acesse Plans no menu para assinar!',
+          content: '📊 Nossos Planos:\n\n🌱 Básico - R$ 27,00/mês\n• 15 comparações/mês\n• Todos os marketplaces\n• Sem anúncios\n• Histórico 30 dias\n\n🚀 Pro - R$ 77,00/mês (Popular)\n• 48 análises/mês\n• IA que entende o produto\n• Todos os marketplaces\n• Prioridade na fila\n• Suporte WhatsApp\n\n👑 Business - R$ 197,00/mês\n• 200 análises/mês\n• API completa\n• Todas as lojas\n• Até 5 usuários\n• Relatórios avançados\n\n👆 Acesse Plans no menu para assinar!',
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, aiMessage]);
