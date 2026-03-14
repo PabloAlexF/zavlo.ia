@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { FirebaseService } from '@config/firebase.service';
+import { RedisService } from '@config/redis.service';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { FirebaseService } from '@config/firebase.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, FirebaseService],
+  providers: [AuthService, JwtStrategy, FirebaseService, RedisService],
   exports: [AuthService],
 })
 export class AuthModule {}
