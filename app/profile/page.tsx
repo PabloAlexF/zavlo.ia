@@ -20,6 +20,9 @@ export default function Profile() {
   const { user, loading, updateUser } = useUser();
   const router = useRouter();
   const [transactions, setTransactions] = useState<(Transaction & { id: string })[]>([]);
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [locationData, setLocationData] = useState({ cep: '', city: '', state: '' });
+  const [loadingLocation, setLoadingLocation] = useState(false);
 
   useEffect(() => {
     if (user?.userId) {
@@ -42,6 +45,15 @@ export default function Profile() {
             const profile = await profileRes.json();
             const usage = usageRes.ok ? await usageRes.json() : { textToday: 0, imageToday: 0 };
             
+            // Atualizar location data se existir
+            if (profile.location) {
+              setLocationData({
+                cep: profile.location.cep || '',
+                city: profile.location.city || '',
+                state: profile.location.state || ''
+              });
+            }
+            
             updateUser({ 
               credits: profile.credits,
               plan: profile.plan || 'free',
@@ -63,6 +75,42 @@ export default function Profile() {
       return () => clearInterval(interval);
     }
   }, [user?.userId]);
+
+  const handleUpdateLocation = async () => {
+    if (!user?.token) return;
+    
+    setLoadingLocation(true);
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+    
+    try {
+      const response = await fetch(`${API_URL}/users/profile`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          location: {
+            cep: locationData.cep || undefined,
+            city: locationData.city || undefined,
+            state: locationData.state || undefined
+          }
+        })
+      });
+      
+      if (response.ok) {
+        alert('✅ Localização atualizada com sucesso!');
+        setIsEditingLocation(false);
+      } else {
+        alert('❌ Erro ao atualizar localização');
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar localização:', error);
+      alert('❌ Erro ao atualizar localização');
+    } finally {
+      setLoadingLocation(false);
+    }
+  };
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -156,6 +204,97 @@ export default function Profile() {
                   </div>
                 </div>
               </div>
+            </motion.div>
+
+            {/* Location Card */}
+            <motion.div 
+              className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Localização
+                </h3>
+                <motion.button
+                  onClick={() => setIsEditingLocation(!isEditingLocation)}
+                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-semibold text-white hover:bg-white/10 transition-all"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {isEditingLocation ? 'Cancelar' : 'Editar'}
+                </motion.button>
+              </div>
+
+              {!isEditingLocation ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between py-3 border-b border-white/10">
+                    <span className="text-sm text-gray-400">Cidade</span>
+                    <span className="text-sm font-semibold text-white">
+                      {locationData.city || 'Não informada'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 border-b border-white/10">
+                    <span className="text-sm text-gray-400">Estado</span>
+                    <span className="text-sm font-semibold text-white">
+                      {locationData.state || 'Não informado'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-3">
+                    <span className="text-sm text-gray-400">CEP</span>
+                    <span className="text-sm font-semibold text-white">
+                      {locationData.cep || 'Não informado'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Cidade</label>
+                    <input
+                      type="text"
+                      value={locationData.city}
+                      onChange={(e) => setLocationData({ ...locationData, city: e.target.value })}
+                      placeholder="Ex: Belo Horizonte"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Estado</label>
+                    <input
+                      type="text"
+                      value={locationData.state}
+                      onChange={(e) => setLocationData({ ...locationData, state: e.target.value })}
+                      placeholder="Ex: Minas Gerais"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">CEP (opcional)</label>
+                    <input
+                      type="text"
+                      value={locationData.cep}
+                      onChange={(e) => setLocationData({ ...locationData, cep: e.target.value })}
+                      placeholder="Ex: 30000-000"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  <motion.button
+                    onClick={handleUpdateLocation}
+                    disabled={loadingLocation}
+                    className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl text-white font-semibold hover:shadow-lg hover:shadow-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    whileHover={{ scale: loadingLocation ? 1 : 1.02 }}
+                    whileTap={{ scale: loadingLocation ? 1 : 0.98 }}
+                  >
+                    {loadingLocation ? 'Salvando...' : 'Salvar Localização'}
+                  </motion.button>
+                </div>
+              )}
             </motion.div>
 
             {/* Stats Grid */}

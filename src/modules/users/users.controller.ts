@@ -18,6 +18,13 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('profile')
+  async updateProfile(@Req() req: any, @Body() data: { name?: string; phone?: string; location?: { cep?: string; city?: string; state?: string } }) {
+    const userId = req.user.userId;
+    return this.usersService.updateProfile(userId, data);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('plan-status')
   async getPlanStatus(@Req() req: any) {
     const userId = req.user.userId;
