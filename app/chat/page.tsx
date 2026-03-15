@@ -894,8 +894,43 @@ const loadChatHistory = async () => {
 
     // Estado: aguardando localização
     if (chatState === 'awaiting_location') {
-      const location = currentInput.toLowerCase().trim();
-      const updatedLocation = (location === 'não' || location === 'nao') ? undefined : currentInput;
+      const locationInput = currentInput.toLowerCase().trim();
+      let updatedLocation: string | undefined;
+      
+      // Se usuário escolheu "minha cidade" ou "meu estado", buscar do perfil
+      if (locationInput === 'minha cidade' || locationInput === 'meu estado') {
+        try {
+          const user = localStorage.getItem('zavlo_user');
+          if (user) {
+            const userData = JSON.parse(user);
+            const API_URL = process.env.NEXT_PUBLIC_API_URL;
+            const response = await fetch(`${API_URL}/users/profile`, {
+              headers: { 'Authorization': `Bearer ${userData.token}` },
+            });
+            if (response.ok) {
+              const profile = await response.json();
+              if (locationInput === 'minha cidade' && profile.location?.city) {
+                updatedLocation = profile.location.city;
+                console.log(`🏛️ Cidade do perfil: ${updatedLocation}`);
+              } else if (locationInput === 'meu estado' && profile.location?.state) {
+                updatedLocation = profile.location.state;
+                console.log(`📍 Estado do perfil: ${updatedLocation}`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao buscar localização do perfil:', error);
+        }
+        
+        // Se não conseguiu pegar do perfil, usar "Todo o Brasil"
+        if (!updatedLocation) {
+          updatedLocation = undefined;
+        }
+      } else if (locationInput === 'não' || locationInput === 'nao') {
+        updatedLocation = undefined;
+      } else {
+        updatedLocation = currentInput;
+      }
       
       setPendingSearch(prev => {
         if (!prev) return prev;
@@ -1808,7 +1843,12 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
                 if (idx >= 0) updated[idx].content = editedQuery;
                 return updated;
               });
-              setPendingSearch(prev => prev ? { ...prev, query: editedQuery } : prev);
+              setPendingSearch(prev => {
+                if (!prev) return prev;
+                // Extrair apenas a query base, removendo condição/localização
+                const cleanQuery = editedQuery.split(' novo')[0].split(' usado')[0].split(' seminovo')[0].trim();
+                return { ...prev, query: cleanQuery };
+              });
               setIsEditingQuery(false);
               setEditedQuery('');
             }}
