@@ -909,6 +909,8 @@ const loadChatHistory = async () => {
             });
             if (response.ok) {
               const profile = await response.json();
+              console.log('📍 Perfil do usuário:', profile.location);
+              
               if (locationInput === 'minha cidade' && profile.location?.city) {
                 updatedLocation = profile.location.city;
                 console.log(`🏛️ Cidade do perfil: ${updatedLocation}`);
@@ -924,6 +926,7 @@ const loadChatHistory = async () => {
         
         // Se não conseguiu pegar do perfil, usar "Todo o Brasil"
         if (!updatedLocation) {
+          console.warn('⚠️ Não foi possível obter localização do perfil');
           updatedLocation = undefined;
         }
       } else if (locationInput === 'não' || locationInput === 'nao') {
@@ -931,6 +934,8 @@ const loadChatHistory = async () => {
       } else {
         updatedLocation = currentInput;
       }
+      
+      console.log(`📍 Localização final: ${updatedLocation || 'Todo o Brasil'}`);
       
       setPendingSearch(prev => {
         if (!prev) return prev;
@@ -1571,6 +1576,8 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
     const condition = overrideCondition || pendingSearch.condition;
     
     console.log(`🔍 buildFinalQuery - condition: "${condition}"`);
+    console.log(`📍 buildFinalQuery - location: "${pendingSearch.location || 'nenhuma'}"`);
+    console.log(`📍 buildFinalQuery - pendingSearch completo:`, pendingSearch);
     
     const result = buildSearchQuery(
       parseProductQuery(pendingSearch.query),
