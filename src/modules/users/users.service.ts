@@ -25,7 +25,7 @@ export class UsersService {
     return { id: userDoc.id, ...userData } as User;
   }
 
-  async updateProfile(userId: string, data: { name?: string; phone?: string }) {
+  async updateProfile(userId: string, data: { name?: string; phone?: string; location?: { cep?: string; city?: string; state?: string } }) {
     const firestore = this.firebaseService.getFirestore();
     await firestore.collection('users').doc(userId).update({
       ...data,
