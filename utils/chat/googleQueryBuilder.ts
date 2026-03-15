@@ -142,9 +142,12 @@ export function buildGoogleSearchQuery(
     parts.push(normalized);
   }
   
-  // 3. Adiciona condição (remove acentos)
+  // 3. Adiciona condição (remove acentos e normaliza)
   if (filters.condition && filters.condition !== 'Tanto faz') {
-    parts.push(removeAccents(filters.condition.toLowerCase()));
+    const normalizedCondition = removeAccents(filters.condition.toLowerCase());
+    // Mapear "seminovo" para "usado" no Google Shopping (mais resultados)
+    const mappedCondition = normalizedCondition === 'seminovo' ? 'usado' : normalizedCondition;
+    parts.push(mappedCondition);
   }
   
   // 4. PREÇO NÃO VAI NA QUERY - Extrair para filtro separado

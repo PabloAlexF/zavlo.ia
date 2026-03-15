@@ -177,12 +177,13 @@ export function ChatMessages({
                             <span>Quer buscar em alguma região específica?</span>
                           </div>
                           <div className="flex flex-wrap gap-2 pt-1">
-                            {['São Paulo', 'Rio de Janeiro', 'Minas Gerais'].map((location, i) => (
-                              <OptionButton key={location} onClick={() => onSendMessage(location)}>
-                                {location}
-                              </OptionButton>
-                            ))}
-                            <OptionButton onClick={() => onSendMessage('não')} variant="primary">
+                            <OptionButton onClick={() => onSendMessage('minha cidade')} variant="primary">
+                              Minha cidade
+                            </OptionButton>
+                            <OptionButton onClick={() => onSendMessage('meu estado')}>
+                              Meu estado
+                            </OptionButton>
+                            <OptionButton onClick={() => onSendMessage('não')}>
                               Todo o Brasil
                             </OptionButton>
                           </div>
@@ -316,7 +317,10 @@ export function ChatMessages({
                       ) : (
                         <div className="flex gap-2">
                           <OptionButton onClick={onCancelEditQuery}>Cancelar</OptionButton>
-                          <OptionButton onClick={onConfirmEditQuery} variant="primary">Salvar</OptionButton>
+                          <OptionButton onClick={() => {
+                            onConfirmEditQuery();
+                            setTimeout(() => onConfirmSearch(), 100);
+                          }} variant="primary">Salvar e Buscar</OptionButton>
                         </div>
                       )}
                     </AIBubble>
