@@ -910,6 +910,7 @@ const loadChatHistory = async () => {
             if (response.ok) {
               const profile = await response.json();
               console.log('📍 Perfil do usuário:', profile.location);
+              console.log('🔍 Perfil completo:', profile);
               
               if (locationInput === 'minha cidade' && profile.location?.city) {
                 updatedLocation = profile.location.city;

@@ -21,6 +21,7 @@ export class UsersService {
     delete userData.password;
     
     logger.log(`🔍 [USER DEBUG] Found user ${userId}: credits=${userData.credits}, plan=${userData.plan}, freeTrialUsed=${userData.freeTrialUsed}`);
+    logger.log(`📍 [USER DEBUG] Location data:`, userData.location);
 
     return { id: userDoc.id, ...userData } as User;
   }
