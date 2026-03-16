@@ -260,9 +260,9 @@ export class SearchService {
       }
 
       if (scrapers.includes('olx')) {
-        this.logger.log(`[OLX] Buscando ${resultLimit} produtos...`);
+        this.logger.log(`[OLX] Buscando ${resultLimit} produtos com sortBy=${sortBy}...`);
         scrapingPromises.push(
-          this.olxService.search(normalizedQuery, resultLimit)
+          this.olxService.search(normalizedQuery, resultLimit, sortBy)
             .then(results => ({ source: 'olx', results }))
             .catch(error => {
               this.logger.warn(`[OLX] Erro: ${error.message}`);
@@ -305,6 +305,14 @@ export class SearchService {
       }
 
       this.logger.log(`📊 [TOTAL] ${products.length} produtos consolidados de ${scrapers.length} fonte(s)`);
+      
+      // Ordenar produtos consolidados se necessário
+      // Google Shopping e OLX já retornam ordenados
+      // Webmotors e Mobiauto precisam ser ordenados localmente
+      if (sortBy !== 'RELEVANCE' && sortBy !== 'BEST_MATCH') {
+        this.logger.log(`🔄 [SORT] Ordenando ${products.length} produtos por ${sortBy}`);
+        products = this.sortProducts(products, sortBy);
+      }
     } catch (error) {
       this.logger.warn(`[SCRAPING] Erro geral: ${error.message}`);
     }
@@ -676,6 +684,41 @@ export class SearchService {
       .createHash('md5')
       .update(url)
       .digest('hex');
+  }
+
+  /**
+   * Ordena produtos localmente (para APIs que não suportam sortBy)
+   */
+  private sortProducts(products: Product[], sortBy: string): Product[] {
+    if (!products || products.length === 0) return products;
+    
+    const sorted = [...products];
+    
+    switch (sortBy) {
+      case 'LOWEST_PRICE':
+        return sorted.sort((a, b) => {
+          const priceA = this.extractPrice(String(a.price));
+          const priceB = this.extractPrice(String(b.price));
+          return (priceA || 0) - (priceB || 0);
+        });
+      
+      case 'HIGHEST_PRICE':
+        return sorted.sort((a, b) => {
+          const priceA = this.extractPrice(String(a.price));
+          const priceB = this.extractPrice(String(b.price));
+          return (priceB || 0) - (priceA || 0);
+        });
+      
+      case 'TOP_RATED':
+        return sorted.sort((a, b) => {
+          const ratingA = a.rating || 0;
+          const ratingB = b.rating || 0;
+          return ratingB - ratingA;
+        });
+      
+      default:
+        return sorted;
+    }
   }
 
 }

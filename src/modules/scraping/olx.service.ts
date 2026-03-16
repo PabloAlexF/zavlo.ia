@@ -16,19 +16,30 @@ export class OlxService {
    * @param query - Termo de busca (ex: "iPhone 13 usado")
    * @param limit - Número máximo de resultados
    */
-  async search(query: string, limit = 20): Promise<any[]> {
+  async search(query: string, limit = 20, sortBy: string = 'RELEVANCE'): Promise<any[]> {
     try {
-      this.logger.log(`🛒 [OLX] Buscando: "${query}" (limit: ${limit})`);
+      this.logger.log(`🛒 [OLX] Buscando: "${query}" (limit: ${limit}, sortBy: ${sortBy})`);
+
+      // Mapear sortBy do Google Shopping para OLX
+      const sortByMap: Record<string, string> = {
+        'RELEVANCE': 'relevance',
+        'BEST_MATCH': 'relevance',
+        'LOWEST_PRICE': 'cheapest',
+        'HIGHEST_PRICE': 'expensive',
+        'TOP_RATED': 'relevance',
+      };
+
+      const olxSortBy = sortByMap[sortBy] || 'newest';
 
       const input = {
         searchQuery: query,
-        olxDomain: 'olx.com.br', // Brasil
-        sortBy: 'newest', // Mais recentes primeiro
-        maxPages: Math.ceil(limit / 40), // ~40 resultados por página
+        olxDomain: 'olx.com.br',
+        sortBy: olxSortBy,
+        maxPages: Math.ceil(limit / 40),
         maxRequestsPerCrawl: limit,
         proxyConfiguration: {
           useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL'], // Proxy residencial para melhor confiabilidade
+          apifyProxyGroups: ['RESIDENTIAL'],
         },
       };
 

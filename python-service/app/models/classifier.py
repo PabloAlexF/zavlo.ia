@@ -15,7 +15,7 @@ class ProductClassifier:
     Decide qual categoria e quais scrapers usar
     """
     
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: str = None, learner = None):
         # Carregar configurações do JSON
         self.config_loader = ConfigLoader(config_path)
         
@@ -29,6 +29,24 @@ class ProductClassifier:
         brands = self.config_loader.get_brands()
         self.car_brands = set(brands.get("car", []))
         self.moto_brands = set(brands.get("motorcycle", []))
+        
+        # 🎓 APRENDIZADO: Referência ao learner (opcional)
+        self.learner = learner
+        
+        # 🚀 OTIMIZAÇÃO: Listas de localização (evita recriar a cada chamada)
+        self.estados = [
+            'sp', 'rj', 'mg', 'rs', 'pr', 'sc', 'ba', 'pe', 'ce', 'pa', 'go', 'df',
+            'es', 'ma', 'pb', 'rn', 'al', 'se', 'pi', 'mt', 'ms', 'ac', 'ro', 'rr', 'ap', 'am', 'to',
+            'sao paulo', 'rio de janeiro', 'minas gerais', 'rio grande do sul',
+            'parana', 'santa catarina', 'bahia', 'pernambuco', 'ceara'
+        ]
+        
+        self.cidades = [
+            'sao paulo', 'rio de janeiro', 'belo horizonte', 'brasilia',
+            'curitiba', 'porto alegre', 'salvador', 'recife', 'fortaleza',
+            'manaus', 'campinas', 'guarulhos', 'santo andre', 'sao bernardo',
+            'goiania', 'belem', 'natal', 'joao pessoa', 'maceio'
+        ]
         
         # Cache de regex compiladas (performance)
         self._compile_regex_patterns()
@@ -75,7 +93,9 @@ class ProductClassifier:
         # Padrões de perguntas sobre sistema
         self.system_question_patterns_compiled = [
             re.compile(r'\bcomo\b.*\b(buscar|procurar|encontrar|achar)\b.*\b(produto|item|coisa)\b'),
+            re.compile(r'\bcomo\b.*\b(buscar|procurar)\b'),  # "como buscar produtos?"
             re.compile(r'\bcomo\b.*\bfunciona\b'),
+            re.compile(r'\bcomo\b.*\busar\b'),  # "como usar?"
             re.compile(r'\bcomo\b.*\busar\b.*\b(sistema|site|app|zavlo)\b'),
             re.compile(r'\bcomo\b.*\bfazer\b.*\b(busca|pesquisa)\b'),
             re.compile(r'\bque\b.*\bfazer\b.*\b(buscar|procurar)\b'),
@@ -91,6 +111,49 @@ class ProductClassifier:
             re.compile(r'^o que.*fazer'),
             re.compile(r'\bconfuso\b'),
             re.compile(r'\bduvida\b')
+        ]
+        
+        # Padrões de perguntas sobre créditos
+        self.credits_question_patterns_compiled = [
+            re.compile(r'\b(quantos?|quanto)\b.*\bcreditos?\b'),
+            re.compile(r'\bcreditos?\b.*\b(tenho|restantes?|sobrando|disponiveis?)\b'),
+            re.compile(r'\bmeus?\b.*\bcreditos?\b'),
+            re.compile(r'\bsaldo\b.*\b(de\s+)?creditos?\b'),
+            re.compile(r'\bsaldo\b'),  # "qual meu saldo?"
+            re.compile(r'\bver\b.*\bcreditos?\b'),
+            re.compile(r'\bconsultar\b.*\bcreditos?\b'),
+            re.compile(r'\bcreditos?\b.*\b(restam|faltam)\b')
+        ]
+        
+        # Padrões de perguntas sobre recarga/compra de créditos
+        self.recharge_question_patterns_compiled = [
+            re.compile(r'\b(como|onde)\b.*\b(comprar|compro|adquirir|adquiro)\b.*\bcreditos?\b'),
+            re.compile(r'\b(como|onde)\b.*\b(fazer|faco|realizar)\b.*\b(recarga|recarregar)\b'),
+            re.compile(r'\brecarga\b.*\b(de\s+)?creditos?\b'),
+            re.compile(r'\brecarregar\b'),  # "como recarregar?"
+            re.compile(r'\bcomprar\b.*\b(mais\s+)?creditos?\b'),
+            re.compile(r'\badquirir\b.*\bcreditos?\b'),
+            re.compile(r'\bcreditos?\b.*\b(avulsos?|extras?|adicionais?)\b'),
+            re.compile(r'\bpreciso\b.*\b(de\s+)?(mais\s+)?creditos?\b'),
+            re.compile(r'\bquero\b.*\b(mais\s+)?creditos?\b')
+        ]
+        
+        # Padrões de perguntas sobre planos/assinatura
+        self.plans_question_patterns_compiled = [
+            re.compile(r'\b(quais?|que)\b.*\bplanos?\b'),
+            re.compile(r'\bplanos?\b.*\b(disponiveis?|existem|tem|ha)\b'),
+            re.compile(r'\b(como|onde)\b.*\b(assinar|assino|contratar|contrato)\b.*\bplano\b'),
+            re.compile(r'\b(como|onde)\b.*\bassinar\b'),  # "como assinar?"
+            re.compile(r'\bassinatura\b'),
+            re.compile(r'\bassinar\b.*\b(plano|servico)\b'),
+            re.compile(r'\bcontratar\b.*\bplano\b'),
+            re.compile(r'\bplano\b.*\b(mensal|anual|pago)\b'),
+            re.compile(r'\b(preco|valor|custo)\b.*\b(do\s+)?plano\b'),
+            re.compile(r'\bplano\b.*\b(preco|valor|custo)\b'),
+            re.compile(r'\bquanto\b.*\b(custa|vale|sai)\b.*\bplano\b'),
+            re.compile(r'\bplano\b.*\b(basico|pro|business|premium)\b'),
+            re.compile(r'\bupgrade\b.*\bplano\b'),
+            re.compile(r'\bmudar\b.*\bplano\b')
         ]
     
     def normalize_query(self, query: str) -> str:
@@ -111,20 +174,25 @@ class ProductClassifier:
         return query
     
     def keyword_match(self, keyword: str, text: str) -> bool:
-        """Match de keyword com word boundary (evita falsos positivos)"""
-        return bool(re.search(rf'\b{re.escape(keyword)}\b', text))
+        """Match de keyword com word boundary (otimizado - sem regex)"""
+        # 🚀 OTIMIZAÇÃO: Usa string matching ao invés de regex (mais rápido)
+        # Como tudo já está normalizado, podemos usar espaços como boundary
+        return f" {keyword} " in f" {text} "
     
     def detect_brand(self, normalized: str) -> str | None:
-        """Detecta marca do produto"""
+        """Detecta marca do produto (otimizado com set intersection)"""
+        # 🚀 OTIMIZAÇÃO: Usa set intersection ao invés de loops
+        words = set(normalized.split())
+        
         # Verificar marcas de carros
-        for brand in self.car_brands:
-            if self.keyword_match(brand, normalized):
-                return brand
+        car_match = words & self.car_brands
+        if car_match:
+            return car_match.pop()
         
         # Verificar marcas de motos
-        for brand in self.moto_brands:
-            if self.keyword_match(brand, normalized):
-                return brand
+        moto_match = words & self.moto_brands
+        if moto_match:
+            return moto_match.pop()
         
         return None
     
@@ -191,39 +259,24 @@ class ProductClassifier:
         return "unknown"
     
     def detect_location(self, normalized: str) -> bool:
-        """Detecta se a query contém informação de localização (MELHORADO - evita falsos positivos)"""
-        
-        # Estados brasileiros (siglas e nomes) - lista explícita
-        estados = [
-            'sp', 'rj', 'mg', 'rs', 'pr', 'sc', 'ba', 'pe', 'ce', 'pa', 'go', 'df',
-            'es', 'ma', 'pb', 'rn', 'al', 'se', 'pi', 'mt', 'ms', 'ac', 'ro', 'rr', 'ap', 'am', 'to',
-            'sao paulo', 'rio de janeiro', 'minas gerais', 'rio grande do sul',
-            'parana', 'santa catarina', 'bahia', 'pernambuco', 'ceara'
-        ]
-        
-        # Cidades principais
-        cidades = [
-            'sao paulo', 'rio de janeiro', 'belo horizonte', 'brasilia',
-            'curitiba', 'porto alegre', 'salvador', 'recife', 'fortaleza',
-            'manaus', 'campinas', 'guarulhos', 'santo andre', 'sao bernardo',
-            'goiania', 'belem', 'natal', 'joao pessoa', 'maceio'
-        ]
+        """Detecta se a query contém informação de localização (OTIMIZADO)"""
+        # 🚀 OTIMIZAÇÃO: Usa listas pré-carregadas do __init__
         
         # Verificar padrão "em [localização]"
-        for estado in estados:
+        for estado in self.estados:
             if re.search(rf'\bem\s+{re.escape(estado)}\b', normalized):
                 return True
         
-        for cidade in cidades:
+        for cidade in self.cidades:
             if re.search(rf'\bem\s+{re.escape(cidade)}\b', normalized):
                 return True
         
         # Verificar estados/cidades sozinhos (com word boundary)
-        for estado in estados:
+        for estado in self.estados:
             if self.keyword_match(estado, normalized):
                 return True
         
-        for cidade in cidades:
+        for cidade in self.cidades:
             if self.keyword_match(cidade, normalized):
                 return True
         
@@ -232,6 +285,27 @@ class ProductClassifier:
     def is_question_about_usage(self, normalized: str) -> bool:
         """Detecta se o usuário está perguntando como usar o sistema (usando regex compiladas)"""
         for pattern in self.system_question_patterns_compiled:
+            if pattern.search(normalized):
+                return True
+        return False
+    
+    def is_credits_question(self, normalized: str) -> bool:
+        """Detecta se o usuário está perguntando sobre créditos"""
+        for pattern in self.credits_question_patterns_compiled:
+            if pattern.search(normalized):
+                return True
+        return False
+    
+    def is_recharge_question(self, normalized: str) -> bool:
+        """Detecta se o usuário está perguntando sobre recarga/compra de créditos"""
+        for pattern in self.recharge_question_patterns_compiled:
+            if pattern.search(normalized):
+                return True
+        return False
+    
+    def is_plans_question(self, normalized: str) -> bool:
+        """Detecta se o usuário está perguntando sobre planos/assinatura"""
+        for pattern in self.plans_question_patterns_compiled:
             if pattern.search(normalized):
                 return True
         return False
@@ -336,14 +410,94 @@ class ProductClassifier:
                 "extracted_product": str | None
             }
         """
+        # 🚀 OTIMIZAÇÃO: Limitar tamanho da query (evita queries gigantes)
+        MAX_TOKENS = 20
+        tokens = query.split()
+        if len(tokens) > MAX_TOKENS:
+            logger.warning(f"Query muito longa ({len(tokens)} tokens), truncando para {MAX_TOKENS}")
+            query = " ".join(tokens[:MAX_TOKENS])
+        
         # NORMALIZAR APENAS UMA VEZ (performance)
         normalized = self.normalize_query(query)
         
         # 🆕 DETECTAR PERGUNTAS E SAUDAÇÕES
         is_question = self.is_question_about_usage(normalized)
         is_greeting = self.is_greeting(normalized)
+        is_credits_question = self.is_credits_question(normalized)
+        is_recharge_question = self.is_recharge_question(normalized)
+        is_plans_question = self.is_plans_question(normalized)
         extracted_product = None
         
+        # 💳 PERGUNTAS SOBRE CRÉDITOS
+        if is_credits_question:
+            logger.info("Pergunta sobre créditos detectada!")
+            return {
+                "category": "general",
+                "confidence": 1.0,
+                "recommended_scrapers": [],
+                "condition": "unknown",
+                "all_scores": {},
+                "missing_fields": [],
+                "suggested_question": None,
+                "is_question": True,
+                "is_greeting": False,
+                "is_credits_question": True,
+                "is_recharge_question": False,
+                "is_plans_question": False,
+                "extracted_product": None,
+                "detected_brand": None,
+                "detected_model": None,
+                "normalized_query": "",
+                "question_type": "credits"
+            }
+        
+        # 🔄 PERGUNTAS SOBRE RECARGA
+        if is_recharge_question:
+            logger.info("Pergunta sobre recarga detectada!")
+            return {
+                "category": "general",
+                "confidence": 1.0,
+                "recommended_scrapers": [],
+                "condition": "unknown",
+                "all_scores": {},
+                "missing_fields": [],
+                "suggested_question": None,
+                "is_question": True,
+                "is_greeting": False,
+                "is_credits_question": False,
+                "is_recharge_question": True,
+                "is_plans_question": False,
+                "extracted_product": None,
+                "detected_brand": None,
+                "detected_model": None,
+                "normalized_query": "",
+                "question_type": "recharge"
+            }
+        
+        # 📊 PERGUNTAS SOBRE PLANOS
+        if is_plans_question:
+            logger.info("Pergunta sobre planos detectada!")
+            return {
+                "category": "general",
+                "confidence": 1.0,
+                "recommended_scrapers": [],
+                "condition": "unknown",
+                "all_scores": {},
+                "missing_fields": [],
+                "suggested_question": None,
+                "is_question": True,
+                "is_greeting": False,
+                "is_credits_question": False,
+                "is_recharge_question": False,
+                "is_plans_question": True,
+                "extracted_product": None,
+                "detected_brand": None,
+                "detected_model": None,
+                "normalized_query": "",
+                "question_type": "plans"
+            }
+        
+        # ❓ PERGUNTAS SOBRE USO DO SISTEMA
         if is_question:
             logger.info("Pergunta sobre o sistema detectada!")
             
@@ -361,11 +515,15 @@ class ProductClassifier:
                 "suggested_question": guided_question,
                 "is_question": True,
                 "is_greeting": False,
+                "is_credits_question": False,
+                "is_recharge_question": False,
+                "is_plans_question": False,
                 "extracted_product": None,
                 "detected_brand": None,
                 "detected_model": None,
                 "normalized_query": "",
-                "guided_response": guided_question
+                "guided_response": guided_question,
+                "question_type": "usage"
             }
         
         if is_greeting:
@@ -402,6 +560,15 @@ class ProductClassifier:
                 if self.keyword_match(keyword, normalized):
                     score += 1.0
                     matches.append(keyword)
+            
+            # 🎓 APRENDIZADO: Verificar keywords aprendidas
+            if self.learner:
+                learned_kws = self.learner.get_learned_keywords(category=category)
+                for learned_kw in learned_kws:
+                    if self.keyword_match(learned_kw, normalized):
+                        score += 1.5  # Boost para keywords aprendidas
+                        matches.append(f"learned:{learned_kw}")
+                        logger.debug(f"  🎓 Keyword aprendida detectada: {learned_kw}")
             
             # Boost para categorias específicas
             if category == "car":
@@ -497,7 +664,9 @@ class ProductClassifier:
         detected_model = self.detect_model(normalized)
         detected_year = self.detect_year(normalized) if best_category in ["car", "motorcycle"] else None
         normalized_for_scraper = self.normalize_query_for_scraper(query, best_category)
-        result_limit = self.extract_result_limit(normalized)
+        
+        # 🆕 EXTRAIR LIMITE APENAS SE ESPECIFICADO PELO USUÁRIO
+        result_limit = self.extract_result_limit(normalized) if self.has_result_limit(normalized) else None
         
         result = {
             "category": best_category,
