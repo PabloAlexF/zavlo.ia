@@ -549,7 +549,7 @@ class ProductClassifier:
         # 1. QUANTIDADE DE RESULTADOS (SEMPRE PERGUNTAR PRIMEIRO)
         if not self.has_result_limit(query):
             missing_fields.append("result_limit")
-            suggested_question = "Quantos resultados você quer ver?\n\n📊 **10 resultados** - Busca rápida\n🎯 **20 resultados** - Busca completa"
+            suggested_question = "Quantos resultados você quer ver?"
         
         # 2. Verificar condição (novo/usado) - APENAS SE JÁ TEM LIMITE
         elif condition == "unknown":
