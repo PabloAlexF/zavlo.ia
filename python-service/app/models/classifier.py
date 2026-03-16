@@ -5,6 +5,7 @@ Abordagem pragmática sem ML pesado
 import re
 from typing import Dict, List, Tuple
 import logging
+from .config_loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
@@ -14,109 +15,83 @@ class ProductClassifier:
     Decide qual categoria e quais scrapers usar
     """
     
-    def __init__(self):
-        # Dicionário de categorias e keywords (EXPANDIDO)
-        self.categories = {
-            "car": {
-                "keywords": [
-                    "carro", "carros", "veiculo", "veículo", "automovel", "automóvel",
-                    "toyota", "honda", "fiat", "chevrolet", "ford", "volkswagen", "vw",
-                    "hyundai", "nissan", "renault", "peugeot", "citroen", "jeep",
-                    "sedan", "suv", "hatch", "pickup", "caminhonete",
-                    "corolla", "civic", "onix", "gol", "polo", "hb20", "creta",
-                    "compass", "renegade", "kicks", "tracker", "t-cross"
-                ],
-                "scrapers": ["webmotors", "mobiauto"],
-                "priority": 10
-            },
-            "motorcycle": {
-                "keywords": [
-                    "moto", "motos", "motocicleta", "motocicletas", "scooter",
-                    "honda", "yamaha", "suzuki", "kawasaki", "harley",
-                    "cg", "fazer", "cb", "xre", "bros", "titan", "fan",
-                    "biz", "pcx", "nmax", "mt", "r1", "ninja", "z"
-                ],
-                "scrapers": ["webmotors", "mobiauto"],
-                "priority": 9
-            },
-            "smartphone": {
-                "keywords": [
-                    "iphone", "samsung", "xiaomi", "motorola", "lg", "asus",
-                    "smartphone", "celular", "telefone", "galaxy", "redmi",
-                    "poco", "realme", "oneplus", "pixel", "moto g", "moto e",
-                    "note", "pro max", "ultra", "fold", "flip"
-                ],
-                "scrapers": ["google_shopping", "olx"],
-                "priority": 8
-            },
-            "electronics": {
-                "keywords": [
-                    "notebook", "laptop", "computador", "pc", "desktop",
-                    "tablet", "ipad", "monitor", "tv", "televisão", "televisao",
-                    "playstation", "xbox", "nintendo", "switch", "ps5", "ps4",
-                    "camera", "câmera", "fone", "headphone", "airpods",
-                    "macbook", "dell", "lenovo", "acer", "asus", "gamer",
-                    "rtx", "gtx", "ryzen", "intel", "i5", "i7", "i9"
-                ],
-                "scrapers": ["google_shopping", "olx"],
-                "priority": 7
-            },
-            "furniture": {
-                "keywords": [
-                    "sofa", "sofá", "mesa", "cadeira", "cama", "guarda-roupa",
-                    "armario", "armário", "estante", "rack", "criado-mudo",
-                    "movel", "móvel", "moveis", "móveis", "colchao", "colchão"
-                ],
-                "scrapers": ["olx", "google_shopping"],
-                "priority": 6
-            },
-            "appliance": {
-                "keywords": [
-                    "geladeira", "fogao", "fogão", "microondas", "lavadora",
-                    "secadora", "freezer", "ar-condicionado", "ventilador",
-                    "liquidificador", "batedeira", "aspirador", "ferro de passar"
-                ],
-                "scrapers": ["google_shopping", "olx"],
-                "priority": 6
-            },
-            "fashion": {
-                "keywords": [
-                    "tenis", "tênis", "sapato", "bota", "sandalia", "sandália",
-                    "camisa", "camiseta", "calça", "calca", "jaqueta", "casaco",
-                    "vestido", "saia", "short", "bermuda", "nike", "adidas",
-                    "puma", "reebok", "vans", "converse", "air max", "jordan",
-                    "yeezy", "ultraboost", "roupa", "roupas"
-                ],
-                "scrapers": ["google_shopping", "olx"],
-                "priority": 5
-            },
-            "marketplace_used": {
-                "keywords": [
-                    "usado", "usada", "usados", "usadas", "seminovo", "seminova",
-                    "segunda mao", "segunda mão", "usado em bom estado"
-                ],
-                "scrapers": ["olx"],
-                "priority": 8
-            },
-            "general": {
-                "keywords": [],  # Fallback
-                "scrapers": ["google_shopping"],
-                "priority": 1
-            }
-        }
+    def __init__(self, config_path: str = None):
+        # Carregar configurações do JSON
+        self.config_loader = ConfigLoader(config_path)
         
-        # Marcas de carros (para aumentar confiança)
-        self.car_brands = {
-            "toyota", "honda", "fiat", "chevrolet", "ford", "volkswagen", "vw",
-            "hyundai", "nissan", "renault", "peugeot", "citroen", "jeep",
-            "bmw", "mercedes", "audi", "volvo", "mitsubishi", "kia"
-        }
+        # Sistema de sinônimos para melhorar precisão
+        self.synonyms = self.config_loader.get_synonyms()
         
-        # Marcas de motos
-        self.moto_brands = {
-            "honda", "yamaha", "suzuki", "kawasaki", "harley", "ducati",
-            "triumph", "bmw", "ktm", "cg", "fazer", "cb", "xre"
-        }
+        # Dicionário de categorias e keywords
+        self.categories = self.config_loader.get_categories()
+        
+        # Marcas de carros e motos
+        brands = self.config_loader.get_brands()
+        self.car_brands = set(brands.get("car", []))
+        self.moto_brands = set(brands.get("motorcycle", []))
+        
+        # Cache de regex compiladas (performance)
+        self._compile_regex_patterns()
+    
+    def _compile_regex_patterns(self):
+        """Pré-compila regex patterns para melhor performance"""
+        # Padrões de condição
+        self.used_patterns_compiled = [
+            re.compile(r'\busado\b'), re.compile(r'\busada\b'), 
+            re.compile(r'\busados\b'), re.compile(r'\busadas\b'),
+            re.compile(r'\bseminovo\b'), re.compile(r'\bseminova\b'), 
+            re.compile(r'\bsemi-novo\b'), re.compile(r'\bsemi novo\b'),
+            re.compile(r'\bsegunda mao\b'), re.compile(r'\bsegunda-mao\b'), 
+            re.compile(r'\b2a mao\b'),
+            re.compile(r'\buso\b'), re.compile(r'\bde uso\b'), 
+            re.compile(r'\bja usado\b'), re.compile(r'\bjá usado\b')
+        ]
+        
+        self.new_patterns_compiled = [
+            re.compile(r'\bnovo\b'), re.compile(r'\bnova\b'), 
+            re.compile(r'\bnovos\b'), re.compile(r'\bnovas\b'),
+            re.compile(r'\blacrado\b'), re.compile(r'\blacrada\b'), 
+            re.compile(r'\b0km\b'), re.compile(r'\bzero km\b'),
+            re.compile(r'\bna caixa\b'), re.compile(r'\bnunca usado\b'), 
+            re.compile(r'\bsem uso\b'),
+            re.compile(r'\bnovo na caixa\b'), re.compile(r'\bnovo lacrado\b')
+        ]
+        
+        # Padrão de limite de resultados
+        self.limit_pattern_compiled = re.compile(r'(?<!\d)(\d+)(?!\d)\s*(resultados|produtos|itens)')
+        
+        # Padrão de ano para veículos
+        self.year_pattern_compiled = re.compile(r'\b(19[89]\d|20[0-2]\d)\b')
+        
+        # Padrões de saudação
+        self.greeting_patterns_compiled = [
+            re.compile(r'^ola\b'), re.compile(r'^oi\b'), 
+            re.compile(r'^hey\b'), re.compile(r'^e ai\b'),
+            re.compile(r'^bom dia\b'), re.compile(r'^boa tarde\b'), 
+            re.compile(r'^boa noite\b'),
+            re.compile(r'^hello\b'), re.compile(r'^hi\b')
+        ]
+        
+        # Padrões de perguntas sobre sistema
+        self.system_question_patterns_compiled = [
+            re.compile(r'\bcomo\b.*\b(buscar|procurar|encontrar|achar)\b.*\b(produto|item|coisa)\b'),
+            re.compile(r'\bcomo\b.*\bfunciona\b'),
+            re.compile(r'\bcomo\b.*\busar\b.*\b(sistema|site|app|zavlo)\b'),
+            re.compile(r'\bcomo\b.*\bfazer\b.*\b(busca|pesquisa)\b'),
+            re.compile(r'\bque\b.*\bfazer\b.*\b(buscar|procurar)\b'),
+            re.compile(r'\bo que\b.*\bdigitar\b'),
+            re.compile(r'\bposso\b.*\bbuscar\b.*\b(por|um)\b'),
+            re.compile(r'\bajuda\b'),
+            re.compile(r'\bhelp\b'),
+            re.compile(r'\bensinar\b'),
+            re.compile(r'\bexplicar\b.*\b(como|funciona)\b'),
+            re.compile(r'\bnao sei\b.*\b(o que|como)\b'),
+            re.compile(r'\bestou perdido\b'),
+            re.compile(r'\be agora\b'),
+            re.compile(r'^o que.*fazer'),
+            re.compile(r'\bconfuso\b'),
+            re.compile(r'\bduvida\b')
+        ]
     
     def normalize_query(self, query: str) -> str:
         """Normaliza a query removendo acentos e convertendo para lowercase (MELHORADO)"""
@@ -128,16 +103,19 @@ class ProductClassifier:
         query = unicodedata.normalize("NFKD", query)
         query = "".join(c for c in query if not unicodedata.combining(c))
         
+        # Aplicar sinônimos
+        words = query.split()
+        normalized_words = [self.synonyms.get(word, word) for word in words]
+        query = " ".join(normalized_words)
+        
         return query
     
     def keyword_match(self, keyword: str, text: str) -> bool:
         """Match de keyword com word boundary (evita falsos positivos)"""
         return bool(re.search(rf'\b{re.escape(keyword)}\b', text))
     
-    def detect_brand(self, query: str) -> str | None:
+    def detect_brand(self, normalized: str) -> str | None:
         """Detecta marca do produto"""
-        normalized = self.normalize_query(query)
-        
         # Verificar marcas de carros
         for brand in self.car_brands:
             if self.keyword_match(brand, normalized):
@@ -150,9 +128,8 @@ class ProductClassifier:
         
         return None
     
-    def detect_model(self, query: str) -> str | None:
+    def detect_model(self, normalized: str) -> str | None:
         """Detecta modelo do produto (smartphones principalmente)"""
-        normalized = self.normalize_query(query)
         
         # Padrões de modelos de iPhone
         iphone_pattern = r'iphone\s*(\d+|x|xs|xr|se|pro|max|plus|mini)'
@@ -174,6 +151,16 @@ class ProductClassifier:
         
         return None
     
+    def detect_year(self, normalized: str) -> int | None:
+        """Detecta ano do veículo (1980-2029)"""
+        match = self.year_pattern_compiled.search(normalized)
+        if match:
+            year = int(match.group(1))
+            # Validar ano razoável
+            if 1980 <= year <= 2029:
+                return year
+        return None
+    
     def normalize_query_for_scraper(self, query: str, category: str) -> str:
         """Normaliza query para enviar ao scraper (remove palavras desnecessárias)"""
         normalized = self.normalize_query(query)
@@ -191,39 +178,20 @@ class ProductClassifier:
         
         return normalized.strip()
     
-    def detect_condition(self, query: str) -> str:
-        """Detecta se o produto é novo ou usado"""
-        normalized = self.normalize_query(query)
-        
-        # Padrões de usado (EXPANDIDO)
-        used_patterns = [
-            r'\busado\b', r'\busada\b', r'\busados\b', r'\busadas\b',
-            r'\bseminovo\b', r'\bseminova\b', r'\bsemi-novo\b', r'\bsemi novo\b',
-            r'\bsegunda mao\b', r'\bsegunda-mao\b', r'\b2a mao\b',
-            r'\buso\b', r'\bde uso\b', r'\bja usado\b', r'\bjá usado\b'
-        ]
-        
-        # Padrões de novo (EXPANDIDO)
-        new_patterns = [
-            r'\bnovo\b', r'\bnova\b', r'\bnovos\b', r'\bnovas\b',
-            r'\blacrado\b', r'\blacrada\b', r'\b0km\b', r'\bzero km\b',
-            r'\bna caixa\b', r'\bnunca usado\b', r'\bsem uso\b',
-            r'\bnovo na caixa\b', r'\bnovo lacrado\b'
-        ]
-        
-        for pattern in used_patterns:
-            if re.search(pattern, normalized):
+    def detect_condition(self, normalized: str) -> str:
+        """Detecta se o produto é novo ou usado (usando regex compiladas)"""
+        for pattern in self.used_patterns_compiled:
+            if pattern.search(normalized):
                 return "used"
         
-        for pattern in new_patterns:
-            if re.search(pattern, normalized):
+        for pattern in self.new_patterns_compiled:
+            if pattern.search(normalized):
                 return "new"
         
         return "unknown"
     
-    def detect_location(self, query: str) -> bool:
+    def detect_location(self, normalized: str) -> bool:
         """Detecta se a query contém informação de localização (MELHORADO - evita falsos positivos)"""
-        normalized = self.normalize_query(query)
         
         # Estados brasileiros (siglas e nomes) - lista explícita
         estados = [
@@ -261,83 +229,43 @@ class ProductClassifier:
         
         return False
     
-    def is_question_about_usage(self, query: str) -> bool:
-        """Detecta se o usuário está perguntando como usar o sistema"""
-        normalized = self.normalize_query(query)
-        
-        # Padrões que indicam pergunta sobre o SISTEMA (não sobre produto)
-        system_question_patterns = [
-            r'\bcomo\b.*\b(buscar|procurar|encontrar|achar)\b.*\b(produto|item|coisa)\b',
-            r'\bcomo\b.*\bfunciona\b',
-            r'\bcomo\b.*\busar\b.*\b(sistema|site|app|zavlo)\b',
-            r'\bcomo\b.*\bfazer\b.*\b(busca|pesquisa)\b',
-            r'\bque\b.*\bfazer\b.*\b(buscar|procurar)\b',
-            r'\bo que\b.*\bdigitar\b',
-            r'\bposso\b.*\bbuscar\b.*\b(por|um)\b',
-            r'\bajuda\b',
-            r'\bhelp\b',
-            r'\bensinar\b',
-            r'\bexplicar\b.*\b(como|funciona)\b',
-            r'\bnao sei\b.*\b(o que|como)\b',
-            r'\bestou perdido\b',
-            r'\be agora\b',
-            r'^o que.*fazer',
-            r'\bconfuso\b',
-            r'\bduvida\b'
-        ]
-        
-        for pattern in system_question_patterns:
-            if re.search(pattern, normalized):
+    def is_question_about_usage(self, normalized: str) -> bool:
+        """Detecta se o usuário está perguntando como usar o sistema (usando regex compiladas)"""
+        for pattern in self.system_question_patterns_compiled:
+            if pattern.search(normalized):
                 return True
         return False
     
-    def has_result_limit(self, query: str) -> bool:
+    def has_result_limit(self, normalized: str) -> bool:
         """Detecta se o usuário especificou quantidade de resultados"""
-        normalized = self.normalize_query(query)
-        
-        # Padrões que indicam quantidade
-        limit_patterns = [
-            r'\b10\s*(resultados|produtos|itens)?\b',
-            r'\b20\s*(resultados|produtos|itens)?\b',
-            r'\bdez\s*(resultados|produtos|itens)?\b',
-            r'\bvinte\s*(resultados|produtos|itens)?\b',
-        ]
-        
-        for pattern in limit_patterns:
-            if re.search(pattern, normalized):
-                return True
-        return False
+        return self.limit_pattern_compiled.search(normalized) is not None
     
-    def extract_result_limit(self, query: str) -> int | None:
+    def extract_result_limit(self, normalized: str) -> int | None:
         """Extrai quantidade de resultados da query"""
-        normalized = self.normalize_query(query)
+        match = self.limit_pattern_compiled.search(normalized)
         
-        # Verificar números explícitos
-        if re.search(r'\b10\b', normalized) or re.search(r'\bdez\b', normalized):
+        if match:
+            limit = int(match.group(1))
+            # Limitar entre 1 e 50
+            return min(max(limit, 1), 50)
+        
+        # Palavras por extenso
+        if re.search(r'\bdez\s*(resultados|produtos|itens)', normalized):
             return 10
-        if re.search(r'\b20\b', normalized) or re.search(r'\bvinte\b', normalized):
+        if re.search(r'\bvinte\s*(resultados|produtos|itens)', normalized):
             return 20
         
         return None
     
-    def is_greeting(self, query: str) -> bool:
-        """Detecta saudações"""
-        normalized = self.normalize_query(query)
-        
-        greetings = [
-            r'^ola\b', r'^oi\b', r'^hey\b', r'^e ai\b',
-            r'^bom dia\b', r'^boa tarde\b', r'^boa noite\b',
-            r'^hello\b', r'^hi\b'
-        ]
-        
-        for pattern in greetings:
-            if re.search(pattern, normalized):
+    def is_greeting(self, normalized: str) -> bool:
+        """Detecta saudações (usando regex compiladas)"""
+        for pattern in self.greeting_patterns_compiled:
+            if pattern.search(normalized):
                 return True
         return False
     
-    def extract_partial_intent(self, query: str) -> Dict[str, any]:
+    def extract_partial_intent(self, normalized: str) -> Dict[str, any]:
         """Extrai intenção parcial quando usuário está perdido"""
-        normalized = self.normalize_query(query)
         
         # Detectar se mencionou alguma categoria vagamente
         vague_intents = {
@@ -373,10 +301,9 @@ class ProductClassifier:
         
         return ' '.join(product_words).strip()
     
-    def generate_guided_question(self, query: str) -> str | None:
+    def generate_guided_question(self, normalized: str) -> str | None:
         """Gera pergunta guiada baseada no contexto"""
-        normalized = self.normalize_query(query)
-        partial_intent = self.extract_partial_intent(query)
+        partial_intent = self.extract_partial_intent(normalized)
         
         # Se usuário mencionou categoria vaga, perguntar especificamente
         if partial_intent['has_partial_intent']:
@@ -409,18 +336,19 @@ class ProductClassifier:
                 "extracted_product": str | None
             }
         """
+        # NORMALIZAR APENAS UMA VEZ (performance)
         normalized = self.normalize_query(query)
         
         # 🆕 DETECTAR PERGUNTAS E SAUDAÇÕES
-        is_question = self.is_question_about_usage(query)
-        is_greeting = self.is_greeting(query)
+        is_question = self.is_question_about_usage(normalized)
+        is_greeting = self.is_greeting(normalized)
         extracted_product = None
         
         if is_question:
             logger.info("Pergunta sobre o sistema detectada!")
             
             # Tentar gerar pergunta guiada
-            guided_question = self.generate_guided_question(query)
+            guided_question = self.generate_guided_question(normalized)
             
             # Perguntas sobre o sistema não devem buscar produtos
             return {
@@ -455,7 +383,7 @@ class ProductClassifier:
                 "extracted_product": None
             }
         
-        condition = self.detect_condition(query)
+        condition = self.detect_condition(normalized)
         
         logger.info(f"Classificando query: '{query}' (normalizada: '{normalized}')")
         
@@ -535,19 +463,20 @@ class ProductClassifier:
         # Normalizar scores para retorno
         normalized_scores = {k: v / total_score for k, v in scores.items()} if total_score > 0 else scores
         
-        # Pegar scrapers recomendados
-        scrapers = self.categories[best_category]["scrapers"]
+        # Pegar scrapers recomendados (CÓPIA para evitar efeitos colaterais)
+        scrapers = self.categories[best_category]["scrapers"].copy()
         
         # Se condição é "usado", priorizar OLX
         if condition == "used" and "olx" in scrapers:
-            scrapers = ["olx"] + [s for s in scrapers if s != "olx"]
+            scrapers.remove("olx")
+            scrapers.insert(0, "olx")
         
         # 🆕 DETECTAR CAMPOS FALTANTES (ORDEM DE PRIORIDADE)
         missing_fields = []
         suggested_question = None
         
         # 1. QUANTIDADE DE RESULTADOS (SEMPRE PERGUNTAR PRIMEIRO)
-        if not self.has_result_limit(query):
+        if not self.has_result_limit(normalized):
             missing_fields.append("result_limit")
             suggested_question = "Quantos resultados você quer ver?"
         
@@ -558,16 +487,17 @@ class ProductClassifier:
         
         # 3. Verificar localização (apenas para carros/motos) - APENAS SE JÁ TEM LIMITE E CONDIÇÃO
         elif best_category in ["car", "motorcycle"]:
-            has_location = self.detect_location(query)
+            has_location = self.detect_location(normalized)
             if not has_location:
                 missing_fields.append("location")
                 suggested_question = "Em qual **cidade ou estado** você está procurando?"
         
-        # 🆕 DETECTAR MARCA E MODELO
-        detected_brand = self.detect_brand(query)
-        detected_model = self.detect_model(query)
+        # 🆕 DETECTAR MARCA, MODELO E ANO
+        detected_brand = self.detect_brand(normalized)
+        detected_model = self.detect_model(normalized)
+        detected_year = self.detect_year(normalized) if best_category in ["car", "motorcycle"] else None
         normalized_for_scraper = self.normalize_query_for_scraper(query, best_category)
-        result_limit = self.extract_result_limit(query)
+        result_limit = self.extract_result_limit(normalized)
         
         result = {
             "category": best_category,
@@ -582,6 +512,7 @@ class ProductClassifier:
             "extracted_product": extracted_product,
             "detected_brand": detected_brand,
             "detected_model": detected_model,
+            "detected_year": detected_year,
             "normalized_query": normalized_for_scraper,
             "result_limit": result_limit
         }
@@ -609,3 +540,21 @@ class ProductClassifier:
             scrapers.insert(0, "google_shopping")
         
         return scrapers
+    
+    def reload_config(self):
+        """
+        Recarrega configurações do JSON sem reiniciar o servidor
+        Útil para atualizar categorias/keywords em produção
+        """
+        logger.info("Recarregando configurações do JSON...")
+        self.config_loader.reload()
+        
+        # Atualizar referências
+        self.synonyms = self.config_loader.get_synonyms()
+        self.categories = self.config_loader.get_categories()
+        
+        brands = self.config_loader.get_brands()
+        self.car_brands = set(brands.get("car", []))
+        self.moto_brands = set(brands.get("motorcycle", []))
+        
+        logger.info("Configurações recarregadas com sucesso!")

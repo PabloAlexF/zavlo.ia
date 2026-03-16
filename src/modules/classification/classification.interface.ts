@@ -14,8 +14,9 @@ export interface ClassificationResult {
   extracted_product?: string | null;
   detected_brand?: string | null;
   detected_model?: string | null;
+  detected_year?: number | null;  // 🆕 NOVO: Ano do veículo
   normalized_query?: string;
-  result_limit?: number;
+  result_limit?: number;  // 🆕 ATUALIZADO: Limite de resultados (1-50)
   guided_response?: string | null;
 }
 

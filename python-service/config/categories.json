@@ -1,0 +1,112 @@
+{
+  "categories": {
+    "car": {
+      "keywords": [
+        "carro", "carros", "veiculo", "veículo", "automovel", "automóvel",
+        "toyota", "honda", "fiat", "chevrolet", "ford", "volkswagen", "vw",
+        "hyundai", "nissan", "renault", "peugeot", "citroen", "jeep",
+        "sedan", "suv", "hatch", "pickup", "caminhonete",
+        "corolla", "civic", "onix", "gol", "polo", "hb20", "creta",
+        "compass", "renegade", "kicks", "tracker", "t-cross"
+      ],
+      "scrapers": ["webmotors", "mobiauto"],
+      "priority": 10
+    },
+    "motorcycle": {
+      "keywords": [
+        "moto", "motos", "motocicleta", "motocicletas", "scooter",
+        "honda", "yamaha", "suzuki", "kawasaki", "harley",
+        "cg", "fazer", "cb", "xre", "bros", "titan", "fan",
+        "biz", "pcx", "nmax", "mt", "r1", "ninja", "z"
+      ],
+      "scrapers": ["webmotors", "mobiauto"],
+      "priority": 9
+    },
+    "smartphone": {
+      "keywords": [
+        "iphone", "samsung", "xiaomi", "motorola", "lg", "asus",
+        "smartphone", "celular", "telefone", "galaxy", "redmi",
+        "poco", "realme", "oneplus", "pixel", "moto g", "moto e",
+        "note", "pro max", "ultra", "fold", "flip"
+      ],
+      "scrapers": ["google_shopping", "olx"],
+      "priority": 8
+    },
+    "electronics": {
+      "keywords": [
+        "notebook", "laptop", "computador", "pc", "desktop",
+        "tablet", "ipad", "monitor", "tv", "televisão", "televisao",
+        "playstation", "xbox", "nintendo", "switch", "ps5", "ps4",
+        "camera", "câmera", "fone", "headphone", "airpods",
+        "macbook", "dell", "lenovo", "acer", "asus", "gamer",
+        "rtx", "gtx", "ryzen", "intel", "i5", "i7", "i9"
+      ],
+      "scrapers": ["google_shopping", "olx"],
+      "priority": 7
+    },
+    "furniture": {
+      "keywords": [
+        "sofa", "sofá", "mesa", "cadeira", "cama", "guarda-roupa",
+        "armario", "armário", "estante", "rack", "criado-mudo",
+        "movel", "móvel", "moveis", "móveis", "colchao", "colchão"
+      ],
+      "scrapers": ["olx", "google_shopping"],
+      "priority": 6
+    },
+    "appliance": {
+      "keywords": [
+        "geladeira", "fogao", "fogão", "microondas", "lavadora",
+        "secadora", "freezer", "ar-condicionado", "ventilador",
+        "liquidificador", "batedeira", "aspirador", "ferro de passar"
+      ],
+      "scrapers": ["google_shopping", "olx"],
+      "priority": 6
+    },
+    "fashion": {
+      "keywords": [
+        "tenis", "tênis", "sapato", "bota", "sandalia", "sandália",
+        "camisa", "camiseta", "calça", "calca", "jaqueta", "casaco",
+        "vestido", "saia", "short", "bermuda", "nike", "adidas",
+        "puma", "reebok", "vans", "converse", "air max", "jordan",
+        "yeezy", "ultraboost", "roupa", "roupas"
+      ],
+      "scrapers": ["google_shopping", "olx"],
+      "priority": 5
+    },
+    "marketplace_used": {
+      "keywords": [
+        "usado", "usada", "usados", "usadas", "seminovo", "seminova",
+        "segunda mao", "segunda mão", "usado em bom estado"
+      ],
+      "scrapers": ["olx"],
+      "priority": 8
+    },
+    "general": {
+      "keywords": [],
+      "scrapers": ["google_shopping"],
+      "priority": 1
+    }
+  },
+  "brands": {
+    "car": [
+      "toyota", "honda", "fiat", "chevrolet", "ford", "volkswagen", "vw",
+      "hyundai", "nissan", "renault", "peugeot", "citroen", "jeep",
+      "bmw", "mercedes", "audi", "volvo", "mitsubishi", "kia"
+    ],
+    "motorcycle": [
+      "honda", "yamaha", "suzuki", "kawasaki", "harley", "ducati",
+      "triumph", "bmw", "ktm", "cg", "fazer", "cb", "xre"
+    ]
+  },
+  "synonyms": {
+    "celular": "smartphone",
+    "telefone": "smartphone",
+    "automovel": "carro",
+    "veiculo": "carro",
+    "motocicleta": "moto",
+    "pc": "computador",
+    "tv": "televisao",
+    "sofa": "sofa",
+    "movel": "moveis"
+  }
+}

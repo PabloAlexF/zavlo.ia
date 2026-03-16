@@ -32,8 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Inicializar classificador
+# Inicializar classificador (carrega config/categories.json)
+logger.info("Inicializando ProductClassifier...")
 classifier = ProductClassifier()
+logger.info(f"Classificador pronto! Categorias: {len(classifier.categories)}, Sinônimos: {len(classifier.synonyms)}")
 
 @app.get("/")
 async def root():
@@ -113,6 +115,22 @@ async def test_classify(queries: List[str]):
         "total_queries": len(queries),
         "results": results
     }
+
+@app.post("/api/reload-config")
+async def reload_config():
+    """Hot-reload de configurações sem reiniciar servidor"""
+    try:
+        classifier.reload_config()
+        logger.info("✅ Configurações recarregadas com sucesso!")
+        return {
+            "status": "success",
+            "message": "Configurações recarregadas",
+            "categories": len(classifier.categories),
+            "synonyms": len(classifier.synonyms)
+        }
+    except Exception as e:
+        logger.error(f"❌ Erro ao recarregar: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
