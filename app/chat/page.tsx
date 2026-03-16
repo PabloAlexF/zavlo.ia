@@ -13,8 +13,6 @@ import { ProductCard } from '@/components/features/ProductCard';
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
 import { parseProductQuery, buildSearchQuery } from '@/utils/chat/productParser';
-import { handleGenericProduct } from '@/utils/chat/genericProductHandler';
-import { cleanProductQuery } from '@/utils/chat/queryProcessor';
 import { 
   detectProductCategory, 
   PRODUCT_CATEGORIES, 
@@ -1318,58 +1316,16 @@ const loadChatHistory = async () => {
 
     // Pipeline NLP
     setTimeout(() => {
-      // 1. Corrigir erros comuns de digitação (marcas)
-      const typosCorrected = correctCommonTypos(currentInput);
-      
-      // 2. Limpar query (remove "estou querendo", "preciso de", etc.)
-      const cleaned = cleanProductQuery(typosCorrected);
-      
-      // 3. Detectar refinamento de busca anterior
-      const refinement = detectRefinement(cleaned);
-      if (refinement.isRefinement && refinement.refinedQuery) {
-        console.log('🔄 Refinamento detectado:', refinement);
-        // Usar query refinada
-        const withContext = contextManager.applyContext(refinement.refinedQuery);
-        const intent = detectIntent(withContext);
-        const parsed = parseProductQuery(withContext);
-        
-        // Atualizar contexto do smartBot
-        updateConversationContext(refinement.refinedQuery, parsed);
-        
-        // Continuar com o fluxo normal usando a query refinada
-        handleParsedQuery(withContext, intent, parsed);
-        return;
-      }
-      
-      // 4. Aplicar contexto
-      const withContext = contextManager.applyContext(cleaned);
-      
-      // 5. Detectar intenção
+      // 1. Detectar intenção
+      const withContext = contextManager.applyContext(currentInput);
       const intent = detectIntent(withContext);
-      
-      // 6. Gerar resposta inteligente baseada no contexto (smartBot)
-      const smartResponse = generateSmartResponse(withContext, intent);
-      if (smartResponse.shouldRespond) {
-        const aiMessage: Message = {
-          id: crypto.randomUUID(),
-          type: 'ai',
-          content: smartResponse.response || '',
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, aiMessage]);
-        setLoading(false);
-        return;
-      }
-      
-      // 7. Detectar intenção de negociação
-      const negotiation = detectNegotiationIntent(withContext);
-      if (negotiation.isNegotiation) {
-        console.log('💰 Intenção de negociação detectada:', negotiation.type);
-        // Continuar com o fluxo normal, mas logar para analytics
-      }
-      
-      // IMPORTANTE: Tratar comandos ANTES de processar como produto
-      // Tratar apresentação pessoal
+      const parsed = parseProductQuery(withContext);
+      console.log('🔍 Pipeline NLP:', {
+        original: currentInput,
+        withContext,
+        intent,
+        parsed
+      });
       if (intent.type === 'introduction') {
         const userName = intent.userName || 'amigo(a)';
         const aiMessage: Message = {
@@ -1512,25 +1468,17 @@ const loadChatHistory = async () => {
         setLoading(false);
         return;
       }
-      
-      // 8. Parse do produto
+      // 2. Parse do produto
       const parsed = parseProductQuery(withContext);
-      
-      // 9. Atualizar contexto do smartBot
-      updateConversationContext(withContext, parsed);
       
       console.log('🔍 Pipeline NLP:', {
         original: currentInput,
-        typosCorrected,
-        cleaned,
         withContext,
         intent,
-        parsed,
-        refinement,
-        negotiation
+        parsed
       });
       
-      // 10. Processar query parseada
+      // 3. Processar query parseada
       handleParsedQuery(withContext, intent, parsed);
     }, 500);
   };
@@ -1539,7 +1487,7 @@ const loadChatHistory = async () => {
   const handleParsedQuery = (withContext: string, intent: any, parsed: any) => {
     // 1. Verificar se é genérico
     if (parsed.isGeneric) {
-        const genericMessage = handleGenericProduct(parsed.product);
+        const genericMessage = `🤔 "${parsed.product}" é muito genérico!\n\nPara melhores resultados, seja mais específico:\n\n💡 Exemplos:\n• Marca: "${parsed.product} Samsung"\n• Modelo: "${parsed.product} Galaxy S23"\n• Características: "${parsed.product} 128GB preto"\n\n🔍 Digite novamente com mais detalhes!`;
         const aiMessage: Message = {
           id: crypto.randomUUID(),
           type: 'ai',
