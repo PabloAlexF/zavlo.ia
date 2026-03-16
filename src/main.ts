@@ -76,7 +76,7 @@ async function bootstrap() {
   );
 
   const port = configService.get('PORT') || 3001;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0'); // Escutar em todas as interfaces (necessário para Render)
 
   console.log(`🚀 Zavlo.ia Backend rodando na porta ${port}`);
   console.log(`📍 API disponível em: http://localhost:${port}/${configService.get('API_PREFIX')}`);
