@@ -8,6 +8,7 @@ from typing import List, Dict, Optional
 import logging
 
 from app.models.classifier import ProductClassifier
+from app.utils.keyword_learner import KeywordLearner
 
 # Configurar logging
 logging.basicConfig(
@@ -34,7 +35,15 @@ app.add_middleware(
 
 # Inicializar classificador (carrega config/categories.json)
 logger.info("Inicializando ProductClassifier...")
-classifier = ProductClassifier()
+
+# Inicializar sistema de aprendizado PRIMEIRO
+logger.info("Inicializando KeywordLearner...")
+learner = KeywordLearner()
+stats = learner.get_stats()
+logger.info(f"Learner pronto! Keywords aprendidas: {stats['total_learned_keywords']}, Buscas únicas: {stats['total_unique_searches']}")
+
+# Passar learner para o classificador
+classifier = ProductClassifier(learner=learner)
 logger.info(f"Classificador pronto! Categorias: {len(classifier.categories)}, Sinônimos: {len(classifier.synonyms)}")
 
 @app.get("/")
@@ -67,6 +76,14 @@ async def classify_query(request: dict):
         result = classifier.classify(query)
         
         logger.info(f"✅ Classificação: {result['category']} (confiança: {result['confidence']})")
+        
+        # 🎓 APRENDIZADO AUTOMÁTICO: Registrar busca
+        if not result.get('is_question') and not result.get('is_greeting'):
+            learner.record_search(
+                query=query,
+                category=result['category'],
+                confidence=result['confidence']
+            )
         
         return result
         
@@ -131,6 +148,68 @@ async def reload_config():
     except Exception as e:
         logger.error(f"❌ Erro ao recarregar: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/learning/stats")
+async def get_learning_stats():
+    """🎓 Retorna estatísticas do aprendizado automático"""
+    return learner.get_stats()
+
+@app.get("/api/learning/top-searches")
+async def get_top_searches(limit: int = 20):
+    """🔥 Retorna as buscas mais frequentes"""
+    return {
+        "top_searches": learner.get_top_searches(limit=limit)
+    }
+
+@app.get("/api/learning/learned-keywords")
+async def get_learned_keywords(category: Optional[str] = None):
+    """🎯 Retorna keywords aprendidas automaticamente"""
+    keywords = learner.get_learned_keywords(category=category)
+    return {
+        "category": category or "all",
+        "count": len(keywords),
+        "keywords": keywords
+    }
+
+@app.post("/api/learning/export")
+async def export_learned_keywords():
+    """📤 Exporta keywords aprendidas para categories.json (ADMIN)"""
+    try:
+        learned_by_category = {}
+        
+        # Agrupar por categoria
+        for kw, data in learner.data["learned_keywords"].items():
+            if data["status"] != "active":
+                continue
+            
+            category = data["category"]
+            if category not in learned_by_category:
+                learned_by_category[category] = []
+            
+            learned_by_category[category].append({
+                "keyword": kw,
+                "frequency": data["frequency"],
+                "learned_at": data["learned_at"]
+            })
+        
+        return {
+            "status": "success",
+            "learned_by_category": learned_by_category,
+            "total_keywords": sum(len(kws) for kws in learned_by_category.values()),
+            "message": "Revise e adicione manualmente em config/categories.json"
+        }
+    except Exception as e:
+        logger.error(f"❌ Erro ao exportar: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/learning/reset")
+async def reset_learning():
+    """⚠️ Reseta todo o aprendizado (usar com cuidado!)"""
+    learner.reset_learning()
+    return {
+        "status": "success",
+        "message": "Aprendizado resetado"
+    }
 
 if __name__ == "__main__":
     import uvicorn

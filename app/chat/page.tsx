@@ -467,7 +467,24 @@ export default function ChatPage() {
   };
 
   const handleHybridAnswer = async (answer: string) => {
-    const enrichedQuery = `${originalQuery} ${answer}`.trim();
+    // Construir query enriquecida baseada no tipo de resposta
+    let enrichedQuery = originalQuery;
+    
+    const currentField = hybridMissingFields[0];
+    
+    if (currentField === 'result_limit') {
+      // Para limite de resultados, adicionar de forma natural
+      enrichedQuery = `${answer} de ${originalQuery}`.trim();
+    } else if (currentField === 'condition') {
+      // Para condição, adicionar após o produto
+      enrichedQuery = `${originalQuery} ${answer}`.trim();
+    } else if (currentField === 'location') {
+      // Para localização, adicionar com "em"
+      enrichedQuery = `${originalQuery} em ${answer}`.trim();
+    } else {
+      // Fallback genérico
+      enrichedQuery = `${originalQuery} ${answer}`.trim();
+    }
     
     // Verificar se ainda tem campos faltantes
     const currentMissingIndex = hybridMissingFields.indexOf(hybridMissingFields[0]);
@@ -650,6 +667,30 @@ export default function ChatPage() {
           setLoading(false);
           setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
           
+          const questionType = data.classification?.question_type;
+          
+          // 💳 PERGUNTAS SOBRE CRÉDITOS
+          if (questionType === 'credits') {
+            const creditsMessage = `💰 **Seus Créditos: ${userCredits}**\n\n📊 **Custos por busca:**\n• Busca por texto: **1 crédito**\n• Busca por imagem: **2 créditos** (1 para identificar + 1 para buscar preços)\n\n🔄 **Precisa de mais créditos?**\nVocê pode comprar créditos avulsos ou assinar um plano mensal!`;
+            addMessage('ai', creditsMessage);
+            return;
+          }
+          
+          // 🔄 PERGUNTAS SOBRE RECARGA
+          if (questionType === 'recharge') {
+            const rechargeMessage = `🔄 **Como comprar créditos:**\n\n**Opção 1: Créditos Avulsos**\n• Acesse: **Perfil → Comprar Créditos**\n• Escolha o pacote desejado\n• Pague via PIX instantâneo\n\n**Opção 2: Assinar Plano Mensal**\n• Acesse: **Perfil → Planos**\n• Créditos renovam automaticamente todo mês\n• Melhor custo-benefício!\n\n💳 **Formas de pagamento:**\nPIX, Cartão de Crédito e Boleto`;
+            addMessage('ai', rechargeMessage);
+            return;
+          }
+          
+          // 📊 PERGUNTAS SOBRE PLANOS
+          if (questionType === 'plans') {
+            const plansMessage = `📊 **Nossos Planos:**\n\n🌱 **Básico - R$ 27/mês**\n• 100 créditos/mês\n• Busca por texto e imagem\n• Suporte por email\n\n🚀 **Pro - R$ 77/mês**\n• 300 créditos/mês\n• Todos os recursos do Básico\n• Alertas de preço\n• Suporte prioritário\n\n👑 **Business - R$ 197/mês**\n• 1000 créditos/mês\n• Todos os recursos do Pro\n• API de integração\n• Suporte dedicado\n\n👉 **Para assinar:** Acesse **Perfil → Planos**`;
+            addMessage('ai', plansMessage);
+            return;
+          }
+          
+          // ❓ PERGUNTAS SOBRE USO DO SISTEMA
           const guidedResponse = data.classification?.guided_response;
           if (guidedResponse) {
             addMessage('ai', guidedResponse);
