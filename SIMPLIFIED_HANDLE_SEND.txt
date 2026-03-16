@@ -1,0 +1,193 @@
+// VERSÃO SIMPLIFICADA DO HANDLE SEND - MODO HÍBRIDO
+
+const handleSend = async (messageText?: string) => {
+  const currentInput = messageText || input;
+  if (!currentInput || !String(currentInput).trim() || loading) return;
+
+  const userMessage: Message = {
+    id: crypto.randomUUID(),
+    type: 'user',
+    content: currentInput,
+    timestamp: new Date(),
+  };
+
+  setMessages(prev => [...prev, userMessage]);
+  setInput('');
+  setLoading(true);
+
+  // Verificar créditos
+  if (userCredits < 1) {
+    setTimeout(() => {
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'ai',
+        content: '💳 Créditos insuficientes!\\n\\nVocê precisa de pelo menos 1 crédito para fazer buscas.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setLoading(false);
+    }, 500);
+    return;
+  }
+
+  setTimeout(() => {
+    const withContext = contextManager.applyContext(currentInput);
+    const intent = detectIntent(withContext);
+
+    // Tratar comandos especiais
+    if (intent.type === 'introduction') {
+      const userName = intent.userName || 'amigo(a)';
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'ai',
+        content: `Prazer em conhecer você, ${userName}! 😊\\n\\nDigite o produto que procura!`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      setLoading(false);
+      return;
+    }
+
+    if (intent.type === 'greeting') {
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'ai',
+        content: 'Olá! 👋 Que produto você está procurando?',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      setLoading(false);
+      return;
+    }
+
+    if (intent.type === 'help') {
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'ai',
+        content: '❓ Como usar:\\n\\n1️⃣ Digite o produto\\n2️⃣ Responda perguntas (se houver)\\n3️⃣ Veja os resultados!',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      setLoading(false);
+      return;
+    }
+
+    // Se não for busca, avisar
+    if (intent.type !== 'search' && intent.type !== 'buy') {
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'ai',
+        content: '🤔 Não entendi... Digite um produto para buscar!',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      setLoading(false);
+      return;
+    }
+
+    // Buscar produto (modo híbrido)
+    executeSearch(withContext);
+  }, 500);
+};
+
+const executeSearch = async (query: string) => {
+  const searchingMessage: Message = {
+    id: crypto.randomUUID(),
+    type: 'ai',
+    content: 'searching_animation',
+    timestamp: new Date(),
+  };
+  setMessages(prev => [...prev, searchingMessage]);
+
+  try {
+    const user = localStorage.getItem('zavlo_user');
+    if (!user) {
+      router.push('/auth');
+      return;
+    }
+
+    const userData = JSON.parse(user);
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    
+    const params = new URLSearchParams({
+      query: query,
+      limit: '50',
+      sortBy: 'RELEVANCE'
+    });
+    
+    const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${userData.token}`,
+      },
+    });
+
+    if (response.status === 401) {
+      localStorage.removeItem('zavlo_user');
+      router.push('/auth');
+      return;
+    }
+
+    if (response.ok) {
+      const data = await response.json();
+      
+      // MODO HÍBRIDO: Verificar se precisa fazer pergunta
+      if (data.needsQuestion && data.question) {
+        setHybridQuestion(data.question);
+        setHybridMissingFields(data.missingFields || []);
+        setHybridClassification(data.classification);
+        setOriginalQuery(query);
+        setLoading(false);
+        setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
+        return;
+      }
+      
+      const products = data.results || [];
+      
+      if (typeof data.remainingCredits === 'number') {
+        setUserCredits(data.remainingCredits);
+        const updatedUser = { ...userData, credits: data.remainingCredits };
+        localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
+        window.dispatchEvent(new Event('userChanged'));
+      }
+      
+      const creditsUsed = data.creditsUsed || 1;
+      const remainingCredits = data.remainingCredits ?? userCredits - 1;
+      
+      setTimeout(() => {
+        const productsMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'products',
+          content: `✅ Encontrei ${products.length} produtos!\\n\\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
+          products: products,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, productsMessage]);
+        contextManager.update({
+          lastResults: products,
+          lastProduct: query
+        });
+        setLoading(false);
+      }, 1000);
+    } else {
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'ai',
+        content: 'Erro na busca. Tente novamente.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setLoading(false);
+    }
+  } catch (error) {
+    console.error('Search error:', error);
+    const errorMessage: Message = {
+      id: crypto.randomUUID(),
+      type: 'ai',
+      content: 'Erro ao processar busca. Tente novamente.',
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, errorMessage]);
+    setLoading(false);
+  }
+};
