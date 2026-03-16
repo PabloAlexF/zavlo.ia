@@ -9,6 +9,12 @@ export interface ClassificationResult {
   all_scores: Record<string, number>;
   missing_fields: string[];
   suggested_question: string | null;
+  is_question?: boolean;
+  is_greeting?: boolean;
+  extracted_product?: string | null;
+  detected_brand?: string | null;
+  detected_model?: string | null;
+  normalized_query?: string;
 }
 
 /**
