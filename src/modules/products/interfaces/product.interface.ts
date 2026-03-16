@@ -19,6 +19,7 @@ export interface Product {
   };
   condition?: 'new' | 'used';
   rating?: number; // Rating do produto (0-5)
+  brand?: string; // 🆕 Marca do produto (para deduplicação)
   createdAt: Date;
   updatedAt: Date;
   scrapedAt: Date;

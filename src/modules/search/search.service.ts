@@ -177,8 +177,8 @@ export class SearchService {
         return {
           classification,
           is_question: true,
-          question_type: classification.question_type,
-          guided_response: classification.guided_response,
+          question_type: (classification as any).question_type,
+          guided_response: (classification as any).guided_response,
         };
       }
       
