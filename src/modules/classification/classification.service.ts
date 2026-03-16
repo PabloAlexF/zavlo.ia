@@ -66,6 +66,8 @@ export class ClassificationService {
         recommended_scrapers: ['google_shopping'],
         condition: 'unknown',
         all_scores: { general: 0.5 },
+        missing_fields: [],
+        suggested_question: null,
       };
     }
   }
