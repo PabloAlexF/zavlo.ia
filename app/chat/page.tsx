@@ -1468,8 +1468,6 @@ const loadChatHistory = async () => {
         setLoading(false);
         return;
       }
-      // 2. Parse do produto
-      const parsed = parseProductQuery(withContext);
       
       console.log('🔍 Pipeline NLP:', {
         original: currentInput,
