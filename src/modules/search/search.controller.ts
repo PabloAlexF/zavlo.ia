@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Query, Req, ForbiddenException, UseGuards,
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { SearchService } from './search.service';
+import { CloudinaryService } from './cloudinary.service';
 import { IpLimitService } from './ip-limit.service';
 import { SearchTextDto, SearchImageDto } from './dto/search.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -12,6 +13,7 @@ import { CurrentUser } from '@common/decorators/current-user.decorator';
 export class SearchController {
   constructor(
     private searchService: SearchService,
+    private cloudinaryService: CloudinaryService,
     private ipLimitService: IpLimitService,
   ) {}
 
@@ -26,6 +28,25 @@ export class SearchController {
     return req.ip || req.connection.remoteAddress || 'unknown';
   }
 
+  @Post('classify')
+  @UseGuards(OptionalJwtAuthGuard)
+  async classifyQuery(
+    @Body() body: { query: string },
+    @CurrentUser() user?: any,
+  ) {
+    const { query } = body;
+
+    console.log(`🔍 [CLASSIFY] Classifying query: ${query}`);
+    console.log(`   - user: ${user ? `${user.id} (${user.plan})` : 'anonymous'}`);
+
+    // ✅ APENAS CLASSIFICAR - NÃO CONSUMIR CRÉDITOS
+    const classification = await this.searchService.classifyQueryOnly(query);
+
+    console.log(`✅ [CLASSIFY] Classification result:`, classification);
+
+    return classification;
+  }
+
   @Get('text')
   @UseGuards(OptionalJwtAuthGuard)
   async searchByText(
@@ -33,6 +54,7 @@ export class SearchController {
     @Query('sortBy') sortBy: 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | undefined,
     @Query('minPrice') minPrice: number | undefined,
     @Query('maxPrice') maxPrice: number | undefined,
+    @Query('classification') classificationStr: string | undefined, // ✅ Receber classificação do frontend
     @Req() req: Request,
     @CurrentUser() user?: any,
   ) {
@@ -44,16 +66,29 @@ export class SearchController {
     console.log(`   - sortBy: ${sortBy}`);
     console.log(`   - minPrice: ${minPrice}`);
     console.log(`   - maxPrice: ${maxPrice}`);
+    console.log(`   - classification provided: ${!!classificationStr}`);
     console.log(`   - user: ${user ? `${user.id} (${user.plan})` : 'anonymous'}`);
     console.log(`   - clientIp: ${clientIp}`);
     console.log(`   - filters:`, filters);
+
+    // ✅ Parse classificação se fornecida
+    let classification;
+    if (classificationStr) {
+      try {
+        classification = JSON.parse(classificationStr);
+        console.log(`✅ [CONTROLLER] Using provided classification, skipping re-classification`);
+      } catch (error) {
+        console.warn(`⚠️ [CONTROLLER] Invalid classification JSON, will re-classify`);
+      }
+    }
 
     // Adiciona sortBy e filtros de preço
     const searchFilters = {
       ...filters,
       sortBy: sortBy || 'RELEVANCE',
       minPrice: minPrice ? Number(minPrice) : undefined,
-      maxPrice: maxPrice ? Number(maxPrice) : undefined
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      providedClassification: classification // ✅ Passar para service
     };
 
     // ============================================
@@ -160,27 +195,8 @@ export class SearchController {
       throw new BadRequestException('Nenhum arquivo enviado');
     }
 
-    // Upload para Cloudinary via backend
-    const FormData = require('form-data');
-    const formData = new FormData();
-    formData.append('file', file.buffer, file.originalname);
-    formData.append('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET || 'zavlo_preset');
-
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME || 'dj2nkf9od'}/image/upload`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
-
-    if (!response.ok) {
-      throw new BadRequestException('Erro ao fazer upload da imagem');
-    }
-
-    const data = await response.json();
-    const imageUrl = data.secure_url.replace(/\/v\d+\//, '/');
-
+    // ✅ PROBLEMA 6 CORRIGIDO: Usar CloudinaryService
+    const imageUrl = await this.cloudinaryService.uploadImage(file);
     return { imageUrl };
   }
 
