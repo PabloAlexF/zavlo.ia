@@ -18,6 +18,7 @@ export interface Product {
     whatsapp?: string;
   };
   condition?: 'new' | 'used';
+  rating?: number; // Rating do produto (0-5)
   createdAt: Date;
   updatedAt: Date;
   scrapedAt: Date;
