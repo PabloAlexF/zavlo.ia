@@ -8,6 +8,7 @@ import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
+import { QuestionModal } from '@/components/chat/QuestionModal';
 import { ProductCard } from '@/components/features/ProductCard';
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
@@ -94,6 +95,12 @@ export default function ChatPage() {
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false);
   const [isEditingQuery, setIsEditingQuery] = useState(false);
   const [editedQuery, setEditedQuery] = useState('');
+  
+  // Modo Híbrido states
+  const [hybridQuestion, setHybridQuestion] = useState<string | null>(null);
+  const [hybridMissingFields, setHybridMissingFields] = useState<string[]>([]);
+  const [hybridClassification, setHybridClassification] = useState<any>(null);
+  const [originalQuery, setOriginalQuery] = useState<string>('');
 
   const [userCredits, setUserCredits] = useState(0);
   
@@ -794,6 +801,122 @@ const loadChatHistory = async () => {
     setImageFile(null);
     setDetectedProductName('');
     setLoading(false);
+  };
+
+  // Handler para responder pergunta do modo híbrido
+  const handleHybridAnswer = async (answer: string) => {
+    setHybridQuestion(null);
+    setHybridMissingFields([]);
+    
+    const enrichedQuery = `${originalQuery} ${answer}`.trim();
+    setLoading(true);
+    
+    const searchingMessage: Message = {
+      id: crypto.randomUUID(),
+      type: 'ai',
+      content: 'searching_animation',
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, searchingMessage]);
+    
+    try {
+      const user = localStorage.getItem('zavlo_user');
+      if (!user) {
+        router.push('/auth');
+        return;
+      }
+
+      const userData = JSON.parse(user);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      
+      const params = new URLSearchParams({
+        query: enrichedQuery,
+        limit: '50',
+        sortBy: 'RELEVANCE'
+      });
+      
+      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${userData.token}`,
+        },
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem('zavlo_user');
+        router.push('/auth');
+        return;
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.needsQuestion && data.question) {
+          setHybridQuestion(data.question);
+          setHybridMissingFields(data.missingFields || []);
+          setHybridClassification(data.classification);
+          setOriginalQuery(enrichedQuery);
+          setLoading(false);
+          setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
+          return;
+        }
+        
+        const products = data.results || [];
+        
+        if (typeof data.remainingCredits === 'number') {
+          setUserCredits(data.remainingCredits);
+          const updatedUser = { ...userData, credits: data.remainingCredits };
+          localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
+          window.dispatchEvent(new Event('userChanged'));
+        }
+        
+        const creditsUsed = data.creditsUsed || 1;
+        const remainingCredits = data.remainingCredits ?? userCredits - 1;
+        
+        setTimeout(() => {
+          const productsMessage: Message = {
+            id: crypto.randomUUID(),
+            type: 'products',
+            content: `✅ Encontrei ${products.length} produtos!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}\n\n🔍 Quer buscar outro produto? Digite agora!`,
+            products: products,
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, productsMessage]);
+          setChatState('idle');
+          setPendingSearch(null);
+          setOriginalQuery('');
+          setLoading(false);
+        }, 1000);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'ai',
+          content: errorData.message || 'Erro na busca. Tente novamente.',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        setChatState('idle');
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Hybrid search error:', error);
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        type: 'ai',
+        content: 'Erro ao processar busca. Tente novamente.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setChatState('idle');
+      setLoading(false);
+    }
+  };
+
+  const handleHybridSkip = async () => {
+    setHybridQuestion(null);
+    setHybridMissingFields([]);
+    await handleHybridAnswer('');
   };
 
   const sendMessage = (text: string) => {
@@ -1689,6 +1812,21 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
 
       if (response.ok) {
         const data = await response.json();
+        
+        // 🆕 VERIFICAR SE PRECISA FAZER PERGUNTA (MODO HÍBRIDO)
+        if (data.needsQuestion && data.question) {
+          setHybridQuestion(data.question);
+          setHybridMissingFields(data.missingFields || []);
+          setHybridClassification(data.classification);
+          setOriginalQuery(searchParams.query);
+          setLoading(false);
+          
+          // Remover mensagem de busca
+          setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
+          
+          return;
+        }
+        
         const products = data.results || [];
         
         if (products.length === 0) {
@@ -1891,6 +2029,16 @@ const buildFinalQuery = (overrideCondition?: string): { query: string; sortBy: s
           fileInputRef={fileInputRef}
         />
       </div>
+
+      {/* Modal de Pergunta Híbrida */}
+      {hybridQuestion && (
+        <QuestionModal
+          question={hybridQuestion}
+          missingFields={hybridMissingFields}
+          onAnswer={handleHybridAnswer}
+          onSkip={handleHybridSkip}
+        />
+      )}
     </div>
   );
 }

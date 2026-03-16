@@ -4,8 +4,12 @@ import { RedisService } from '@config/redis.service';
 import { Product } from '../products/interfaces/product.interface';
 import { GoogleShoppingService } from '../scraping/google-shopping.service';
 import { GoogleLensService } from '../scraping/google-lens.service';
+import { OlxService } from '../scraping/olx.service';
+import { MobiautoService } from '../scraping/mobiauto.service';
+import { WebmotorsService } from '../scraping/webmotors.service';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { ClassificationService } from '../classification/classification.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -17,8 +21,12 @@ export class SearchService {
     private redisService: RedisService,
     private googleShoppingService: GoogleShoppingService,
     private googleLensService: GoogleLensService,
+    private olxService: OlxService,
+    private mobiautoService: MobiautoService,
+    private webmotorsService: WebmotorsService,
     private usersService: UsersService,
     private analyticsService: AnalyticsService,
+    private classificationService: ClassificationService,
   ) {}
 
   /* ============================================
@@ -28,7 +36,16 @@ export class SearchService {
     query: string,
     filters?: any,
     userId?: string,
-  ): Promise<{ results: Product[]; total: number; creditsUsed?: number; remainingCredits?: number }> {
+  ): Promise<{ 
+    results: Product[]; 
+    total: number; 
+    creditsUsed?: number; 
+    remainingCredits?: number;
+    needsQuestion?: boolean;
+    question?: string;
+    missingFields?: string[];
+    classification?: any;
+  }> {
     const startTime = Date.now();
     let creditsUsed = 0;
     let remainingCredits: number | undefined;
@@ -42,6 +59,48 @@ export class SearchService {
     this.logger.log(`   - sortBy: ${sortBy}`);
     this.logger.log(`   - filters: ${JSON.stringify(filters)}`);
     
+    // 🆕 CLASSIFICAÇÃO INTELIGENTE
+    let classification;
+    try {
+      this.logger.log(`🤖 [CLASSIFICATION] Classificando query: "${query}"`);
+      classification = await this.classificationService.classifyQuery(query);
+      this.logger.log(`✅ [CLASSIFICATION] Resultado:`);
+      this.logger.log(`   - Categoria: ${classification.category}`);
+      this.logger.log(`   - Confiança: ${classification.confidence}`);
+      this.logger.log(`   - Scrapers recomendados: ${classification.recommended_scrapers.join(', ')}`);
+      this.logger.log(`   - Condição: ${classification.condition}`);
+      this.logger.log(`   - Campos faltantes: ${classification.missing_fields?.join(', ') || 'nenhum'}`);
+      
+      // 💬 VERIFICAR SE PRECISA FAZER PERGUNTA
+      if (classification.missing_fields && classification.missing_fields.length > 0) {
+        this.logger.log(`❓ [QUESTION] Campos faltantes detectados: ${classification.missing_fields.join(', ')}`);
+        this.logger.log(`❓ [QUESTION] Pergunta sugerida: ${classification.suggested_question}`);
+        
+        // Retornar indicação de que precisa fazer pergunta
+        return {
+          results: [],
+          total: 0,
+          needsQuestion: true,
+          question: classification.suggested_question,
+          missingFields: classification.missing_fields,
+          classification: classification,
+          creditsUsed: 0,
+          remainingCredits: userId ? (await this.usersService.findById(userId))?.credits : undefined
+        };
+      }
+    } catch (error) {
+      this.logger.warn(`⚠️ [CLASSIFICATION] Erro na classificação: ${error.message}`);
+      this.logger.warn(`⚠️ [CLASSIFICATION] Usando fallback (Google Shopping)`);
+      classification = {
+        category: 'general',
+        confidence: 0.5,
+        recommended_scrapers: ['google_shopping'],
+        condition: 'unknown',
+        all_scores: {},
+        missing_fields: [],
+        suggested_question: null
+      };
+    }
     if (userId) {
       this.logger.log(`🔍 [SEARCH DEBUG] User is logged in, checking usage limit...`);
       
@@ -174,13 +233,74 @@ export class SearchService {
     const requestedLimit = filters?.limit || 50;
     const maxLimit = Math.min(requestedLimit, 100); // Máximo 100 conforme API
 
+    // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
+    const scrapers = classification.recommended_scrapers;
+    this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')}`);
+
     try {
-      this.logger.log(`[GOOGLE SHOPPING] Buscando ${maxLimit} produtos com sortBy=${sortBy}...`);
-      
-      products = await this.googleShoppingService.search(normalizedQuery, maxLimit, sortBy);
-      this.logger.log(`[GOOGLE SHOPPING] ${products.length} produtos encontrados`);
+      // Executar scrapers em paralelo
+      const scrapingPromises = [];
+
+      if (scrapers.includes('google_shopping')) {
+        this.logger.log(`[GOOGLE SHOPPING] Buscando ${maxLimit} produtos com sortBy=${sortBy}...`);
+        scrapingPromises.push(
+          this.googleShoppingService.search(normalizedQuery, maxLimit, sortBy)
+            .then(results => ({ source: 'google_shopping', results }))
+            .catch(error => {
+              this.logger.warn(`[GOOGLE SHOPPING] Erro: ${error.message}`);
+              return { source: 'google_shopping', results: [] };
+            })
+        );
+      }
+
+      if (scrapers.includes('olx')) {
+        this.logger.log(`[OLX] Buscando ${maxLimit} produtos...`);
+        scrapingPromises.push(
+          this.olxService.search(normalizedQuery, maxLimit)
+            .then(results => ({ source: 'olx', results }))
+            .catch(error => {
+              this.logger.warn(`[OLX] Erro: ${error.message}`);
+              return { source: 'olx', results: [] };
+            })
+        );
+      }
+
+      if (scrapers.includes('webmotors')) {
+        this.logger.log(`[WEBMOTORS] Buscando ${maxLimit} veículos...`);
+        scrapingPromises.push(
+          this.webmotorsService.search(normalizedQuery, maxLimit)
+            .then(results => ({ source: 'webmotors', results }))
+            .catch(error => {
+              this.logger.warn(`[WEBMOTORS] Erro: ${error.message}`);
+              return { source: 'webmotors', results: [] };
+            })
+        );
+      }
+
+      if (scrapers.includes('mobiauto')) {
+        this.logger.log(`[MOBIAUTO] Buscando ${maxLimit} veículos...`);
+        scrapingPromises.push(
+          this.mobiautoService.search(normalizedQuery, maxLimit)
+            .then(results => ({ source: 'mobiauto', results }))
+            .catch(error => {
+              this.logger.warn(`[MOBIAUTO] Erro: ${error.message}`);
+              return { source: 'mobiauto', results: [] };
+            })
+        );
+      }
+
+      // Aguardar todos os scrapers
+      const scrapingResults = await Promise.all(scrapingPromises);
+
+      // Consolidar resultados
+      for (const { source, results } of scrapingResults) {
+        this.logger.log(`✅ [${source.toUpperCase()}] ${results.length} produtos encontrados`);
+        products.push(...results);
+      }
+
+      this.logger.log(`📊 [TOTAL] ${products.length} produtos consolidados de ${scrapers.length} fonte(s)`);
     } catch (error) {
-      this.logger.warn(`[GOOGLE SHOPPING] Erro: ${error.message}`);
+      this.logger.warn(`[SCRAPING] Erro geral: ${error.message}`);
     }
 
     // FALLBACK se vazio

@@ -10,6 +10,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { SearchModule } from './modules/search/search.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { ScrapingModule } from './modules/scraping/scraping.module';
+import { ClassificationModule } from './modules/classification/classification.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AIModule } from './modules/ai/ai.module';
 import { ComparisonsModule } from './modules/comparisons/comparisons.module';
@@ -39,6 +40,7 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
     SearchModule,
     LocationsModule,
     ScrapingModule,
+    ClassificationModule,
     NotificationsModule,
     AIModule,
     ComparisonsModule,
