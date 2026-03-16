@@ -235,16 +235,17 @@ export class SearchService {
 
     // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
     const scrapers = classification.recommended_scrapers;
-    this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')}`);
+    const resultLimit = classification.result_limit || 20; // Padrão 20 se não especificado
+    this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite de ${resultLimit} resultados`);
 
     try {
       // Executar scrapers em paralelo
       const scrapingPromises = [];
 
       if (scrapers.includes('google_shopping')) {
-        this.logger.log(`[GOOGLE SHOPPING] Buscando ${maxLimit} produtos com sortBy=${sortBy}...`);
+        this.logger.log(`[GOOGLE SHOPPING] Buscando ${resultLimit} produtos com sortBy=${sortBy}...`);
         scrapingPromises.push(
-          this.googleShoppingService.search(normalizedQuery, maxLimit, sortBy)
+          this.googleShoppingService.search(normalizedQuery, resultLimit, sortBy)
             .then(results => ({ source: 'google_shopping', results }))
             .catch(error => {
               this.logger.warn(`[GOOGLE SHOPPING] Erro: ${error.message}`);
@@ -254,9 +255,9 @@ export class SearchService {
       }
 
       if (scrapers.includes('olx')) {
-        this.logger.log(`[OLX] Buscando ${maxLimit} produtos...`);
+        this.logger.log(`[OLX] Buscando ${resultLimit} produtos...`);
         scrapingPromises.push(
-          this.olxService.search(normalizedQuery, maxLimit)
+          this.olxService.search(normalizedQuery, resultLimit)
             .then(results => ({ source: 'olx', results }))
             .catch(error => {
               this.logger.warn(`[OLX] Erro: ${error.message}`);
@@ -266,9 +267,9 @@ export class SearchService {
       }
 
       if (scrapers.includes('webmotors')) {
-        this.logger.log(`[WEBMOTORS] Buscando ${maxLimit} veículos...`);
+        this.logger.log(`[WEBMOTORS] Buscando ${resultLimit} veículos...`);
         scrapingPromises.push(
-          this.webmotorsService.search(normalizedQuery, maxLimit)
+          this.webmotorsService.search(normalizedQuery, resultLimit)
             .then(results => ({ source: 'webmotors', results }))
             .catch(error => {
               this.logger.warn(`[WEBMOTORS] Erro: ${error.message}`);
@@ -278,9 +279,9 @@ export class SearchService {
       }
 
       if (scrapers.includes('mobiauto')) {
-        this.logger.log(`[MOBIAUTO] Buscando ${maxLimit} veículos...`);
+        this.logger.log(`[MOBIAUTO] Buscando ${resultLimit} veículos...`);
         scrapingPromises.push(
-          this.mobiautoService.search(normalizedQuery, maxLimit)
+          this.mobiautoService.search(normalizedQuery, resultLimit)
             .then(results => ({ source: 'mobiauto', results }))
             .catch(error => {
               this.logger.warn(`[MOBIAUTO] Erro: ${error.message}`);

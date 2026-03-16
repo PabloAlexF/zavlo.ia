@@ -15,6 +15,8 @@ export interface ClassificationResult {
   detected_brand?: string | null;
   detected_model?: string | null;
   normalized_query?: string;
+  result_limit?: number;
+  guided_response?: string | null;
 }
 
 /**
