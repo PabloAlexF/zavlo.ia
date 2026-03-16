@@ -265,24 +265,60 @@ class ProductClassifier:
         """Detecta se o usuário está perguntando como usar o sistema"""
         normalized = self.normalize_query(query)
         
-        question_patterns = [
-            r'\bcomo\b.*\bbuscar\b',
+        # Padrões que indicam pergunta sobre o SISTEMA (não sobre produto)
+        system_question_patterns = [
+            r'\bcomo\b.*\b(buscar|procurar|encontrar|achar)\b.*\b(produto|item|coisa)\b',
             r'\bcomo\b.*\bfunciona\b',
-            r'\bcomo\b.*\busar\b',
-            r'\bcomo\b.*\bprocurar\b',
-            r'\bcomo\b.*\bencontrar\b',
-            r'\bque\b.*\bfazer\b',
+            r'\bcomo\b.*\busar\b.*\b(sistema|site|app|zavlo)\b',
+            r'\bcomo\b.*\bfazer\b.*\b(busca|pesquisa)\b',
+            r'\bque\b.*\bfazer\b.*\b(buscar|procurar)\b',
             r'\bo que\b.*\bdigitar\b',
+            r'\bposso\b.*\bbuscar\b.*\b(por|um)\b',
             r'\bajuda\b',
             r'\bhelp\b',
             r'\bensinar\b',
-            r'\bexplicar\b'
+            r'\bexplicar\b.*\b(como|funciona)\b',
+            r'\bnao sei\b.*\b(o que|como)\b',
+            r'\bestou perdido\b',
+            r'\be agora\b',
+            r'^o que.*fazer',
+            r'\bconfuso\b',
+            r'\bduvida\b'
         ]
         
-        for pattern in question_patterns:
+        for pattern in system_question_patterns:
             if re.search(pattern, normalized):
                 return True
         return False
+    
+    def has_result_limit(self, query: str) -> bool:
+        """Detecta se o usuário especificou quantidade de resultados"""
+        normalized = self.normalize_query(query)
+        
+        # Padrões que indicam quantidade
+        limit_patterns = [
+            r'\b10\s*(resultados|produtos|itens)?\b',
+            r'\b20\s*(resultados|produtos|itens)?\b',
+            r'\bdez\s*(resultados|produtos|itens)?\b',
+            r'\bvinte\s*(resultados|produtos|itens)?\b',
+        ]
+        
+        for pattern in limit_patterns:
+            if re.search(pattern, normalized):
+                return True
+        return False
+    
+    def extract_result_limit(self, query: str) -> int | None:
+        """Extrai quantidade de resultados da query"""
+        normalized = self.normalize_query(query)
+        
+        # Verificar números explícitos
+        if re.search(r'\b10\b', normalized) or re.search(r'\bdez\b', normalized):
+            return 10
+        if re.search(r'\b20\b', normalized) or re.search(r'\bvinte\b', normalized):
+            return 20
+        
+        return None
     
     def is_greeting(self, query: str) -> bool:
         """Detecta saudações"""
@@ -299,6 +335,28 @@ class ProductClassifier:
                 return True
         return False
     
+    def extract_partial_intent(self, query: str) -> Dict[str, any]:
+        """Extrai intenção parcial quando usuário está perdido"""
+        normalized = self.normalize_query(query)
+        
+        # Detectar se mencionou alguma categoria vagamente
+        vague_intents = {
+            'vehicle': ['carro', 'moto', 'veiculo', 'automovel'],
+            'electronics': ['celular', 'notebook', 'computador', 'eletronico'],
+            'general': ['produto', 'coisa', 'item', 'algo']
+        }
+        
+        for intent_type, keywords in vague_intents.items():
+            for keyword in keywords:
+                if self.keyword_match(keyword, normalized):
+                    return {
+                        'has_partial_intent': True,
+                        'intent_type': intent_type,
+                        'keyword': keyword
+                    }
+        
+        return {'has_partial_intent': False}
+    
     def extract_product_from_question(self, query: str) -> str:
         """Extrai o produto de perguntas como 'como buscar iphone?'"""
         normalized = self.normalize_query(query)
@@ -314,6 +372,24 @@ class ProductClassifier:
         product_words = [w for w in words if w not in question_words and len(w) > 2]
         
         return ' '.join(product_words).strip()
+    
+    def generate_guided_question(self, query: str) -> str | None:
+        """Gera pergunta guiada baseada no contexto"""
+        normalized = self.normalize_query(query)
+        partial_intent = self.extract_partial_intent(query)
+        
+        # Se usuário mencionou categoria vaga, perguntar especificamente
+        if partial_intent['has_partial_intent']:
+            intent_type = partial_intent['intent_type']
+            
+            if intent_type == 'vehicle':
+                return "Entendi que você quer um veículo! 🚗\n\nÉ um **carro** ou uma **moto**? E qual marca/modelo você prefere?"
+            elif intent_type == 'electronics':
+                return "Certo, eletrônicos! 📱\n\nVocê procura:\n• Smartphone\n• Notebook\n• Tablet\n• Outro?"
+            elif intent_type == 'general':
+                return "Vou te ajudar! 😊\n\nQue tipo de produto você procura?\n\n💡 Exemplos:\n• iPhone 13\n• Honda Civic\n• Notebook Dell"
+        
+        return None
     
     def classify(self, query: str) -> Dict:
         """
@@ -341,26 +417,28 @@ class ProductClassifier:
         extracted_product = None
         
         if is_question:
-            extracted_product = self.extract_product_from_question(query)
-            logger.info(f"Pergunta detectada! Produto extraído: '{extracted_product}'")
+            logger.info("Pergunta sobre o sistema detectada!")
             
-            # Se extraiu produto, continuar classificação
-            if extracted_product and len(extracted_product) > 2:
-                normalized = self.normalize_query(extracted_product)
-            else:
-                # Pergunta genérica sem produto
-                return {
-                    "category": "general",
-                    "confidence": 1.0,
-                    "recommended_scrapers": [],
-                    "condition": "unknown",
-                    "all_scores": {},
-                    "missing_fields": [],
-                    "suggested_question": None,
-                    "is_question": True,
-                    "is_greeting": False,
-                    "extracted_product": None
-                }
+            # Tentar gerar pergunta guiada
+            guided_question = self.generate_guided_question(query)
+            
+            # Perguntas sobre o sistema não devem buscar produtos
+            return {
+                "category": "general",
+                "confidence": 1.0,
+                "recommended_scrapers": [],
+                "condition": "unknown",
+                "all_scores": {},
+                "missing_fields": [],
+                "suggested_question": guided_question,
+                "is_question": True,
+                "is_greeting": False,
+                "extracted_product": None,
+                "detected_brand": None,
+                "detected_model": None,
+                "normalized_query": "",
+                "guided_response": guided_question
+            }
         
         if is_greeting:
             logger.info("Saudação detectada!")
@@ -464,28 +542,32 @@ class ProductClassifier:
         if condition == "used" and "olx" in scrapers:
             scrapers = ["olx"] + [s for s in scrapers if s != "olx"]
         
-        # 🆕 DETECTAR CAMPOS FALTANTES
+        # 🆕 DETECTAR CAMPOS FALTANTES (ORDEM DE PRIORIDADE)
         missing_fields = []
         suggested_question = None
         
-        # 1. Verificar condição (novo/usado)
-        if condition == "unknown":
+        # 1. QUANTIDADE DE RESULTADOS (SEMPRE PERGUNTAR PRIMEIRO)
+        if not self.has_result_limit(query):
+            missing_fields.append("result_limit")
+            suggested_question = "Quantos resultados você quer ver?\n\n📊 **10 resultados** - Busca rápida\n🎯 **20 resultados** - Busca completa"
+        
+        # 2. Verificar condição (novo/usado) - APENAS SE JÁ TEM LIMITE
+        elif condition == "unknown":
             missing_fields.append("condition")
             suggested_question = "Você prefere **novo ou usado**?"
         
-        # 2. Verificar localização (apenas para carros/motos)
-        if best_category in ["car", "motorcycle"]:
+        # 3. Verificar localização (apenas para carros/motos) - APENAS SE JÁ TEM LIMITE E CONDIÇÃO
+        elif best_category in ["car", "motorcycle"]:
             has_location = self.detect_location(query)
             if not has_location:
                 missing_fields.append("location")
-                # Se já tem pergunta de condição, não sobrescrever
-                if not suggested_question:
-                    suggested_question = "Em qual **cidade ou estado** você está procurando?"
+                suggested_question = "Em qual **cidade ou estado** você está procurando?"
         
         # 🆕 DETECTAR MARCA E MODELO
         detected_brand = self.detect_brand(query)
         detected_model = self.detect_model(query)
         normalized_for_scraper = self.normalize_query_for_scraper(query, best_category)
+        result_limit = self.extract_result_limit(query)
         
         result = {
             "category": best_category,
@@ -500,7 +582,8 @@ class ProductClassifier:
             "extracted_product": extracted_product,
             "detected_brand": detected_brand,
             "detected_model": detected_model,
-            "normalized_query": normalized_for_scraper
+            "normalized_query": normalized_for_scraper,
+            "result_limit": result_limit
         }
         
         logger.info(f"  Resultado: {result}")
