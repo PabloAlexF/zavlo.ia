@@ -69,6 +69,9 @@ export class SearchService {
       this.logger.log(`   - Confiança: ${classification.confidence}`);
       this.logger.log(`   - Scrapers recomendados: ${classification.recommended_scrapers.join(', ')}`);
       this.logger.log(`   - Condição: ${classification.condition}`);
+      this.logger.log(`   - Limite de resultados: ${classification.result_limit || 'não especificado'}`);
+      this.logger.log(`   - Ano detectado: ${classification.detected_year || 'N/A'}`);
+      this.logger.log(`   - Marca detectada: ${classification.detected_brand || 'N/A'}`);
       this.logger.log(`   - Campos faltantes: ${classification.missing_fields?.join(', ') || 'nenhum'}`);
       
       // 💬 VERIFICAR SE PRECISA FAZER PERGUNTA
@@ -89,7 +92,8 @@ export class SearchService {
         };
       }
     } catch (error) {
-      this.logger.warn(`⚠️ [CLASSIFICATION] Erro na classificação: ${error.message}`);
+      this.logger.error(`❌ [CLASSIFICATION] Erro na classificação: ${error.message}`);
+      this.logger.error(`❌ [CLASSIFICATION] Stack: ${error.stack}`);
       this.logger.warn(`⚠️ [CLASSIFICATION] Usando fallback (Google Shopping)`);
       classification = {
         category: 'general',
@@ -98,7 +102,8 @@ export class SearchService {
         condition: 'unknown',
         all_scores: {},
         missing_fields: [],
-        suggested_question: null
+        suggested_question: null,
+        result_limit: 20
       };
     }
     if (userId) {
