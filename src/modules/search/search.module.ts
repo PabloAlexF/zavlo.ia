@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
+import { CloudinaryService } from './cloudinary.service';
 import { IpLimitService } from './ip-limit.service';
 import { IpLimitAdminController } from './ip-limit-admin.controller';
 import { FirebaseService } from '@config/firebase.service';
@@ -15,6 +16,7 @@ import { ClassificationModule } from '../classification/classification.module';
   controllers: [SearchController, IpLimitAdminController],
   providers: [
     SearchService,
+    CloudinaryService,
     IpLimitService,
     FirebaseService,
     RedisService,

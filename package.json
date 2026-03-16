@@ -52,6 +52,7 @@
     "fuse.js": "^7.1.0",
     "lucide-react": "^0.344.0",
     "next": "^14.2.0",
+    "p-limit": "^7.3.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "playwright": "^1.41.0",
