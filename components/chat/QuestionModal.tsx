@@ -17,6 +17,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
   const isConditionQuestion = missingFields.includes('condition');
   const isLocationQuestion = missingFields.includes('location');
+  const isResultLimitQuestion = missingFields.includes('result_limit');
 
   const handleSubmit = () => {
     if (isLocationQuestion && locationInput.trim()) {
@@ -35,11 +36,12 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
       onClick={onSkip}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
+        initial={{ scale: 0.9, y: 20, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.9, y: 20, opacity: 0 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#13131f] p-6 shadow-2xl"
+        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-gradient-to-br from-[#13131f] to-[#1a1a2e] p-6 shadow-2xl"
       >
         {/* Close Button */}
         <button
@@ -51,7 +53,9 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
         {/* Icon */}
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-600">
-          {isConditionQuestion ? (
+          {isResultLimitQuestion ? (
+            <span className="text-2xl">📊</span>
+          ) : isConditionQuestion ? (
             <Tag className="h-6 w-6 text-white" />
           ) : (
             <MapPin className="h-6 w-6 text-white" />
@@ -68,6 +72,41 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
         {/* Options */}
         <div className="space-y-3">
+          {isResultLimitQuestion && (
+            <>
+              {[
+                { value: '10', label: '10 resultados', desc: 'Busca rápida' },
+                { value: '20', label: '20 resultados', desc: 'Busca completa' }
+              ].map((option) => (
+                <motion.button
+                  key={option.value}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setSelectedAnswer(option.value)}
+                  className={`w-full rounded-xl border-2 p-4 text-left transition-all ${
+                    selectedAnswer === option.value
+                      ? 'border-violet-500 bg-violet-500/10'
+                      : 'border-white/10 bg-white/5 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-white">{option.label}</div>
+                      <div className="text-xs text-slate-400">{option.desc}</div>
+                    </div>
+                    {selectedAnswer === option.value && (
+                      <div className="h-5 w-5 rounded-full bg-violet-500 flex items-center justify-center">
+                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                </motion.button>
+              ))}
+            </>
+          )}
+
           {isConditionQuestion && (
             <>
               {['novo', 'usado'].map((option) => (
