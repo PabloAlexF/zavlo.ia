@@ -8,9 +8,10 @@ import { RedisService } from '@config/redis.service';
 import { ScrapingModule } from '../scraping/scraping.module';
 import { UsersModule } from '../users/users.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { ClassificationModule } from '../classification/classification.module';
 
 @Module({
-  imports: [ScrapingModule, UsersModule, AnalyticsModule],
+  imports: [ScrapingModule, UsersModule, AnalyticsModule, ClassificationModule],
   controllers: [SearchController, IpLimitAdminController],
   providers: [
     SearchService,
