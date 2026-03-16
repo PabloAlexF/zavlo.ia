@@ -9,6 +9,7 @@ import { ChatMessages } from '@/components/chat/ChatMessages';
 import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
 import { QuestionModal } from '@/components/chat/QuestionModal';
 import { SearchConfirmationModal } from '@/components/chat/SearchConfirmationModal';
+import { SortSelectionModal } from '@/components/chat/SortSelectionModal';
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
 import { chatHistoryService } from '@/lib/chatHistory';
@@ -58,6 +59,8 @@ export default function ChatPage() {
   const [originalQuery, setOriginalQuery] = useState<string>('');
   const [finalQuery, setFinalQuery] = useState<string>('');
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showSortQuestion, setShowSortQuestion] = useState(false);
+  const [selectedSort, setSelectedSort] = useState<string>('RELEVANCE');
 
   const [userCredits, setUserCredits] = useState(0);
   
@@ -494,7 +497,15 @@ export default function ChatPage() {
 
   const handleConfirmSearch = async (editedQuery: string) => {
     setShowConfirmation(false);
-    await executeTextSearch(editedQuery);
+    setFinalQuery(editedQuery);
+    // Mostrar pergunta de ordenação
+    setShowSortQuestion(true);
+  };
+
+  const handleSortSelection = async (sortBy: string) => {
+    setShowSortQuestion(false);
+    setSelectedSort(sortBy);
+    await executeTextSearch(finalQuery, sortBy);
   };
 
   const handleCancelSearch = () => {
@@ -599,7 +610,7 @@ export default function ChatPage() {
     }, 500);
   };
 
-  const executeTextSearch = async (query: string) => {
+  const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE') => {
     addMessage('ai', 'searching_animation');
 
     try {
@@ -615,7 +626,7 @@ export default function ChatPage() {
       const params = new URLSearchParams({
         query: query,
         limit: '50',
-        sortBy: 'RELEVANCE'
+        sortBy: sortBy
       });
       
       const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
@@ -821,6 +832,14 @@ export default function ChatPage() {
           finalQuery={finalQuery}
           onConfirm={handleConfirmSearch}
           onCancel={handleCancelSearch}
+        />
+      )}
+
+      {/* Sort Selection Modal */}
+      {showSortQuestion && (
+        <SortSelectionModal
+          onSelect={handleSortSelection}
+          onCancel={() => setShowSortQuestion(false)}
         />
       )}
     </div>
