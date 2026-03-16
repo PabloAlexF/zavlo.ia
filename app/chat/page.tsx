@@ -467,36 +467,48 @@ export default function ChatPage() {
   };
 
   const handleHybridAnswer = async (answer: string) => {
+    console.log('[HYBRID] Resposta recebida:', answer);
+    console.log('[HYBRID] Campo atual:', hybridMissingFields[0]);
+    console.log('[HYBRID] Query original:', originalQuery);
+    
     // Construir query enriquecida baseada no tipo de resposta
     let enrichedQuery = originalQuery;
     
     const currentField = hybridMissingFields[0];
     
     if (currentField === 'result_limit') {
-      // Para limite de resultados, adicionar de forma natural
-      enrichedQuery = `${answer} de ${originalQuery}`.trim();
+      // ❌ PROBLEMA 1 CORRIGIDO: NÃO adicionar "de" na query
+      // Apenas armazenar o limite, não modificar a query
+      enrichedQuery = originalQuery; // Mantém query original
+      console.log('[HYBRID] Limite definido:', answer, '- Query mantida:', enrichedQuery);
     } else if (currentField === 'condition') {
       // Para condição, adicionar após o produto
       enrichedQuery = `${originalQuery} ${answer}`.trim();
+      console.log('[HYBRID] Condição adicionada:', enrichedQuery);
     } else if (currentField === 'location') {
       // Para localização, adicionar com "em"
       enrichedQuery = `${originalQuery} em ${answer}`.trim();
+      console.log('[HYBRID] Localização adicionada:', enrichedQuery);
     } else {
       // Fallback genérico
       enrichedQuery = `${originalQuery} ${answer}`.trim();
     }
     
-    // Verificar se ainda tem campos faltantes
-    const currentMissingIndex = hybridMissingFields.indexOf(hybridMissingFields[0]);
+    // Remover campo respondido da lista
+    const remainingFields = hybridMissingFields.slice(1);
+    console.log('[HYBRID] Campos restantes:', remainingFields);
     
-    if (currentMissingIndex < hybridMissingFields.length - 1) {
-      // Ainda tem mais perguntas, continuar
-      setHybridQuestion(null);
-      setHybridMissingFields([]);
+    if (remainingFields.length > 0) {
+      // Ainda tem mais perguntas
+      console.log('[HYBRID] Próxima pergunta:', remainingFields[0]);
+      setHybridMissingFields(remainingFields);
       setOriginalQuery(enrichedQuery);
-      await executeTextSearch(enrichedQuery);
+      
+      // ✅ Fazer nova classificação (NÃO buscar)
+      await classifyQuery(enrichedQuery);
     } else {
       // Última pergunta respondida, mostrar confirmação
+      console.log('[HYBRID] Todas perguntas respondidas, mostrando confirmação');
       setHybridQuestion(null);
       setHybridMissingFields([]);
       setFinalQuery(enrichedQuery);
@@ -522,6 +534,7 @@ export default function ChatPage() {
   const handleSortSelection = async (sortBy: string) => {
     setShowSortQuestion(false);
     setSelectedSort(sortBy);
+    // ✅ Buscar passando classificação (já foi classificado)
     await executeTextSearch(finalQuery, sortBy);
   };
 
@@ -622,14 +635,15 @@ export default function ChatPage() {
         return;
       }
 
-      // Execute search
-      executeTextSearch(currentInput);
+      // ✅ VALIDAÇÃO: Verificar se é realmente um produto pesquisável
+      // Não executar busca diretamente, apenas classificar
+      classifyQuery(currentInput);
     }, 500);
   };
 
-  const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE') => {
-    addMessage('ai', 'searching_animation');
-
+  const classifyQuery = async (query: string) => {
+    console.log('[CLASSIFY] Classificando query:', query);
+    
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) {
@@ -640,17 +654,14 @@ export default function ChatPage() {
       const userData = JSON.parse(user);
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
       
-      const params = new URLSearchParams({
-        query: query,
-        limit: '50',
-        sortBy: sortBy
-      });
-      
-      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
-        method: 'GET',
+      // ✅ USAR ENDPOINT CORRETO: /search/classify (NÃO consome créditos)
+      const response = await fetch(`${API_URL}/search/classify`, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ query }),
       });
 
       if (response.status === 401) {
@@ -662,10 +673,11 @@ export default function ChatPage() {
       if (response.ok) {
         const data = await response.json();
         
+        console.log('[CLASSIFY] Classificação recebida:', data.classification);
+        
         // Check if it's a question about the system
         if (data.classification?.is_question) {
           setLoading(false);
-          setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
           
           const questionType = data.classification?.question_type;
           
@@ -703,21 +715,98 @@ export default function ChatPage() {
         // Check if it's a greeting
         if (data.classification?.is_greeting) {
           setLoading(false);
-          setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
           addMessage('ai', 'Olá! 👋 Que produto você está procurando?');
+          return;
+        }
+        
+        // ✅ VALIDAR: Verificar se é um produto válido
+        const category = data.classification?.category;
+        const confidence = data.classification?.confidence || 0;
+        
+        console.log('[CLASSIFY] Categoria:', category, 'Confiança:', confidence);
+        
+        // Se confiança muito baixa, não é um produto válido
+        if (confidence < 0.3 || category === 'general') {
+          setLoading(false);
+          addMessage('ai', '🤔 Não consegui identificar um produto específico.\n\n💡 Tente ser mais específico:\n• "iPhone 15 Pro"\n• "Honda Civic 2020"\n• "Notebook Dell"');
           return;
         }
         
         // HYBRID MODE: Check if needs question
         if (data.needsQuestion && data.question) {
+          console.log('[HYBRID] Backend retornou pergunta:', data.question);
+          console.log('[HYBRID] Campos faltantes:', data.missingFields);
+          
           setHybridQuestion(data.question);
           setHybridMissingFields(data.missingFields || []);
           setOriginalQuery(query);
           setLoading(false);
-          setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
+          
+          // ✅ Mostrar pergunta do backend
+          addMessage('ai', data.question);
           return;
         }
         
+        // ✅ PRODUTO VÁLIDO: Mostrar confirmação e perguntar ordenação
+        setFinalQuery(query);
+        setShowSortQuestion(true);
+        setLoading(false);
+        
+      } else {
+        addMessage('ai', 'Erro ao processar. Tente novamente.');
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Classify error:', error);
+      addMessage('ai', 'Erro ao processar. Tente novamente.');
+      setLoading(false);
+    }
+  };
+
+  const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any) => {
+    console.log('[SEARCH] Executando busca:', query, 'sortBy:', sortBy);
+    
+    // ✅ Só mostrar "Buscando" quando realmente for buscar
+    addMessage('ai', 'searching_animation');
+
+    try {
+      const user = localStorage.getItem('zavlo_user');
+      if (!user) {
+        router.push('/auth');
+        return;
+      }
+
+      const userData = JSON.parse(user);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      
+      const params = new URLSearchParams({
+        query: query,
+        limit: '50',
+        sortBy: sortBy
+      });
+      
+      // ✅ Passar classificação para evitar duplicação
+      if (classification) {
+        params.append('classification', JSON.stringify(classification));
+      }
+      
+      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${userData.token}`,
+        },
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem('zavlo_user');
+        router.push('/auth');
+        return;
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // ✅ BUSCAR PRODUTOS
         const products = data.results || [];
         
         if (typeof data.remainingCredits === 'number') {
