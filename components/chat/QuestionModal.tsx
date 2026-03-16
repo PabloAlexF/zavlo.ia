@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { X, MapPin, Tag } from 'lucide-react';
+import { X, MapPin, Tag, BarChart3 } from 'lucide-react';
 import { useState } from 'react';
 
 interface QuestionModalProps {
@@ -54,7 +54,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
         {/* Icon */}
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-600">
           {isResultLimitQuestion ? (
-            <span className="text-2xl">📊</span>
+            <BarChart3 className="h-6 w-6 text-white" />
           ) : isConditionQuestion ? (
             <Tag className="h-6 w-6 text-white" />
           ) : (
@@ -64,7 +64,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
         {/* Question */}
         <h3 className="mb-2 text-xl font-semibold text-white">
-          {question.replace(/\*\*/g, '')}
+          {question.split('\n')[0]}
         </h3>
         <p className="mb-6 text-sm text-slate-400">
           Isso ajuda a encontrar os melhores resultados para você
@@ -74,9 +74,10 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
         <div className="space-y-3">
           {isResultLimitQuestion && (
             <>
+              <p className="mb-3 text-sm text-slate-300">Escolha a quantidade de produtos:</p>
               {[
-                { value: '10', label: '10 resultados', desc: 'Busca rápida' },
-                { value: '20', label: '20 resultados', desc: 'Busca completa' }
+                { value: '10', label: '10 resultados', desc: 'Busca rápida e econômica', icon: 'zap' },
+                { value: '20', label: '20 resultados', desc: 'Busca completa e detalhada', icon: 'target' }
               ].map((option) => (
                 <motion.button
                   key={option.value}
@@ -90,12 +91,12 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-white">{option.label}</div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-white text-base mb-1">{option.label}</div>
                       <div className="text-xs text-slate-400">{option.desc}</div>
                     </div>
                     {selectedAnswer === option.value && (
-                      <div className="h-5 w-5 rounded-full bg-violet-500 flex items-center justify-center">
+                      <div className="h-5 w-5 rounded-full bg-violet-500 flex items-center justify-center flex-shrink-0 ml-3">
                         <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
@@ -109,6 +110,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
           {isConditionQuestion && (
             <>
+              <p className="mb-3 text-sm text-slate-300">Qual condição você prefere?</p>
               {['novo', 'usado'].map((option) => (
                 <motion.button
                   key={option}
@@ -122,7 +124,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-white capitalize">{option}</span>
+                    <span className="font-semibold text-white capitalize text-base">{option}</span>
                     {selectedAnswer === option && (
                       <div className="h-5 w-5 rounded-full bg-violet-500 flex items-center justify-center">
                         <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -138,6 +140,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
           {isLocationQuestion && (
             <div className="space-y-3">
+              <p className="text-sm text-slate-300 mb-3">Digite a cidade ou estado:</p>
               <input
                 type="text"
                 value={locationInput}
@@ -149,13 +152,13 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
               <div className="flex gap-2">
                 <button
                   onClick={() => setLocationInput('minha cidade')}
-                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10"
+                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 transition-colors"
                 >
                   Minha cidade
                 </button>
                 <button
                   onClick={() => setLocationInput('meu estado')}
-                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10"
+                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 transition-colors"
                 >
                   Meu estado
                 </button>
