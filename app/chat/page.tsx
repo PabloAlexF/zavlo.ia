@@ -8,6 +8,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
 import { QuestionModal } from '@/components/chat/QuestionModal';
+import { SearchConfirmationModal } from '@/components/chat/SearchConfirmationModal';
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
 import { chatHistoryService } from '@/lib/chatHistory';
@@ -37,7 +38,7 @@ export default function ChatPage() {
     {
       id: '1',
       type: 'ai',
-      content: 'Olá! 👋 Eu sou a Zavlo, sua assistente de compras inteligente!\\n\\nQue produto você está procurando?',
+      content: 'Olá! 👋 Eu sou a Zavlo, sua assistente de compras inteligente!\n\nQue produto você está procurando?',
       timestamp: new Date(),
     }
   ]);
@@ -55,6 +56,8 @@ export default function ChatPage() {
   const [hybridQuestion, setHybridQuestion] = useState<string | null>(null);
   const [hybridMissingFields, setHybridMissingFields] = useState<string[]>([]);
   const [originalQuery, setOriginalQuery] = useState<string>('');
+  const [finalQuery, setFinalQuery] = useState<string>('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const [userCredits, setUserCredits] = useState(0);
   
@@ -209,7 +212,7 @@ export default function ChatPage() {
     setMessages([{
       id: '1',
       type: 'ai',
-      content: 'Olá! 👋 Eu sou a Zavlo, sua assistente de compras inteligente!\\n\\nQue produto você está procurando?',
+      content: 'Olá! 👋 Eu sou a Zavlo, sua assistente de compras inteligente!\n\nQue produto você está procurando?',
       timestamp: new Date(),
     }]);
     setUploadedImage(null);
@@ -289,7 +292,7 @@ export default function ChatPage() {
       return;
     }
 
-    addMessage('ai', '🔍 Analisando sua imagem...\\n\\nAguarde enquanto identifico o produto.');
+    addMessage('ai', '🔍 Analisando sua imagem...\n\nAguarde enquanto identifico o produto.');
 
     try {
       const user = localStorage.getItem('zavlo_user');
@@ -338,7 +341,7 @@ export default function ChatPage() {
           const confirmationMessage: Message = {
             id: crypto.randomUUID(),
             type: 'image_confirmation',
-            content: `✅ Produto identificado!\\n\\n📦 ${productName}\\n\\n💳 Já gasto: -${creditsUsed} crédito(s)\\n💰 Saldo: ${remainingCredits} créditos\\n\\n🔍 Deseja buscar preços? (custará +1 crédito)`,
+            content: `✅ Produto identificado!\n\n📦 ${productName}\n\n💳 Já gasto: -${creditsUsed} crédito(s)\n💰 Saldo: ${remainingCredits} créditos\n\n🔍 Deseja buscar preços? (custará +1 crédito)`,
             timestamp: new Date(),
             detectedProduct: productName,
             creditCost: creditsUsed,
@@ -427,7 +430,7 @@ export default function ChatPage() {
           const productsMessage: Message = {
             id: crypto.randomUUID(),
             type: 'products',
-            content: `✅ Encontrei ${products.length} produtos!\\n\\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
+            content: `✅ Encontrei ${products.length} produtos!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
             products: products,
             timestamp: new Date(),
             creditCost: creditsUsed,
@@ -461,17 +464,45 @@ export default function ChatPage() {
   };
 
   const handleHybridAnswer = async (answer: string) => {
-    setHybridQuestion(null);
-    setHybridMissingFields([]);
-    
     const enrichedQuery = `${originalQuery} ${answer}`.trim();
-    await executeTextSearch(enrichedQuery);
+    
+    // Verificar se ainda tem campos faltantes
+    const currentMissingIndex = hybridMissingFields.indexOf(hybridMissingFields[0]);
+    
+    if (currentMissingIndex < hybridMissingFields.length - 1) {
+      // Ainda tem mais perguntas, continuar
+      setHybridQuestion(null);
+      setHybridMissingFields([]);
+      setOriginalQuery(enrichedQuery);
+      await executeTextSearch(enrichedQuery);
+    } else {
+      // Última pergunta respondida, mostrar confirmação
+      setHybridQuestion(null);
+      setHybridMissingFields([]);
+      setFinalQuery(enrichedQuery);
+      setShowConfirmation(true);
+    }
   };
 
   const handleHybridSkip = async () => {
+    // Pular pergunta e mostrar confirmação
     setHybridQuestion(null);
     setHybridMissingFields([]);
-    await executeTextSearch(originalQuery);
+    setFinalQuery(originalQuery);
+    setShowConfirmation(true);
+  };
+
+  const handleConfirmSearch = async (editedQuery: string) => {
+    setShowConfirmation(false);
+    await executeTextSearch(editedQuery);
+  };
+
+  const handleCancelSearch = () => {
+    setShowConfirmation(false);
+    setFinalQuery('');
+    setOriginalQuery('');
+    setLoading(false);
+    setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
   };
 
   const handleSend = async (messageText?: string) => {
@@ -528,7 +559,7 @@ export default function ChatPage() {
       // Handle special commands
       if (intent.type === 'introduction') {
         const userName = intent.userName || 'amigo(a)';
-        addMessage('ai', `Prazer em conhecer você, ${userName}! 😊\\n\\nDigite o produto que procura!`);
+        addMessage('ai', `Prazer em conhecer você, ${userName}! 😊\n\nDigite o produto que procura!`);
         setLoading(false);
         return;
       }
@@ -540,19 +571,19 @@ export default function ChatPage() {
       }
 
       if (intent.type === 'help') {
-        addMessage('ai', '❓ Como usar:\\n\\n1️⃣ Digite o produto\\n2️⃣ Responda perguntas (se houver)\\n3️⃣ Veja os resultados!');
+        addMessage('ai', '❓ Como usar:\n\n1️⃣ Digite o produto\n2️⃣ Responda perguntas (se houver)\n3️⃣ Veja os resultados!');
         setLoading(false);
         return;
       }
 
       if (intent.type === 'credits_question') {
-        addMessage('ai', `💰 Seus Créditos: ${userCredits}\\n\\n📊 Custos:\\n• Busca por texto: 1 crédito\\n• Busca por imagem: 2 créditos`);
+        addMessage('ai', `💰 Seus Créditos: ${userCredits}\n\n📊 Custos:\n• Busca por texto: 1 crédito\n• Busca por imagem: 2 créditos`);
         setLoading(false);
         return;
       }
 
       if (intent.type === 'plans_question') {
-        addMessage('ai', '📊 Nossos Planos:\\n\\n🌱 Básico - R$ 27/mês\\n🚀 Pro - R$ 77/mês\\n👑 Business - R$ 197/mês');
+        addMessage('ai', '📊 Nossos Planos:\n\n🌱 Básico - R$ 27/mês\n🚀 Pro - R$ 77/mês\n👑 Business - R$ 197/mês');
         setLoading(false);
         return;
       }
@@ -603,6 +634,28 @@ export default function ChatPage() {
       if (response.ok) {
         const data = await response.json();
         
+        // Check if it's a question about the system
+        if (data.classification?.is_question) {
+          setLoading(false);
+          setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
+          
+          const guidedResponse = data.classification?.guided_response;
+          if (guidedResponse) {
+            addMessage('ai', guidedResponse);
+          } else {
+            addMessage('ai', '❓ Como usar:\n\n1️⃣ Digite o produto que procura\n2️⃣ Responda perguntas se necessário\n3️⃣ Veja os melhores preços!\n\n💡 Exemplos:\n• "iPhone 13 usado"\n• "Honda Civic 2020"\n• "Notebook gamer"');
+          }
+          return;
+        }
+        
+        // Check if it's a greeting
+        if (data.classification?.is_greeting) {
+          setLoading(false);
+          setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
+          addMessage('ai', 'Olá! 👋 Que produto você está procurando?');
+          return;
+        }
+        
         // HYBRID MODE: Check if needs question
         if (data.needsQuestion && data.question) {
           setHybridQuestion(data.question);
@@ -626,7 +679,7 @@ export default function ChatPage() {
           const productsMessage: Message = {
             id: crypto.randomUUID(),
             type: 'products',
-            content: `✅ Encontrei ${products.length} produtos!\\n\\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
+            content: `✅ Encontrei ${products.length} produtos!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
             products: products,
             timestamp: new Date(),
           };
@@ -659,6 +712,12 @@ export default function ChatPage() {
   };
 
   const updateCredits = (newCredits: number, userData: any) => {
+    console.log('💳 [CREDITS] Atualizando créditos:', {
+      anterior: userCredits,
+      novo: newCredits,
+      diferença: userCredits - newCredits
+    });
+    
     setUserCredits(newCredits);
     const updatedUser = { ...userData, credits: newCredits };
     localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
@@ -753,6 +812,15 @@ export default function ChatPage() {
           missingFields={hybridMissingFields}
           onAnswer={handleHybridAnswer}
           onSkip={handleHybridSkip}
+        />
+      )}
+
+      {/* Search Confirmation Modal */}
+      {showConfirmation && (
+        <SearchConfirmationModal
+          finalQuery={finalQuery}
+          onConfirm={handleConfirmSearch}
+          onCancel={handleCancelSearch}
         />
       )}
     </div>
