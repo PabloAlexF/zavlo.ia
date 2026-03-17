@@ -15,13 +15,14 @@ export class MobiautoService {
    * Busca veículos no Mobiauto usando o scraper Apify
    * @param query - Termo de busca (ex: "Fiat Uno 2020")
    * @param limit - Número máximo de resultados
+   * @param classification - Classificação com dados estruturados (marca, modelo, ano, localização)
    */
-  async search(query: string, limit = 20): Promise<any[]> {
+  async search(query: string, limit = 20, classification?: any): Promise<any[]> {
     try {
       this.logger.log(`🚗 [MOBIAUTO] Buscando: "${query}" (limit: ${limit})`);
 
-      // Construir URL de busca do Mobiauto
-      const searchUrl = this.buildSearchUrl(query);
+      // Construir URL de busca do Mobiauto usando dados estruturados
+      const searchUrl = this.buildSearchUrl(query, classification);
 
       const input = {
         urls: [searchUrl],
@@ -104,16 +105,62 @@ export class MobiautoService {
     }
   }
 
-  private buildSearchUrl(query: string): string {
-    // Normalizar query para URL
-    const normalized = query
+  private buildSearchUrl(query: string, classification?: any): string {
+    // Se temos classificação com dados estruturados, construir URL de busca
+    if (classification) {
+      const parts = ['https://www.mobiauto.com.br/comprar/carros'];
+      
+      // Marca
+      if (classification.detected_brand) {
+        parts.push(this.normalizeForUrl(classification.detected_brand));
+        
+        // Modelo (extrair da query)
+        const model = this.extractModel(query, classification.detected_brand);
+        if (model) {
+          parts.push(this.normalizeForUrl(model));
+        }
+      }
+      
+      // Localização: cidade-estado OU brasil
+      if (classification.user_location?.city && classification.user_location?.state) {
+        const city = this.normalizeForUrl(classification.user_location.city);
+        const state = this.normalizeForUrl(classification.user_location.state);
+        parts.push(`${city}-${state}`);
+      } else {
+        parts.push('brasil');
+      }
+      
+      const url = parts.join('/');
+      this.logger.log(`🔗 [MOBIAUTO] URL estruturada: ${url}`);
+      return url;
+    }
+    
+    // Fallback: busca simples
+    return `https://www.mobiauto.com.br/comprar/carros/brasil?q=${encodeURIComponent(query)}`;
+  }
+  
+  private normalizeForUrl(text: string): string {
+    return text
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, '-');
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+  }
+  
+  private extractModel(query: string, brand?: string): string | null {
+    let normalized = query.toLowerCase();
     
-    // URL base do Mobiauto
-    return `https://www.mobiauto.com.br/comprar/carros/brasil?q=${encodeURIComponent(query)}`;
+    // Remover marca da query
+    if (brand) {
+      normalized = normalized.replace(new RegExp(brand, 'gi'), '').trim();
+    }
+    
+    // Remover palavras comuns
+    const stopWords = ['novo', 'usado', 'seminovo', 'ate', 'em', 'manual', 'automatico'];
+    const words = normalized.split(/\s+/).filter(w => !stopWords.includes(w) && !/^\d{4}$/.test(w));
+    
+    return words[0] || null;
   }
 
   private buildTitle(item: any): string {
