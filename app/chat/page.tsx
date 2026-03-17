@@ -22,6 +22,11 @@ interface Message {
   creditCost?: number;
   imageData?: string;
   detectedProduct?: string;
+  priceRangeApplied?: {
+    min?: number;
+    max?: number;
+    target?: number;
+  };
 }
 
 interface ChatHistory {
@@ -480,6 +485,10 @@ export default function ChatPage() {
     } else if (currentField === 'year') {
       enrichedQuery = `${originalQuery} ${answer}`.trim();
       console.log('[HYBRID] Ano adicionado:', enrichedQuery);
+    } else if (currentField === 'price_range') {
+      enrichedQuery = `${originalQuery} ${answer}`.trim();
+      console.log('[HYBRID] Faixa de preço adicionada:', enrichedQuery);
+      console.log('[HYBRID] 💰 Preço estruturado será extraído pelo backend');
     } else if (currentField === 'location') {
       enrichedQuery = `${originalQuery} em ${answer}`.trim();
       console.log('[HYBRID] Localização adicionada:', enrichedQuery);
@@ -500,7 +509,15 @@ export default function ChatPage() {
       setHybridQuestion(null);
       setHybridMissingFields([]);
       setFinalQuery(enrichedQuery);
-      setShowSortQuestion(true);
+      
+      // ✅ Para carros/motos, buscar direto sem modal de ordenação
+      if (currentClassification?.category === 'car' || currentClassification?.category === 'motorcycle') {
+        console.log('[HYBRID] Veículo detectado - buscando direto com RELEVANCE');
+        await executeTextSearch(enrichedQuery, 'RELEVANCE', currentClassification);
+      } else {
+        console.log('[HYBRID] Produto genérico - mostrando modal de ordenação');
+        setShowSortQuestion(true);
+      }
     }
   };
 
@@ -508,7 +525,15 @@ export default function ChatPage() {
     setHybridQuestion(null);
     setHybridMissingFields([]);
     setFinalQuery(originalQuery);
-    setShowSortQuestion(true);
+    
+    // ✅ Para carros/motos, buscar direto sem modal de ordenação
+    if (currentClassification?.category === 'car' || currentClassification?.category === 'motorcycle') {
+      console.log('[HYBRID SKIP] Veículo detectado - buscando direto com RELEVANCE');
+      await executeTextSearch(originalQuery, 'RELEVANCE', currentClassification);
+    } else {
+      console.log('[HYBRID SKIP] Produto genérico - mostrando modal de ordenação');
+      setShowSortQuestion(true);
+    }
   };
 
   const handleSortSelection = async (sortBy: string) => {
@@ -718,10 +743,19 @@ export default function ChatPage() {
           return;
         }
         
-        // ✅ PRODUTO VÁLIDO: Armazenar classificação e mostrar ordenação
+        // ✅ PRODUTO VÁLIDO: Armazenar classificação e decidir próximo passo
         setCurrentClassification(data.classification);
         setFinalQuery(query);
-        setShowSortQuestion(true);
+        
+        // ✅ Para carros/motos, buscar direto sem modal de ordenação
+        if (data.classification?.category === 'car' || data.classification?.category === 'motorcycle') {
+          console.log('[CLASSIFY] Veículo detectado - buscando direto com RELEVANCE');
+          await executeTextSearch(query, 'RELEVANCE', data.classification);
+        } else {
+          console.log('[CLASSIFY] Produto genérico - mostrando modal de ordenação');
+          setShowSortQuestion(true);
+        }
+        
         setLoading(false);
         
       } else {
@@ -800,6 +834,7 @@ export default function ChatPage() {
         console.log('[SEARCH] Remaining Credits:', data.remainingCredits);
         console.log('[SEARCH] Needs Question?', data.needsQuestion);
         console.log('[SEARCH] Question:', data.question);
+        console.log('[SEARCH] Price Range Applied:', data.priceRangeApplied);
         
         const products = data.results || [];
         
@@ -818,12 +853,14 @@ export default function ChatPage() {
         console.log('[SEARCH] Aguardando 1s antes de mostrar produtos...');
         setTimeout(() => {
           console.log('[SEARCH] Criando mensagem de produtos...');
+          
           const productsMessage: Message = {
             id: crypto.randomUUID(),
             type: 'products',
             content: `✅ Encontrei ${products.length} produtos!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
             products: products,
             timestamp: new Date(),
+            priceRangeApplied: data.priceRangeApplied,
           };
           console.log('[SEARCH] Adicionando mensagem às messages');
           setMessages(prev => [...prev, productsMessage]);
