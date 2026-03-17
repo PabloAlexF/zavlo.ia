@@ -15,15 +15,24 @@ export class GoogleShoppingService {
     try {
       this.logger.log(`Buscando no Google Shopping: ${query} (sortBy: ${sortBy})`);
 
-      // Aumentar limite para 100 (máximo do Apify)
-      const maxLimit = Math.min(limit, 100);
+      // ✅ Limite mínimo 20, máximo 100 (conforme API)
+      const maxLimit = Math.max(20, Math.min(limit, 100));
+
+      // ✅ Mapear sortBy para valores aceitos pela API
+      const sortByMap: Record<string, string> = {
+        'RELEVANCE': 'BEST_MATCH',
+        'BEST_MATCH': 'BEST_MATCH',
+        'LOWEST_PRICE': 'LOWEST_PRICE',
+        'HIGHEST_PRICE': 'HIGHEST_PRICE',
+        'TOP_RATED': 'TOP_RATED',
+      };
 
       const input = {
         country: 'BR',
         language: 'pt-BR',
         limit: maxLimit,
         searchQuery: query,
-        sortBy: sortBy,
+        sortBy: sortByMap[sortBy] || 'BEST_MATCH',
       };
 
       this.logger.log(`Input Apify: ${JSON.stringify(input)}`);
