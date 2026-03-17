@@ -18,10 +18,10 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip, userL
   const [yearInput, setYearInput] = useState<string>('');
   const [priceInput, setPriceInput] = useState<string>('');
 
-  const isConditionQuestion = missingFields.includes('condition');
-  const isLocationQuestion = missingFields.includes('location');
-  const isYearQuestion = missingFields.includes('year');
-  const isPriceQuestion = missingFields.includes('price_range');
+  const isConditionQuestion = missingFields[0] === 'condition';
+  const isLocationQuestion = missingFields[0] === 'location';
+  const isYearQuestion = missingFields[0] === 'year';
+  const isPriceQuestion = missingFields[0] === 'price_range';
 
   const handleSubmit = () => {
     if (isLocationQuestion && locationInput.trim()) {
