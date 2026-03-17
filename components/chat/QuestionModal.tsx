@@ -2,16 +2,17 @@
 
 import { motion } from 'framer-motion';
 import { X, MapPin, Tag } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface QuestionModalProps {
   question: string;
   missingFields: string[];
   onAnswer: (answer: string) => void;
   onSkip: () => void;
+  userLocation?: { city?: string; state?: string };
 }
 
-export function QuestionModal({ question, missingFields, onAnswer, onSkip }: QuestionModalProps) {
+export function QuestionModal({ question, missingFields, onAnswer, onSkip, userLocation }: QuestionModalProps) {
   const [selectedAnswer, setSelectedAnswer] = useState<string>('');
   const [locationInput, setLocationInput] = useState<string>('');
 
@@ -111,18 +112,22 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
                 autoFocus
               />
               <div className="flex gap-2">
-                <button
-                  onClick={() => setLocationInput('minha cidade')}
-                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 transition-colors"
-                >
-                  Minha cidade
-                </button>
-                <button
-                  onClick={() => setLocationInput('meu estado')}
-                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 transition-colors"
-                >
-                  Meu estado
-                </button>
+                {userLocation?.city && (
+                  <button
+                    onClick={() => setLocationInput(userLocation.city!)}
+                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 transition-colors"
+                  >
+                    {userLocation.city}
+                  </button>
+                )}
+                {userLocation?.state && (
+                  <button
+                    onClick={() => setLocationInput(userLocation.state!)}
+                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 transition-colors"
+                  >
+                    {userLocation.state}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -132,9 +137,9 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
         <div className="mt-6 flex gap-3">
           <button
             onClick={onSkip}
-            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-medium text-slate-300 transition-colors hover:bg-white/10"
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-medium text-slate-300 transition-colors hover:bg-white/10 text-sm"
           >
-            Pular
+            Buscar sem isso
           </button>
           <button
             onClick={handleSubmit}
