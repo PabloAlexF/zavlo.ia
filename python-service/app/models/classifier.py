@@ -658,33 +658,56 @@ class ProductClassifier:
         if best_category in ["car", "motorcycle"]:
             detected_year = self.detect_year(normalized)
             has_location = self.detect_location(normalized)
-            has_price_range = extract_price_range(normalized) is not None
+            price_range_data = extract_price_range(normalized)
+            has_price_range = price_range_data is not None
             
-            # ✅ SÓ PERGUNTAR SE NÃO DETECTOU
-            if not detected_year and not missing_fields:
+            logger.info(f"🔍 [FIELDS DEBUG] ========== DETECÇÃO DE CAMPOS ==========")
+            logger.info(f"🔍 [FIELDS DEBUG] Query normalizada: '{normalized}'")
+            logger.info(f"🔍 [FIELDS DEBUG] Ano detectado: {detected_year}")
+            logger.info(f"🔍 [FIELDS DEBUG] Localização detectada: {has_location}")
+            logger.info(f"🔍 [FIELDS DEBUG] Preço detectado: {has_price_range}")
+            if has_price_range:
+                logger.info(f"🔍 [FIELDS DEBUG] Dados de preço: {price_range_data}")
+            logger.info(f"🔍 [FIELDS DEBUG] ============================================")
+            
+            # ✅ COLETAR TODOS OS CAMPOS FALTANTES (não usar elif)
+            if not detected_year:
                 missing_fields.append("year")
-                suggested_question = "De qual ano você está procurando? (Ex: 2020, 2018-2022)"
+                logger.info(f"📝 [FIELDS] Campo faltante adicionado: year")
             
-            # ✅ SÓ PERGUNTAR LOCALIZAÇÃO SE NÃO DETECTOU
-            elif not has_location and not missing_fields:
+            if not has_location:
                 missing_fields.append("location")
-                
-                # 🆕 USAR LOCALIZAÇÃO DO USUÁRIO SE DISPONÍVEL
-                user_location = user_context.get('location', {})
-                user_city = user_location.get('city')
-                user_state = user_location.get('state')
-                
-                if user_city and user_state:
-                    suggested_question = f"Vi que você mora em {user_city}, {user_state}. Quer pesquisar nessa região ou em outro lugar?"
-                elif user_city:
-                    suggested_question = f"Vi que você mora em {user_city}. Quer pesquisar aí ou em outro lugar?"
-                else:
-                    suggested_question = "Em qual cidade ou estado você está procurando?"
+                logger.info(f"📝 [FIELDS] Campo faltante adicionado: location")
             
-            # ✅ PERGUNTAR FAIXA DE PREÇO (OPCIONAL MAS IMPORTANTE)
-            elif not has_price_range and not missing_fields:
+            if not has_price_range:
                 missing_fields.append("price_range")
-                suggested_question = "Qual sua faixa de preço? (Ex: até 50mil, entre 30mil e 60mil)"
+                logger.info(f"📝 [FIELDS] Campo faltante adicionado: price_range")
+            
+            logger.info(f"📋 [FIELDS] Total de campos faltantes: {len(missing_fields)} - {missing_fields}")
+            
+            # ✅ GERAR PERGUNTA APENAS PARA O PRIMEIRO CAMPO FALTANTE
+            if missing_fields:
+                first_missing = missing_fields[0]
+                logger.info(f"❓ [FIELDS] Gerando pergunta para: {first_missing}")
+                
+                if first_missing == "year":
+                    suggested_question = "De qual ano você está procurando? (Ex: 2020, 2018-2022)"
+                elif first_missing == "location":
+                    # 🆕 USAR LOCALIZAÇÃO DO USUÁRIO SE DISPONÍVEL
+                    user_location = user_context.get('location', {})
+                    user_city = user_location.get('city')
+                    user_state = user_location.get('state')
+                    
+                    if user_city and user_state:
+                        suggested_question = f"Vi que você mora em {user_city}, {user_state}. Quer pesquisar nessa região ou em outro lugar?"
+                    elif user_city:
+                        suggested_question = f"Vi que você mora em {user_city}. Quer pesquisar aí ou em outro lugar?"
+                    else:
+                        suggested_question = "Em qual cidade ou estado você está procurando?"
+                elif first_missing == "price_range":
+                    suggested_question = "Qual sua faixa de preço? (Ex: até 50mil, entre 30mil e 60mil)"
+                
+                logger.info(f"✅ [FIELDS] Pergunta gerada: {suggested_question}")
         
         # 🆕 DETECTAR MARCA, MODELO E ANO
         detected_brand = self.detect_brand(normalized)
