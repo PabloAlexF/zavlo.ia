@@ -74,9 +74,17 @@ export function SortSelectionModal({ onSelect, onCancel }: SortSelectionModalPro
         <h3 className="mb-2 text-xl font-semibold text-white">
           Como ordenar os resultados?
         </h3>
-        <p className="mb-6 text-sm text-slate-400">
+        <p className="mb-2 text-sm text-slate-400">
           Escolha a melhor forma de visualizar os produtos
         </p>
+        <div className="mb-6 rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+          <p className="text-xs text-blue-300 flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Buscaremos até 20 resultados dos melhores marketplaces
+          </p>
+        </div>
 
         {/* Options */}
         <div className="space-y-3">

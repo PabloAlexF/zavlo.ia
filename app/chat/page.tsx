@@ -402,7 +402,6 @@ export default function ChatPage() {
       
       const params = new URLSearchParams({
         query: detectedProductName,
-        limit: '50',
         sortBy: sortBy
       });
       
@@ -783,7 +782,6 @@ export default function ChatPage() {
       
       const params = new URLSearchParams({
         query: query,
-        limit: '50',
         sortBy: sortBy
       });
       
