@@ -648,17 +648,12 @@ class ProductClassifier:
         missing_fields = []
         suggested_question = None
         
-        # 1. QUANTIDADE DE RESULTADOS (SEMPRE PERGUNTAR PRIMEIRO)
-        if not self.has_result_limit(normalized):
-            missing_fields.append("result_limit")
-            suggested_question = "Quantos resultados você quer ver?"
-        
-        # 2. Verificar condição (novo/usado) - APENAS SE JÁ TEM LIMITE
-        elif condition == "unknown":
+        # 1. Verificar condição (novo/usado) - PRIMEIRA PRIORIDADE
+        if condition == "unknown":
             missing_fields.append("condition")
             suggested_question = "Você prefere **novo ou usado**?"
         
-        # 3. Verificar localização (apenas para carros/motos) - APENAS SE JÁ TEM LIMITE E CONDIÇÃO
+        # 2. Verificar localização (apenas para carros/motos) - APENAS SE JÁ TEM CONDIÇÃO
         elif best_category in ["car", "motorcycle"]:
             has_location = self.detect_location(normalized)
             if not has_location:
@@ -682,9 +677,6 @@ class ProductClassifier:
         detected_year = self.detect_year(normalized) if best_category in ["car", "motorcycle"] else None
         normalized_for_scraper = self.normalize_query_for_scraper(query, best_category)
         
-        # 🆕 EXTRAIR LIMITE APENAS SE ESPECIFICADO PELO USUÁRIO
-        result_limit = self.extract_result_limit(normalized) if self.has_result_limit(normalized) else None
-        
         # 🆕 INCLUIR LOCALIZAÇÃO DO USUÁRIO NO RESULTADO
         user_location = user_context.get('location', {})
         
@@ -703,7 +695,6 @@ class ProductClassifier:
             "detected_model": detected_model,
             "detected_year": detected_year,
             "normalized_query": normalized_for_scraper,
-            "result_limit": result_limit,
             "user_location": user_location if user_location else None
         }
         
