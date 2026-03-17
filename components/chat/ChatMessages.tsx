@@ -20,6 +20,11 @@ interface Message {
   };
   imageData?: string;
   detectedProduct?: string;
+  priceRangeApplied?: {
+    min?: number;
+    max?: number;
+    target?: number;
+  };
 }
 
 interface ChatMessagesProps {
@@ -59,6 +64,26 @@ const AIBubble = ({ children }: { children: React.ReactNode }) => (
     {children}
   </div>
 );
+
+const formatPriceRange = (range: { min?: number; max?: number; target?: number }): string => {
+  if (range.min !== undefined && range.max !== undefined) {
+    return `R$ ${range.min.toLocaleString('pt-BR')} - R$ ${range.max.toLocaleString('pt-BR')}`;
+  }
+  
+  if (range.max !== undefined) {
+    return `até R$ ${range.max.toLocaleString('pt-BR')}`;
+  }
+  
+  if (range.min !== undefined) {
+    return `acima de R$ ${range.min.toLocaleString('pt-BR')}`;
+  }
+  
+  if (range.target !== undefined) {
+    return `aprox. R$ ${range.target.toLocaleString('pt-BR')}`;
+  }
+  
+  return '';
+};
 
 const OptionButton = ({ onClick, children, variant = 'default' }: {
   onClick: () => void;
@@ -331,13 +356,66 @@ export function ChatMessages({
               {/* ── Produtos ── */}
               {message.type === 'products' && message.products && message.products.length > 0 && (
                 <div className="space-y-5">
+                  {/* 💰 Badge de faixa de preço aplicada (DADOS ESTRUTURADOS) */}
+                  {message.priceRangeApplied && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-start gap-2 sm:gap-3"
+                    >
+                      <AIAvatar />
+                      <div className="rounded-2xl rounded-tl-sm border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+                        <p className="text-sm font-medium text-emerald-200">
+                          🎯 Filtrando resultados {formatPriceRange(message.priceRangeApplied)}
+                        </p>
+                        <p className="mt-1 text-xs text-emerald-300/60">
+                          mostrando melhores opções dentro do seu orçamento
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                  
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3"
                   >
                     {[...message.products]
-                      .sort((a, b) => a.price - b.price)
+                      .sort((a, b) => {
+                        // 🧠 Ranking inteligente por score
+                        const scoreProduct = (p: any) => {
+                          let score = 0;
+                          
+                          // Preço (mais barato = melhor) - peso 40%
+                          const price = p.price || Infinity;
+                          if (price !== Infinity) {
+                            score += (1 / price) * 100000;
+                          }
+                          
+                          // Rating (se existir) - peso 30%
+                          if (p.rating) {
+                            score += p.rating * 60;
+                          }
+                          
+                          // Fonte confiável - peso 20%
+                          const sourceBonus: Record<string, number> = {
+                            'google_shopping': 50,
+                            'webmotors': 45,
+                            'mobiauto': 40,
+                            'olx': 35,
+                          };
+                          score += sourceBonus[p.source] || 20;
+                          
+                          // Imagem disponível - peso 10%
+                          if (p.image) {
+                            score += 30;
+                          }
+                          
+                          return score;
+                        };
+                        
+                        return scoreProduct(b) - scoreProduct(a);
+                      })
                       .map((product, idx) => (
                         <motion.div
                           key={product.id || idx}

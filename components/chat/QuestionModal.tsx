@@ -16,16 +16,20 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip, userL
   const [selectedAnswer, setSelectedAnswer] = useState<string>('');
   const [locationInput, setLocationInput] = useState<string>('');
   const [yearInput, setYearInput] = useState<string>('');
+  const [priceInput, setPriceInput] = useState<string>('');
 
   const isConditionQuestion = missingFields.includes('condition');
   const isLocationQuestion = missingFields.includes('location');
   const isYearQuestion = missingFields.includes('year');
+  const isPriceQuestion = missingFields.includes('price_range');
 
   const handleSubmit = () => {
     if (isLocationQuestion && locationInput.trim()) {
       onAnswer(locationInput.trim());
     } else if (isYearQuestion && yearInput.trim()) {
       onAnswer(yearInput.trim());
+    } else if (isPriceQuestion && priceInput.trim()) {
+      onAnswer(priceInput.trim());
     } else if (selectedAnswer) {
       onAnswer(selectedAnswer);
     }
@@ -108,6 +112,31 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip, userL
             </>
           )}
 
+          {isPriceQuestion && (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-300 mb-3">Digite sua faixa de preço:</p>
+              <input
+                type="text"
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                placeholder="Ex: até 50mil ou entre 30mil e 60mil"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                autoFocus
+              />
+              <div className="grid grid-cols-2 gap-2">
+                {['até 30mil', 'até 50mil', 'até 80mil', 'até 100mil'].map((price) => (
+                  <button
+                    key={price}
+                    onClick={() => setPriceInput(price)}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 transition-colors"
+                  >
+                    {price}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isYearQuestion && (
             <div className="space-y-3">
               <p className="text-sm text-slate-300 mb-3">Digite o ano ou faixa de anos:</p>
@@ -176,7 +205,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip, userL
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!selectedAnswer && !locationInput.trim() && !yearInput.trim()}
+            disabled={!selectedAnswer && !locationInput.trim() && !yearInput.trim() && !priceInput.trim()}
             className="flex-1 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-3 font-medium text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-violet-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Continuar
