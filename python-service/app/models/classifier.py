@@ -51,6 +51,11 @@ class ProductClassifier:
         
         # Cache de regex compiladas (performance)
         self._compile_regex_patterns()
+        
+        # Pré-compilar patterns de localização (evita recriar por request)
+        self.location_patterns = [
+            re.compile(rf'\b{re.escape(loc)}\b') for loc in self.estados + self.cidades
+        ]
     
     def _compile_regex_patterns(self):
         """Pré-compila regex patterns para melhor performance"""
@@ -175,10 +180,8 @@ class ProductClassifier:
         return query
     
     def keyword_match(self, keyword: str, text: str) -> bool:
-        """Match de keyword com word boundary (otimizado - sem regex)"""
-        # 🚀 OTIMIZAÇÃO: Usa string matching ao invés de regex (mais rápido)
-        # Como tudo já está normalizado, podemos usar espaços como boundary
-        return f" {keyword} " in f" {text} "
+        """Match de keyword com word boundary"""
+        return keyword in (text if isinstance(text, list) else text.split())
     
     def detect_brand(self, normalized: str) -> str | None:
         """Detecta marca do produto (otimizado com set intersection)"""
@@ -261,27 +264,7 @@ class ProductClassifier:
     
     def detect_location(self, normalized: str) -> bool:
         """Detecta se a query contém informação de localização (OTIMIZADO)"""
-        # 🚀 OTIMIZAÇÃO: Usa listas pré-carregadas do __init__
-        
-        # Verificar padrão "em [localização]"
-        for estado in self.estados:
-            if re.search(rf'\bem\s+{re.escape(estado)}\b', normalized):
-                return True
-        
-        for cidade in self.cidades:
-            if re.search(rf'\bem\s+{re.escape(cidade)}\b', normalized):
-                return True
-        
-        # Verificar estados/cidades sozinhos (com word boundary)
-        for estado in self.estados:
-            if self.keyword_match(estado, normalized):
-                return True
-        
-        for cidade in self.cidades:
-            if self.keyword_match(cidade, normalized):
-                return True
-        
-        return False
+        return any(p.search(normalized) for p in self.location_patterns)
     
     def is_question_about_usage(self, normalized: str) -> bool:
         """Detecta se o usuário está perguntando como usar o sistema (usando regex compiladas)"""
@@ -426,6 +409,7 @@ class ProductClassifier:
         
         # NORMALIZAR APENAS UMA VEZ (performance)
         normalized = self.normalize_query(query)
+        normalized_words = normalized.split()
         
         # 🆕 DETECTAR PERGUNTAS E SAUDAÇÕES
         is_question = self.is_question_about_usage(normalized)
@@ -630,65 +614,77 @@ class ProductClassifier:
         best_category = max(scores, key=scores.get)
         max_score = scores[best_category]
         
-        # Calcular confiança (0-1)
+        # Calcular confiança — penaliza competição, boost por sessão
         total_score = sum(scores.values())
-        confidence = min(max_score / total_score, 1.0) if total_score > 0 else 0.5
-        
+        raw_confidence = min(max_score / (total_score + 0.1), 1.0) if total_score > 0 else 0.5
+        confidence = min(raw_confidence * (1 + len(scores) * 0.05), 1.0)
+        if user_context.get('last_category') == best_category:
+            confidence = min(confidence + 0.1, 1.0)
+
         # Normalizar scores para retorno
         normalized_scores = {k: v / total_score for k, v in scores.items()} if total_score > 0 else scores
-        
-        # Pegar scrapers recomendados (CÓPIA para evitar efeitos colaterais)
+
+        # Scrapers com score de prioridade
+        scraper_base_scores = {'olx': 0.7, 'webmotors': 0.8, 'mobiauto': 0.8, 'google_shopping': 0.6}
+        if condition == 'used':
+            scraper_base_scores['olx'] = 0.95
         scrapers = self.categories[best_category]["scrapers"].copy()
+        scrapers_priority = sorted(
+            [{'name': s, 'score': scraper_base_scores.get(s, 0.5)} for s in scrapers],
+            key=lambda x: x['score'], reverse=True
+        )
+        scrapers = [s['name'] for s in scrapers_priority]
         
-        # Se condição é "usado", priorizar OLX
-        if condition == "used" and "olx" in scrapers:
-            scrapers.remove("olx")
-            scrapers.insert(0, "olx")
+        # 🆕 DETECTAR MARCA, MODELO E ANO (MOVER PARA CIMA - ANTES DE USAR)
+        detected_brand = self.detect_brand(normalized)
+        detected_model = self.detect_model(normalized)
+        detected_year = self.detect_year(normalized) if best_category in ["car", "motorcycle"] else None
         
         # 🆕 DETECTAR CAMPOS FALTANTES (ORDEM DE PRIORIDADE)
         missing_fields = []
+        first_missing = None
         suggested_question = None
         
+        # Extrair preço uma única vez
+        price_range_data = extract_price_range(normalized) if best_category in ['car', 'motorcycle'] else None
+        has_price_range = price_range_data is not None
+
         # Para VEÍCULOS: Verificar CONDIÇÃO, ANO, LOCALIZAÇÃO e FAIXA DE PREÇO
-        if best_category in ["car", "motorcycle"]:
-            detected_year = self.detect_year(normalized)
+        if best_category in ['car', 'motorcycle']:
             has_location = self.detect_location(normalized)
-            price_range_data = extract_price_range(normalized)
-            has_price_range = price_range_data is not None
+            logger.info(f"🔍 condition={condition} year={detected_year} location={has_location} price={has_price_range}")
             
-            logger.info(f"🔍 [FIELDS DEBUG] ========== DETECÇÃO DE CAMPOS ==========")
-            logger.info(f"🔍 [FIELDS DEBUG] Query normalizada: '{normalized}'")
-            logger.info(f"🔍 [FIELDS DEBUG] Condição: {condition}")
-            logger.info(f"🔍 [FIELDS DEBUG] Ano detectado: {detected_year}")
-            logger.info(f"🔍 [FIELDS DEBUG] Localização detectada: {has_location}")
-            logger.info(f"🔍 [FIELDS DEBUG] Preço detectado: {has_price_range}")
-            if has_price_range:
-                logger.info(f"🔍 [FIELDS DEBUG] Dados de preço: {price_range_data}")
-            logger.info(f"🔍 [FIELDS DEBUG] ============================================")
-            
-            # ✅ COLETAR TODOS OS CAMPOS FALTANTES
-            if condition == "unknown":
-                missing_fields.append("condition")
-                logger.info(f"📝 [FIELDS] Campo faltante adicionado: condition")
-            
-            if not detected_year:
-                missing_fields.append("year")
-                logger.info(f"📝 [FIELDS] Campo faltante adicionado: year")
-            
-            if not has_location:
-                missing_fields.append("location")
-                logger.info(f"📝 [FIELDS] Campo faltante adicionado: location")
-            
-            if not has_price_range:
-                missing_fields.append("price_range")
-                logger.info(f"📝 [FIELDS] Campo faltante adicionado: price_range")
+            # Prioridade dinâmica por categoria
+            if best_category == 'car':
+                priority_order = ['price_range', 'year', 'condition', 'location']
+            else:  # motorcycle
+                priority_order = ['price_range', 'condition', 'year', 'location']
+
+            checks = {
+                'price_range': not has_price_range and not user_context.get('price_range') and not user_context.get('last_filters', {}).get('price_range'),
+                'condition':   condition == 'unknown' and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'),
+                'year':        not detected_year and not user_context.get('year') and not user_context.get('last_filters', {}).get('year'),
+                'location':    not has_location and not user_context.get('location') and not user_context.get('last_filters', {}).get('location'),
+            }
+            # Herdar filtros da sessão anterior se disponíveis
+            last_filters = user_context.get('last_filters', {})
+            if not has_price_range and last_filters.get('price_range'):
+                price_range_data = last_filters['price_range']
+                checks['price_range'] = False
+            for field in priority_order:
+                if checks[field]:
+                    missing_fields.append(field)
+                    logger.info(f"📝 [FIELDS] Campo faltante adicionado: {field}")
+
+            # Auto-skip: alta confiança só pergunta o primeiro campo
+            if confidence > 0.9 and len(missing_fields) > 1:
+                missing_fields = missing_fields[:1]
             
             logger.info(f"📋 [FIELDS] Total de campos faltantes: {len(missing_fields)} - {missing_fields}")
             
             # ✅ GERAR PERGUNTA APENAS PARA O PRIMEIRO CAMPO FALTANTE
             if missing_fields:
                 first_missing = missing_fields[0]
-                logger.info(f"❓ [FIELDS] Gerando pergunta para: {first_missing}")
                 
                 if first_missing == "condition":
                     suggested_question = "Você prefere novo ou usado?"
@@ -707,34 +703,29 @@ class ProductClassifier:
                     else:
                         suggested_question = "Em qual cidade ou estado você está procurando?"
                 elif first_missing == "price_range":
-                    suggested_question = "Qual sua faixa de preço? (Ex: até 50mil, entre 30mil e 60mil)"
+                    price_question = self.generate_smart_price_question(
+                        detected_brand, detected_model, detected_year, condition, user_context
+                    )
+                    suggested_question = price_question
                 
                 logger.info(f"✅ [FIELDS] Pergunta gerada: {suggested_question}")
+        elif best_category == 'electronics':
+            if condition == "unknown" and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'):
+                missing_fields.append("condition")
+                suggested_question = "Você prefere novo ou usado?"
         else:
-            # Para produtos genéricos, verificar apenas condição
-            if condition == "unknown":
+            if condition == "unknown" and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'):
                 missing_fields.append("condition")
                 suggested_question = "Você prefere novo ou usado?"
         
-        # 🆕 DETECTAR MARCA, MODELO E ANO
-        detected_brand = self.detect_brand(normalized)
-        detected_model = self.detect_model(normalized)
-        detected_year = self.detect_year(normalized) if best_category in ["car", "motorcycle"] else None
-        normalized_for_scraper = self.normalize_query_for_scraper(query, best_category)
-        
-        # 🆕 EXTRAIR FAIXA DE PREÇO ESTRUTURADA
-        price_range_data = extract_price_range(normalized) if best_category in ["car", "motorcycle"] else None
-        
-        if price_range_data:
-            logger.info(f"💰 [PRICE RANGE] Extraído da query: {price_range_data}")
-        
-        # 🆕 INCLUIR LOCALIZAÇÃO DO USUÁRIO NO RESULTADO
+        # Incluir localização do usuário no resultado
         user_location = user_context.get('location', {})
-        
+        normalized_for_scraper = self.normalize_query_for_scraper(query, best_category)
+
         result = {
             "category": best_category,
             "confidence": round(confidence, 2),
-            "recommended_scrapers": scrapers,
+            "scrapers": scrapers_priority,
             "condition": condition,
             "all_scores": {k: round(v, 2) for k, v in normalized_scores.items()},
             "missing_fields": missing_fields,
@@ -746,8 +737,21 @@ class ProductClassifier:
             "detected_model": detected_model,
             "detected_year": detected_year,
             "normalized_query": normalized_for_scraper,
+            "search_query": " ".join(filter(None, [
+                normalized_for_scraper,
+                str(detected_year) if detected_year else None,
+                condition if condition != 'unknown' else None,
+                " ".join(filter(None, [user_location.get('city'), user_location.get('state')])) or None if user_location else None
+            ])),
+            "last_filters": {
+                "price_range": price_range_data,
+                "condition": condition if condition != 'unknown' else None,
+                "year": detected_year,
+                "location": user_location or None,
+            },
             "user_location": user_location if user_location else None,
-            "price_range": price_range_data
+            "price_range": price_range_data,
+            "question_type": first_missing if missing_fields else None
         }
         
         logger.info(f"  Resultado: {result}")
@@ -814,3 +818,84 @@ class ProductClassifier:
                 return True
         
         return False
+
+    
+    def generate_smart_price_question(self, brand: str, model: str, year: int, condition: str, user_context: dict = None) -> dict:
+        """Gera pergunta de preço inteligente com sugestões estruturadas"""
+        from datetime import datetime
+        user_context = user_context or {}
+        location_state = ''
+        loc = user_context.get('location', {})
+        if isinstance(loc, dict):
+            location_state = loc.get('state', '').lower()
+        
+        # Categorização por marca/modelo (mais precisa que string matching)
+        premium_brands = {'bmw', 'mercedes', 'audi', 'volvo', 'porsche', 'land rover', 'jaguar', 'lexus'}
+        popular_models = {'gol', 'uno', 'palio', 'celta', 'ka', 'mobi', 'kwid', 'argo', 'cronos'}
+        medio_models = {'civic', 'corolla', 'cruze', 'jetta', 'sentra', 'cerato', 'elantra'}
+        suv_models = {'tucson', 'tiguan', 'hrv', 'hr-v', 'creta', 't-cross', 'compass', 'renegade', 'kicks', 'tracker'}
+        moto_brands = {'yamaha', 'kawasaki', 'suzuki', 'ducati', 'harley', 'triumph', 'ktm'}
+        
+        brand_lower = (brand or '').lower()
+        model_lower = (model or '').lower()
+        
+        # Detectar categoria
+        if brand_lower in premium_brands:
+            category = 'premium'
+            base_min, base_max = 80000, 250000
+        elif brand_lower in moto_brands or brand_lower == 'honda' and any(m in model_lower for m in ['cg', 'cb', 'xre', 'biz', 'fan']):
+            category = 'moto'
+            base_min, base_max = 8000, 35000
+        elif model_lower in suv_models:
+            category = 'suv'
+            base_min, base_max = 60000, 160000
+        elif model_lower in medio_models:
+            category = 'medio'
+            base_min, base_max = 40000, 90000
+        elif model_lower in popular_models:
+            category = 'popular'
+            base_min, base_max = 12000, 45000
+        else:
+            category = 'medio'
+            base_min, base_max = 35000, 90000
+        
+        # Ajuste regional de preço
+        location_state = user_context.get('location', {}).get('state', '').lower() if isinstance(user_context.get('location'), dict) else ''
+        if location_state in ('sp', 'rj'):
+            base_max = int(base_max * 1.15)
+        elif location_state in ('mg', 'rs'):
+            base_max = int(base_max * 1.05)
+
+        # Depreciação realista (85% ao ano = mercado real)
+        if year:
+            age = datetime.now().year - year
+            depreciation = 0.85 ** age
+            depreciation = max(depreciation, 0.25)  # mínimo 25%
+            base_min = int(base_min * depreciation)
+            base_max = int(base_max * depreciation)
+        
+        # Ajuste por condição
+        if condition == 'new':
+            base_min = int(base_min * 1.4)
+            base_max = int(base_max * 1.6)
+        
+        # Arredondar para múltiplos de 5mil
+        def round5k(v): return max(5000, round(v / 5000) * 5000)
+        
+        low = round5k(base_min)
+        mid = round5k((base_min + base_max) / 2)
+        high = round5k(base_max)
+        
+        def fmt(v): return f"{v/1000:.0f} mil" if v % 1000 == 0 else f"{v/1000:.1f} mil"
+        
+        suggestions = [
+            {"label": f"Até {fmt(mid)}",                        "max": mid},
+            {"label": f"Entre {fmt(low)} e {fmt(high)}",        "min": low, "max": high},
+            {"label": f"Acima de {fmt(high)}",                  "min": high},
+        ]
+        
+        vehicle_name = f"{brand} {model}".strip() if brand and model else (model or brand or 'o veículo')
+        return {
+            "question": f"Qual sua faixa de preço para {vehicle_name}?",
+            "suggestions": suggestions
+        }
