@@ -392,9 +392,13 @@ class ProductClassifier:
         
         return None
     
-    def classify(self, query: str) -> Dict:
+    def classify(self, query: str, user_context: Dict = None) -> Dict:
         """
         Classifica a query e retorna categoria + scrapers recomendados + campos faltantes
+        
+        Args:
+            query: Query do usuário
+            user_context: Contexto do usuário (location: {city, state})
         
         Returns:
             {
@@ -407,9 +411,11 @@ class ProductClassifier:
                 "suggested_question": str | None,
                 "is_question": bool,
                 "is_greeting": bool,
-                "extracted_product": str | None
+                "extracted_product": str | None,
+                "user_location": Dict | None
             }
         """
+        user_context = user_context or {}
         # 🚀 OTIMIZAÇÃO: Limitar tamanho da query (evita queries gigantes)
         MAX_TOKENS = 20
         tokens = query.split()
@@ -657,7 +663,18 @@ class ProductClassifier:
             has_location = self.detect_location(normalized)
             if not has_location:
                 missing_fields.append("location")
-                suggested_question = "Em qual **cidade ou estado** você está procurando?"
+                
+                # 🆕 USAR LOCALIZAÇÃO DO USUÁRIO SE DISPONÍVEL
+                user_location = user_context.get('location', {})
+                user_city = user_location.get('city')
+                user_state = user_location.get('state')
+                
+                if user_city and user_state:
+                    suggested_question = f"Vi que você mora em **{user_city}, {user_state}**. Quer pesquisar nessa região ou em outro lugar?"
+                elif user_city:
+                    suggested_question = f"Vi que você mora em **{user_city}**. Quer pesquisar aí ou em outro lugar?"
+                else:
+                    suggested_question = "Em qual **cidade ou estado** você está procurando?"
         
         # 🆕 DETECTAR MARCA, MODELO E ANO
         detected_brand = self.detect_brand(normalized)
@@ -667,6 +684,9 @@ class ProductClassifier:
         
         # 🆕 EXTRAIR LIMITE APENAS SE ESPECIFICADO PELO USUÁRIO
         result_limit = self.extract_result_limit(normalized) if self.has_result_limit(normalized) else None
+        
+        # 🆕 INCLUIR LOCALIZAÇÃO DO USUÁRIO NO RESULTADO
+        user_location = user_context.get('location', {})
         
         result = {
             "category": best_category,
@@ -683,7 +703,8 @@ class ProductClassifier:
             "detected_model": detected_model,
             "detected_year": detected_year,
             "normalized_query": normalized_for_scraper,
-            "result_limit": result_limit
+            "result_limit": result_limit,
+            "user_location": user_location if user_location else None
         }
         
         logger.info(f"  Resultado: {result}")

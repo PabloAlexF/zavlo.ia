@@ -69,13 +69,17 @@ async def classify_query(request: dict):
     """Classifica a query do usuário"""
     try:
         query = request.get("query", "")
+        context = request.get("context", {})  # 🆕 RECEBER CONTEXTO DO USUÁRIO
         
         if not query or not query.strip():
             raise HTTPException(status_code=400, detail="Query não pode ser vazia")
         
-        result = classifier.classify(query)
+        # 🆕 PASSAR CONTEXTO PARA O CLASSIFICADOR
+        result = classifier.classify(query, user_context=context)
         
         logger.info(f"✅ Classificação: {result['category']} (confiança: {result['confidence']})")
+        if context.get('location'):
+            logger.info(f"📍 Localização do usuário: {context['location']}")
         
         # 🎓 APRENDIZADO AUTOMÁTICO: Registrar busca
         if not result.get('is_question') and not result.get('is_greeting'):
