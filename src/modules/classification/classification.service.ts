@@ -18,13 +18,39 @@ export class ClassificationService {
   /**
    * Classifica a query do usuário usando o serviço Python
    */
-  async classifyQuery(query: string, context?: Record<string, any>): Promise<ClassificationResult> {
+  async classifyQuery(query: string, context?: Record<string, any>, userId?: string): Promise<ClassificationResult> {
     try {
       this.logger.log(`📥 Classificando query: "${query}"`);
 
+      // 🆕 BUSCAR LOCALIZAÇÃO DO USUÁRIO SE DISPONÍVEL
+      let userLocation: { city?: string; state?: string } | undefined;
+      if (userId) {
+        try {
+          const firestore = this.configService.get('firebase.firestore');
+          if (firestore) {
+            const userDoc = await firestore.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              if (userData?.location) {
+                userLocation = {
+                  city: userData.location.city,
+                  state: userData.location.state
+                };
+                this.logger.log(`📍 Localização do usuário: ${userLocation.city}, ${userLocation.state}`);
+              }
+            }
+          }
+        } catch (locationError) {
+          this.logger.warn(`⚠️ Erro ao buscar localização: ${locationError.message}`);
+        }
+      }
+
       const request: ClassificationRequest = {
         query,
-        context,
+        context: {
+          ...context,
+          location: userLocation  // 🆕 PASSAR LOCALIZAÇÃO PARA O PYTHON
+        },
       };
 
       const response = await fetch(`${this.pythonServiceUrl}/api/classify`, {
