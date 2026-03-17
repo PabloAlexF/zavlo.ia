@@ -505,7 +505,8 @@ export default function ChatPage() {
       setOriginalQuery(enrichedQuery);
       await classifyQuery(enrichedQuery);
     } else {
-      console.log('[HYBRID] Todas perguntas respondidas, indo para ordenação');
+      console.log('[HYBRID] Todas perguntas respondidas');
+      console.log('[HYBRID] Categoria atual:', currentClassification?.category);
       setHybridQuestion(null);
       setHybridMissingFields([]);
       setFinalQuery(enrichedQuery);
@@ -522,6 +523,8 @@ export default function ChatPage() {
   };
 
   const handleHybridSkip = async () => {
+    console.log('[HYBRID SKIP] Pulando perguntas');
+    console.log('[HYBRID SKIP] Categoria atual:', currentClassification?.category);
     setHybridQuestion(null);
     setHybridMissingFields([]);
     setFinalQuery(originalQuery);
@@ -746,6 +749,7 @@ export default function ChatPage() {
         // ✅ PRODUTO VÁLIDO: Armazenar classificação e decidir próximo passo
         setCurrentClassification(data.classification);
         setFinalQuery(query);
+        setLoading(false);
         
         // ✅ Para carros/motos, buscar direto sem modal de ordenação
         if (data.classification?.category === 'car' || data.classification?.category === 'motorcycle') {
@@ -755,8 +759,6 @@ export default function ChatPage() {
           console.log('[CLASSIFY] Produto genérico - mostrando modal de ordenação');
           setShowSortQuestion(true);
         }
-        
-        setLoading(false);
         
       } else {
         addMessage('ai', 'Erro ao processar. Tente novamente.');
