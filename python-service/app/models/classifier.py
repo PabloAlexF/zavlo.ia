@@ -649,12 +649,7 @@ class ProductClassifier:
         missing_fields = []
         suggested_question = None
         
-        # 1. Verificar condição (novo/usado) - PRIMEIRA PRIORIDADE
-        if condition == "unknown":
-            missing_fields.append("condition")
-            suggested_question = "Você prefere novo ou usado?"
-        
-        # 2. Para VEÍCULOS: Verificar ANO, LOCALIZAÇÃO e FAIXA DE PREÇO
+        # Para VEÍCULOS: Verificar CONDIÇÃO, ANO, LOCALIZAÇÃO e FAIXA DE PREÇO
         if best_category in ["car", "motorcycle"]:
             detected_year = self.detect_year(normalized)
             has_location = self.detect_location(normalized)
@@ -663,6 +658,7 @@ class ProductClassifier:
             
             logger.info(f"🔍 [FIELDS DEBUG] ========== DETECÇÃO DE CAMPOS ==========")
             logger.info(f"🔍 [FIELDS DEBUG] Query normalizada: '{normalized}'")
+            logger.info(f"🔍 [FIELDS DEBUG] Condição: {condition}")
             logger.info(f"🔍 [FIELDS DEBUG] Ano detectado: {detected_year}")
             logger.info(f"🔍 [FIELDS DEBUG] Localização detectada: {has_location}")
             logger.info(f"🔍 [FIELDS DEBUG] Preço detectado: {has_price_range}")
@@ -670,7 +666,11 @@ class ProductClassifier:
                 logger.info(f"🔍 [FIELDS DEBUG] Dados de preço: {price_range_data}")
             logger.info(f"🔍 [FIELDS DEBUG] ============================================")
             
-            # ✅ COLETAR TODOS OS CAMPOS FALTANTES (não usar elif)
+            # ✅ COLETAR TODOS OS CAMPOS FALTANTES
+            if condition == "unknown":
+                missing_fields.append("condition")
+                logger.info(f"📝 [FIELDS] Campo faltante adicionado: condition")
+            
             if not detected_year:
                 missing_fields.append("year")
                 logger.info(f"📝 [FIELDS] Campo faltante adicionado: year")
@@ -690,7 +690,9 @@ class ProductClassifier:
                 first_missing = missing_fields[0]
                 logger.info(f"❓ [FIELDS] Gerando pergunta para: {first_missing}")
                 
-                if first_missing == "year":
+                if first_missing == "condition":
+                    suggested_question = "Você prefere novo ou usado?"
+                elif first_missing == "year":
                     suggested_question = "De qual ano você está procurando? (Ex: 2020, 2018-2022)"
                 elif first_missing == "location":
                     # 🆕 USAR LOCALIZAÇÃO DO USUÁRIO SE DISPONÍVEL
@@ -708,6 +710,11 @@ class ProductClassifier:
                     suggested_question = "Qual sua faixa de preço? (Ex: até 50mil, entre 30mil e 60mil)"
                 
                 logger.info(f"✅ [FIELDS] Pergunta gerada: {suggested_question}")
+        else:
+            # Para produtos genéricos, verificar apenas condição
+            if condition == "unknown":
+                missing_fields.append("condition")
+                suggested_question = "Você prefere novo ou usado?"
         
         # 🆕 DETECTAR MARCA, MODELO E ANO
         detected_brand = self.detect_brand(normalized)
