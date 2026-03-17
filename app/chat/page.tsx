@@ -8,7 +8,6 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
 import { QuestionModal } from '@/components/chat/QuestionModal';
-import { SearchConfirmationModal } from '@/components/chat/SearchConfirmationModal';
 import { SortSelectionModal } from '@/components/chat/SortSelectionModal';
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
@@ -58,8 +57,7 @@ export default function ChatPage() {
   const [hybridMissingFields, setHybridMissingFields] = useState<string[]>([]);
   const [originalQuery, setOriginalQuery] = useState<string>('');
   const [finalQuery, setFinalQuery] = useState<string>('');
-  const [currentClassification, setCurrentClassification] = useState<any>(null); // 🆕 Armazenar classificação
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [currentClassification, setCurrentClassification] = useState<any>(null);
   const [showSortQuestion, setShowSortQuestion] = useState(false);
   const [selectedSort, setSelectedSort] = useState<string>('RELEVANCE');
 
@@ -477,73 +475,46 @@ export default function ChatPage() {
     const currentField = hybridMissingFields[0];
     
     if (currentField === 'result_limit') {
-      // ❌ PROBLEMA 1 CORRIGIDO: NÃO adicionar "de" na query
-      // Apenas armazenar o limite, não modificar a query
-      enrichedQuery = originalQuery; // Mantém query original
+      enrichedQuery = originalQuery;
       console.log('[HYBRID] Limite definido:', answer, '- Query mantida:', enrichedQuery);
     } else if (currentField === 'condition') {
-      // Para condição, adicionar após o produto
       enrichedQuery = `${originalQuery} ${answer}`.trim();
       console.log('[HYBRID] Condição adicionada:', enrichedQuery);
     } else if (currentField === 'location') {
-      // Para localização, adicionar com "em"
       enrichedQuery = `${originalQuery} em ${answer}`.trim();
       console.log('[HYBRID] Localização adicionada:', enrichedQuery);
     } else {
-      // Fallback genérico
       enrichedQuery = `${originalQuery} ${answer}`.trim();
     }
     
-    // Remover campo respondido da lista
     const remainingFields = hybridMissingFields.slice(1);
     console.log('[HYBRID] Campos restantes:', remainingFields);
     
     if (remainingFields.length > 0) {
-      // Ainda tem mais perguntas
       console.log('[HYBRID] Próxima pergunta:', remainingFields[0]);
       setHybridMissingFields(remainingFields);
       setOriginalQuery(enrichedQuery);
-      
-      // ✅ Fazer nova classificação (NÃO buscar)
       await classifyQuery(enrichedQuery);
     } else {
-      // Última pergunta respondida, mostrar confirmação
-      console.log('[HYBRID] Todas perguntas respondidas, mostrando confirmação');
+      console.log('[HYBRID] Todas perguntas respondidas, indo para ordenação');
       setHybridQuestion(null);
       setHybridMissingFields([]);
       setFinalQuery(enrichedQuery);
-      setShowConfirmation(true);
+      setShowSortQuestion(true);
     }
   };
 
   const handleHybridSkip = async () => {
-    // Pular pergunta e mostrar confirmação
     setHybridQuestion(null);
     setHybridMissingFields([]);
     setFinalQuery(originalQuery);
-    setShowConfirmation(true);
-  };
-
-  const handleConfirmSearch = async (editedQuery: string) => {
-    setShowConfirmation(false);
-    setFinalQuery(editedQuery);
-    // Mostrar pergunta de ordenação
     setShowSortQuestion(true);
   };
 
   const handleSortSelection = async (sortBy: string) => {
     setShowSortQuestion(false);
     setSelectedSort(sortBy);
-    // ✅ Buscar passando classificação (já foi classificado)
     await executeTextSearch(finalQuery, sortBy, currentClassification);
-  };
-
-  const handleCancelSearch = () => {
-    setShowConfirmation(false);
-    setFinalQuery('');
-    setOriginalQuery('');
-    setLoading(false);
-    setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
   };
 
   const handleSend = async (messageText?: string) => {
@@ -953,15 +924,7 @@ export default function ChatPage() {
           missingFields={hybridMissingFields}
           onAnswer={handleHybridAnswer}
           onSkip={handleHybridSkip}
-        />
-      )}
-
-      {/* Search Confirmation Modal */}
-      {showConfirmation && (
-        <SearchConfirmationModal
-          finalQuery={finalQuery}
-          onConfirm={handleConfirmSearch}
-          onCancel={handleCancelSearch}
+          userLocation={currentClassification?.user_location}
         />
       )}
 
