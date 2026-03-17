@@ -496,14 +496,33 @@ export default function ChatPage() {
       enrichedQuery = `${originalQuery} ${answer}`.trim();
     }
     
+    // ✅ REMOVER O CAMPO ATUAL DA LISTA
     const remainingFields = hybridMissingFields.slice(1);
     console.log('[HYBRID] Campos restantes:', remainingFields);
     
     if (remainingFields.length > 0) {
       console.log('[HYBRID] Próxima pergunta:', remainingFields[0]);
+      // ✅ ATUALIZAR LISTA DE CAMPOS FALTANTES
       setHybridMissingFields(remainingFields);
       setOriginalQuery(enrichedQuery);
-      await classifyQuery(enrichedQuery);
+      
+      // ✅ GERAR PRÓXIMA PERGUNTA LOCALMENTE (não reclassificar)
+      const nextField = remainingFields[0];
+      let nextQuestion = '';
+      
+      if (nextField === 'condition') {
+        nextQuestion = 'Você prefere novo ou usado?';
+      } else if (nextField === 'year') {
+        nextQuestion = 'De qual ano você está procurando? (Ex: 2020, 2018-2022)';
+      } else if (nextField === 'location') {
+        nextQuestion = 'Em qual cidade ou estado você está procurando?';
+      } else if (nextField === 'price_range') {
+        nextQuestion = 'Qual sua faixa de preço? (Ex: até 50mil, entre 30mil e 60mil)';
+      }
+      
+      console.log('[HYBRID] Próxima pergunta gerada:', nextQuestion);
+      setHybridQuestion(nextQuestion);
+      addMessage('ai', nextQuestion);
     } else {
       console.log('[HYBRID] Todas perguntas respondidas');
       console.log('[HYBRID] Categoria atual:', currentClassification?.category);
