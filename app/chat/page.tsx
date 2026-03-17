@@ -731,6 +731,9 @@ export default function ChatPage() {
           return;
         }
         
+        // ✅ SEMPRE ATUALIZAR CLASSIFICAÇÃO
+        setCurrentClassification(data.classification);
+        
         // HYBRID MODE: Check if needs question
         if (data.needsQuestion && data.question) {
           console.log('[HYBRID] Backend retornou pergunta:', data.question);
