@@ -474,10 +474,7 @@ export default function ChatPage() {
     
     const currentField = hybridMissingFields[0];
     
-    if (currentField === 'result_limit') {
-      enrichedQuery = originalQuery;
-      console.log('[HYBRID] Limite definido:', answer, '- Query mantida:', enrichedQuery);
-    } else if (currentField === 'condition') {
+    if (currentField === 'condition') {
       enrichedQuery = `${originalQuery} ${answer}`.trim();
       console.log('[HYBRID] Condição adicionada:', enrichedQuery);
     } else if (currentField === 'location') {
