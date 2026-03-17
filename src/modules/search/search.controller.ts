@@ -40,7 +40,7 @@ export class SearchController {
     console.log(`   - user: ${user ? `${user.id} (${user.plan})` : 'anonymous'}`);
 
     // ✅ APENAS CLASSIFICAR - NÃO CONSUMIR CRÉDITOS
-    const classification = await this.searchService.classifyQueryOnly(query);
+    const classification = await this.searchService.classifyQueryOnly(query, user?.id);
 
     console.log(`✅ [CLASSIFY] Classification result:`, classification);
 

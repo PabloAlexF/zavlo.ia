@@ -150,7 +150,7 @@ export class SearchService {
   /* ============================================
      CLASSIFICAÇÃO SEM BUSCA (NÃO CONSOME CRÉDITOS)
   ============================================ */
-  async classifyQueryOnly(query: string): Promise<{
+  async classifyQueryOnly(query: string, userId?: string): Promise<{
     classification: any;
     needsQuestion?: boolean;
     question?: string;
@@ -163,7 +163,7 @@ export class SearchService {
     this.logger.log(`🤖 [CLASSIFY ONLY] Classificando query: "${query}"`);
     
     try {
-      const classification = await this.classificationService.classifyQuery(query);
+      const classification = await this.classificationService.classifyQuery(query, {}, userId);
       
       this.logger.log(`✅ [CLASSIFY ONLY] Resultado:`);
       this.logger.log(`   - Categoria: ${classification.category}`);
@@ -256,7 +256,7 @@ export class SearchService {
       // Classificar apenas se não foi fornecida
       try {
         this.logger.log(`🤖 [CLASSIFICATION] Classificando query: "${query}"`);
-        classification = await this.classificationService.classifyQuery(query);
+        classification = await this.classificationService.classifyQuery(query, {}, userId);
         this.logger.log(`✅ [CLASSIFICATION] Resultado:`);
         this.logger.log(`   - Categoria: ${classification.category}`);
         this.logger.log(`   - Confiança: ${classification.confidence}`);
