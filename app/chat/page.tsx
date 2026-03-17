@@ -58,6 +58,7 @@ export default function ChatPage() {
   const [hybridMissingFields, setHybridMissingFields] = useState<string[]>([]);
   const [originalQuery, setOriginalQuery] = useState<string>('');
   const [finalQuery, setFinalQuery] = useState<string>('');
+  const [currentClassification, setCurrentClassification] = useState<any>(null); // 🆕 Armazenar classificação
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showSortQuestion, setShowSortQuestion] = useState(false);
   const [selectedSort, setSelectedSort] = useState<string>('RELEVANCE');
@@ -401,7 +402,6 @@ export default function ChatPage() {
       
       const params = new URLSearchParams({
         query: detectedProductName,
-        limit: '50',
         sortBy: sortBy
       });
       
@@ -535,7 +535,7 @@ export default function ChatPage() {
     setShowSortQuestion(false);
     setSelectedSort(sortBy);
     // ✅ Buscar passando classificação (já foi classificado)
-    await executeTextSearch(finalQuery, sortBy);
+    await executeTextSearch(finalQuery, sortBy, currentClassification);
   };
 
   const handleCancelSearch = () => {
@@ -747,7 +747,8 @@ export default function ChatPage() {
           return;
         }
         
-        // ✅ PRODUTO VÁLIDO: Mostrar confirmação e perguntar ordenação
+        // ✅ PRODUTO VÁLIDO: Armazenar classificação e mostrar ordenação
+        setCurrentClassification(data.classification);
         setFinalQuery(query);
         setShowSortQuestion(true);
         setLoading(false);
@@ -781,7 +782,6 @@ export default function ChatPage() {
       
       const params = new URLSearchParams({
         query: query,
-        limit: '50',
         sortBy: sortBy
       });
       
