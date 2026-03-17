@@ -370,13 +370,12 @@ export class SearchService {
 
     // Se freeMode (plano free/usuário não logado), busca limitada
     if (filters?.freeMode) {
-      const requestedLimit = filters?.limit || 10;
-      const maxLimit = Math.min(requestedLimit, 20); // Máximo 20 para free
+      const fixedLimit = 20; // ✅ SEMPRE 20 resultados
       
-      this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - ${maxLimit} resultados (freeMode=${filters.freeMode})`);
+      this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - ${fixedLimit} resultados (freeMode=${filters.freeMode})`);
       
       try {
-        const results = await this.googleShoppingService.search(normalizedQuery, maxLimit, sortBy);
+        const results = await this.googleShoppingService.search(normalizedQuery, fixedLimit, sortBy);
         const result = { 
           results: results, 
           total: results.length,
@@ -403,14 +402,13 @@ export class SearchService {
 
     // GOOGLE SHOPPING SEARCH (planos pagos)
     let products: Product[] = [];
-    const requestedLimit = filters?.limit || 50;
-    const maxLimit = Math.min(requestedLimit, 100); // Máximo 100 conforme API
+    const fixedLimit = 20; // ✅ SEMPRE 20 resultados
     const usedSources: string[] = []; // Declarar antes do try
 
     // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
     const scrapers = classification.recommended_scrapers;
-    const resultLimit = classification.result_limit || 20; // Padrão 20 se não especificado
-    this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite de ${resultLimit} resultados`);
+    const resultLimit = 20; // ✅ SEMPRE 20 resultados
+    this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
 
     try {
       // ✅ PROBLEMA 1 CORRIGIDO: Retornar source no objeto para evitar race condition
