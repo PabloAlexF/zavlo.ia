@@ -3,12 +3,19 @@ import { collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, l
 
 export interface ChatMessage {
   id: string;
-  type: 'user' | 'ai' | 'products' | 'confirmation' | 'category_question' | 'image_confirmation' | 'sort_question';
+  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question';
   content: string;
   products?: any[];
   timestamp: Date;
   searchType?: 'text' | 'image';
   creditCost?: number;
+  imageData?: string;
+  detectedProduct?: string;
+  priceRangeApplied?: {
+    min?: number;
+    max?: number;
+    target?: number;
+  };
 }
 
 export interface ChatHistory {
