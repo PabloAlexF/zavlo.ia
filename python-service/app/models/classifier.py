@@ -6,6 +6,7 @@ import re
 from typing import Dict, List, Tuple
 import logging
 from .config_loader import ConfigLoader
+from .price_extractor import extract_price_range
 
 logger = logging.getLogger(__name__)
 
@@ -653,17 +654,18 @@ class ProductClassifier:
             missing_fields.append("condition")
             suggested_question = "Você prefere novo ou usado?"
         
-        # 2. Para VEÍCULOS: Verificar ANO e LOCALIZAÇÃO (SEGUNDA E TERCEIRA PRIORIDADE)
+        # 2. Para VEÍCULOS: Verificar ANO, LOCALIZAÇÃO e FAIXA DE PREÇO
         if best_category in ["car", "motorcycle"]:
             detected_year = self.detect_year(normalized)
             has_location = self.detect_location(normalized)
+            has_price_range = extract_price_range(normalized) is not None
             
-            # Priorizar ANO se não detectado
+            # ✅ SÓ PERGUNTAR SE NÃO DETECTOU
             if not detected_year and not missing_fields:
                 missing_fields.append("year")
                 suggested_question = "De qual ano você está procurando? (Ex: 2020, 2018-2022)"
             
-            # Depois verificar LOCALIZAÇÃO se ano já foi respondido
+            # ✅ SÓ PERGUNTAR LOCALIZAÇÃO SE NÃO DETECTOU
             elif not has_location and not missing_fields:
                 missing_fields.append("location")
                 
@@ -678,12 +680,23 @@ class ProductClassifier:
                     suggested_question = f"Vi que você mora em {user_city}. Quer pesquisar aí ou em outro lugar?"
                 else:
                     suggested_question = "Em qual cidade ou estado você está procurando?"
+            
+            # ✅ PERGUNTAR FAIXA DE PREÇO (OPCIONAL MAS IMPORTANTE)
+            elif not has_price_range and not missing_fields:
+                missing_fields.append("price_range")
+                suggested_question = "Qual sua faixa de preço? (Ex: até 50mil, entre 30mil e 60mil)"
         
         # 🆕 DETECTAR MARCA, MODELO E ANO
         detected_brand = self.detect_brand(normalized)
         detected_model = self.detect_model(normalized)
         detected_year = self.detect_year(normalized) if best_category in ["car", "motorcycle"] else None
         normalized_for_scraper = self.normalize_query_for_scraper(query, best_category)
+        
+        # 🆕 EXTRAIR FAIXA DE PREÇO ESTRUTURADA
+        price_range_data = extract_price_range(normalized) if best_category in ["car", "motorcycle"] else None
+        
+        if price_range_data:
+            logger.info(f"💰 [PRICE RANGE] Extraído da query: {price_range_data}")
         
         # 🆕 INCLUIR LOCALIZAÇÃO DO USUÁRIO NO RESULTADO
         user_location = user_context.get('location', {})
@@ -703,7 +716,8 @@ class ProductClassifier:
             "detected_model": detected_model,
             "detected_year": detected_year,
             "normalized_query": normalized_for_scraper,
-            "user_location": user_location if user_location else None
+            "user_location": user_location if user_location else None,
+            "price_range": price_range_data
         }
         
         logger.info(f"  Resultado: {result}")
@@ -747,3 +761,26 @@ class ProductClassifier:
         self.moto_brands = set(brands.get("motorcycle", []))
         
         logger.info("Configurações recarregadas com sucesso!")
+
+    
+    def detect_price_range(self, normalized: str) -> bool:
+        """✅ Detecta se a query contém faixa de preço"""
+        # Padrões de preço
+        price_patterns = [
+            r'\baté\s+\d+',  # "até 50mil"
+            r'\bentre\s+\d+.*\d+',  # "entre 30mil e 60mil"
+            r'\d+\s*mil',  # "50mil", "50 mil"
+            r'\d+k',  # "50k"
+            r'r\$\s*\d+',  # "R$ 50000"
+            r'\d+\s*reais',  # "50000 reais"
+            r'abaixo\s+de\s+\d+',  # "abaixo de 50mil"
+            r'acima\s+de\s+\d+',  # "acima de 30mil"
+            r'menos\s+de\s+\d+',  # "menos de 50mil"
+            r'mais\s+de\s+\d+',  # "mais de 30mil"
+        ]
+        
+        for pattern in price_patterns:
+            if re.search(pattern, normalized):
+                return True
+        
+        return False
