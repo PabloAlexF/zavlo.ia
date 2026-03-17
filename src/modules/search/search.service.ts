@@ -252,7 +252,7 @@ export class SearchService {
       this.logger.log(`✅ [CLASSIFICATION] Using provided classification, skipping re-classification`);
       this.logger.log(`   - Categoria: ${classification.category}`);
       this.logger.log(`   - Confiança: ${classification.confidence}`);
-      this.logger.log(`   - Scrapers recomendados: ${classification.recommended_scrapers?.join(', ')}`);
+      this.logger.log(`   - Scrapers recomendados: ${classification.scrapers?.map((s: any) => s.name).join(', ')}`);
       this.logger.log(`   - Faixa de preço: ${JSON.stringify(classification.price_range)}`);
     } else {
       // Classificar apenas se não foi fornecida
@@ -262,7 +262,7 @@ export class SearchService {
         this.logger.log(`✅ [CLASSIFICATION] Resultado:`);
         this.logger.log(`   - Categoria: ${classification.category}`);
         this.logger.log(`   - Confiança: ${classification.confidence}`);
-        this.logger.log(`   - Scrapers recomendados: ${classification.recommended_scrapers.join(', ')}`);
+        this.logger.log(`   - Scrapers recomendados: ${classification.scrapers?.map((s: any) => s.name).join(', ')}`);
         this.logger.log(`   - Condição: ${classification.condition}`);
         this.logger.log(`   - Limite de resultados: ${classification.result_limit || 'não especificado'}`);
         this.logger.log(`   - Ano detectado: ${classification.detected_year || 'N/A'}`);
@@ -293,7 +293,7 @@ export class SearchService {
         classification = {
           category: 'general',
           confidence: 0.5,
-          recommended_scrapers: ['google_shopping'],
+          scrapers: [{ name: 'google_shopping', score: 0.6 }],
           condition: 'unknown',
           all_scores: {},
           missing_fields: [],
@@ -408,7 +408,7 @@ export class SearchService {
     const usedSources: string[] = []; // Declarar antes do try
 
     // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
-    const scrapers = classification.recommended_scrapers;
+    const scrapers = (classification.scrapers as { name: string; score: number }[] | undefined)?.map(s => s.name) ?? ['google_shopping'];
     const resultLimit = 20; // ✅ SEMPRE 20 resultados
     this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
 

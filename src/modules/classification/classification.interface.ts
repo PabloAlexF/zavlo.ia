@@ -1,22 +1,31 @@
 /**
  * Interface para resposta do serviço de classificação Python
  */
+export interface ScraperPriority {
+  name: string;
+  score: number;
+}
+
 export interface ClassificationResult {
   category: string;
   confidence: number;
-  recommended_scrapers: string[];
+  scrapers: ScraperPriority[];
   condition: 'new' | 'used' | 'unknown';
   all_scores: Record<string, number>;
   missing_fields: string[];
-  suggested_question: string | null;
+  suggested_question: string | { question: string; suggestions?: any[] } | null;
+  question_type?: string | null;
   is_question?: boolean;
   is_greeting?: boolean;
   extracted_product?: string | null;
   detected_brand?: string | null;
   detected_model?: string | null;
-  detected_year?: number | null;  // 🆕 NOVO: Ano do veículo
+  detected_year?: number | null;
   normalized_query?: string;
-  result_limit?: number;  // 🆕 ATUALIZADO: Limite de resultados (1-50)
+  search_query?: string;
+  user_location?: { city?: string; state?: string } | null;
+  price_range?: any | null;
+  last_filters?: Record<string, any>;
   guided_response?: string | null;
 }
 

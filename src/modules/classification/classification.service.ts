@@ -73,7 +73,7 @@ export class ClassificationService {
       const result: ClassificationResult = await response.json();
 
       this.logger.log(
-        `✅ Classificação concluída: categoria="${result.category}", confiança=${result.confidence}, scrapers=${result.recommended_scrapers.join(', ')}`
+        `✅ Classificação concluída: categoria="${result.category}", confiança=${result.confidence}, scrapers=${result.scrapers?.map(s => s.name).join(', ')}`
       );
 
       return result;
@@ -89,7 +89,7 @@ export class ClassificationService {
       return {
         category: 'general',
         confidence: 0.5,
-        recommended_scrapers: ['google_shopping'],
+        scrapers: [{ name: 'google_shopping', score: 0.6 }],
         condition: 'unknown',
         all_scores: { general: 0.5 },
         missing_fields: [],
