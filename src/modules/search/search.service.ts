@@ -228,6 +228,7 @@ export class SearchService {
     question?: string;
     missingFields?: string[];
     classification?: any;
+    priceRangeApplied?: { min?: number; max?: number; target?: number };
   }> {
     const startTime = Date.now();
     let creditsUsed = 0;
@@ -252,6 +253,7 @@ export class SearchService {
       this.logger.log(`   - Categoria: ${classification.category}`);
       this.logger.log(`   - Confiança: ${classification.confidence}`);
       this.logger.log(`   - Scrapers recomendados: ${classification.recommended_scrapers?.join(', ')}`);
+      this.logger.log(`   - Faixa de preço: ${JSON.stringify(classification.price_range)}`);
     } else {
       // Classificar apenas se não foi fornecida
       try {
@@ -653,15 +655,36 @@ export class SearchService {
 
     // ✅ PROBLEMA 2 CORRIGIDO: Aplicar filtros ANTES de cachear (sem mutação)
     let finalResults = products;
-    if (filters?.minPrice || filters?.maxPrice) {
+    let priceRangeApplied: { min?: number; max?: number; target?: number } | undefined;
+    
+    // 💰 FILTRO DE PREÇO ESTRUTURADO
+    if (classification?.price_range) {
+      const priceRange = classification.price_range;
+      this.logger.log(`💰 [PRICE FILTER] Aplicando filtro estruturado:`, priceRange);
+      
+      finalResults = this.applyStructuredPriceFilter(products, priceRange);
+      priceRangeApplied = {
+        min: priceRange.min_price,
+        max: priceRange.max_price,
+        target: priceRange.target_price
+      };
+      
+      this.logger.log(`💰 [PRICE FILTER] Resultados: ${products.length} → ${finalResults.length}`);
+    } else if (filters?.minPrice || filters?.maxPrice) {
+      // Fallback para filtros legados
       finalResults = this.applyPriceFilter(products, filters.minPrice, filters.maxPrice);
+      priceRangeApplied = {
+        min: filters.minPrice,
+        max: filters.maxPrice
+      };
     }
 
     const finalResult = {
       results: finalResults,
       total: finalResults.length,
       creditsUsed,
-      remainingCredits
+      remainingCredits,
+      priceRangeApplied
     };
 
     // Cache results for 1 hour (com filtros já aplicados)
@@ -936,7 +959,47 @@ export class SearchService {
   }
 
   /* ============================================
-     FILTRO DE PREÇO
+     FILTRO DE PREÇO ESTRUTURADO
+  ============================================ */
+  private applyStructuredPriceFilter(
+    products: Product[], 
+    priceRange: { min_price?: number; max_price?: number; target_price?: number }
+  ): Product[] {
+    if (!priceRange) return products;
+    
+    const { min_price, max_price, target_price } = priceRange;
+    
+    return products.filter(product => {
+      const price = this.extractPrice(String(product.price));
+      if (!price) return true; // Manter produtos sem preço
+      
+      // Caso 1: Faixa (entre X e Y)
+      if (min_price && max_price) {
+        return price >= min_price && price <= max_price;
+      }
+      
+      // Caso 2: Máximo (até X)
+      if (max_price && !min_price) {
+        return price <= max_price;
+      }
+      
+      // Caso 3: Mínimo (acima de X)
+      if (min_price && !max_price) {
+        return price >= min_price;
+      }
+      
+      // Caso 4: Valor alvo (±20%)
+      if (target_price) {
+        const tolerance = target_price * 0.2;
+        return price >= (target_price - tolerance) && price <= (target_price + tolerance);
+      }
+      
+      return true;
+    });
+  }
+  
+  /* ============================================
+     FILTRO DE PREÇO (LEGADO)
   ============================================ */
   private applyPriceFilter(products: Product[], minPrice?: number, maxPrice?: number): Product[] {
     if (!minPrice && !maxPrice) return products;
