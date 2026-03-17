@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { X, MapPin, Tag, BarChart3 } from 'lucide-react';
+import { X, MapPin, Tag } from 'lucide-react';
 import { useState } from 'react';
 
 interface QuestionModalProps {
@@ -17,7 +17,6 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
   const isConditionQuestion = missingFields.includes('condition');
   const isLocationQuestion = missingFields.includes('location');
-  const isResultLimitQuestion = missingFields.includes('result_limit');
 
   const handleSubmit = () => {
     if (isLocationQuestion && locationInput.trim()) {
@@ -53,9 +52,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
         {/* Icon */}
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-600">
-          {isResultLimitQuestion ? (
-            <BarChart3 className="h-6 w-6 text-white" />
-          ) : isConditionQuestion ? (
+          {isConditionQuestion ? (
             <Tag className="h-6 w-6 text-white" />
           ) : (
             <MapPin className="h-6 w-6 text-white" />
@@ -72,42 +69,6 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip }: Que
 
         {/* Options */}
         <div className="space-y-3">
-          {isResultLimitQuestion && (
-            <>
-              <p className="mb-3 text-sm text-slate-300">Escolha a quantidade de produtos:</p>
-              {[
-                { value: '10', label: '10 resultados', desc: 'Busca rápida e econômica', icon: 'zap' },
-                { value: '20', label: '20 resultados', desc: 'Busca completa e detalhada', icon: 'target' }
-              ].map((option) => (
-                <motion.button
-                  key={option.value}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setSelectedAnswer(option.value)}
-                  className={`w-full rounded-xl border-2 p-4 text-left transition-all ${
-                    selectedAnswer === option.value
-                      ? 'border-violet-500 bg-violet-500/10'
-                      : 'border-white/10 bg-white/5 hover:border-white/20'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="font-semibold text-white text-base mb-1">{option.label}</div>
-                      <div className="text-xs text-slate-400">{option.desc}</div>
-                    </div>
-                    {selectedAnswer === option.value && (
-                      <div className="h-5 w-5 rounded-full bg-violet-500 flex items-center justify-center flex-shrink-0 ml-3">
-                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                </motion.button>
-              ))}
-            </>
-          )}
-
           {isConditionQuestion && (
             <>
               <p className="mb-3 text-sm text-slate-300">Qual condição você prefere?</p>

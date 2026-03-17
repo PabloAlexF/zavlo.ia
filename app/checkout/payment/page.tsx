@@ -33,9 +33,9 @@ function CheckoutContent() {
   const [mp, setMp] = useState<any>(null);
 
   const planPrices: Record<string, { monthly: number; yearly: number }> = {
-    basic: { monthly: 27, yearly: 270 },
-    pro: { monthly: 77, yearly: 770 },
-    business: { monthly: 197, yearly: 1970 },
+    basic: { monthly: 39.90, yearly: 399 },
+    pro: { monthly: 89.90, yearly: 899 },
+    business: { monthly: 299, yearly: 2990 },
   };
 
   const price = cycle === 'yearly' 
