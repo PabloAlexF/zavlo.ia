@@ -153,7 +153,7 @@ export class SearchService {
   async classifyQueryOnly(query: string, userId?: string): Promise<{
     classification: any;
     needsQuestion?: boolean;
-    question?: string;
+    question?: string | { question: string; suggestions?: any[] };
     missingFields?: string[];
     is_question?: boolean;
     is_greeting?: boolean;
@@ -225,7 +225,7 @@ export class SearchService {
     creditsUsed?: number; 
     remainingCredits?: number;
     needsQuestion?: boolean;
-    question?: string;
+    question?: string | { question: string; suggestions?: any[] };
     missingFields?: string[];
     classification?: any;
     priceRangeApplied?: { min?: number; max?: number; target?: number };
