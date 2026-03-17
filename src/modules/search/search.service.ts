@@ -514,7 +514,7 @@ export class SearchService {
               // Executar scraper
               try {
                 const results = await this.withTimeout(
-                  this.webmotorsService.search(normalizedQuery, resultLimit),
+                  this.webmotorsService.search(normalizedQuery, resultLimit, classification),
                   10000,
                   'Webmotors'
                 );
@@ -553,7 +553,7 @@ export class SearchService {
               // Executar scraper
               try {
                 const results = await this.withTimeout(
-                  this.mobiautoService.search(normalizedQuery, resultLimit),
+                  this.mobiautoService.search(normalizedQuery, resultLimit, classification),
                   10000,
                   'Mobiauto'
                 );
