@@ -177,8 +177,8 @@ export class SearchService {
         return {
           classification,
           is_question: true,
-          question_type: classification.question_type,
-          guided_response: classification.guided_response,
+          question_type: (classification as any).question_type,
+          guided_response: (classification as any).guided_response,
         };
       }
       
@@ -405,6 +405,7 @@ export class SearchService {
     let products: Product[] = [];
     const requestedLimit = filters?.limit || 50;
     const maxLimit = Math.min(requestedLimit, 100); // Máximo 100 conforme API
+    const usedSources: string[] = []; // Declarar antes do try
 
     // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
     const scrapers = classification.recommended_scrapers;
@@ -574,9 +575,6 @@ export class SearchService {
       // Aguardar todos os scrapers (com resiliência)
       // ✅ Promise.allSettled: Um scraper falhando não derruba os outros
       const scrapingResults = await Promise.allSettled(scrapingPromises);
-
-      // ✅ PROBLEMA 1 CORRIGIDO: Consolidar usedSources fora do async
-      const usedSources: string[] = [];
       
       // Consolidar resultados (apenas fulfilled)
       for (const result of scrapingResults) {
