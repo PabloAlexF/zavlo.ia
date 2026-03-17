@@ -733,39 +733,54 @@ export default function ChatPage() {
   };
 
   const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any) => {
-    console.log('[SEARCH] Executando busca:', query, 'sortBy:', sortBy);
+    console.log('[SEARCH] ========== INICIANDO BUSCA ==========');
+    console.log('[SEARCH] Query:', query);
+    console.log('[SEARCH] SortBy:', sortBy);
+    console.log('[SEARCH] Classification:', classification);
+    console.log('[SEARCH] User Credits:', userCredits);
     
-    // ✅ Só mostrar "Buscando" quando realmente for buscar
     addMessage('ai', 'searching_animation');
 
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) {
+        console.error('[SEARCH] Usuário não encontrado no localStorage');
         router.push('/auth');
         return;
       }
 
       const userData = JSON.parse(user);
+      console.log('[SEARCH] User ID:', userData.userId);
+      
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      console.log('[SEARCH] API URL:', API_URL);
       
       const params = new URLSearchParams({
         query: query,
         sortBy: sortBy
       });
       
-      // ✅ Passar classificação para evitar duplicação
       if (classification) {
         params.append('classification', JSON.stringify(classification));
+        console.log('[SEARCH] Classificação adicionada aos params');
       }
       
-      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
+      const fullUrl = `${API_URL}/search/text?${params.toString()}`;
+      console.log('[SEARCH] URL completa:', fullUrl);
+      
+      console.log('[SEARCH] Fazendo requisição...');
+      const response = await fetch(fullUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
         },
       });
 
+      console.log('[SEARCH] Status da resposta:', response.status);
+      console.log('[SEARCH] Response OK?', response.ok);
+
       if (response.status === 401) {
+        console.error('[SEARCH] Não autorizado - redirecionando para login');
         localStorage.removeItem('zavlo_user');
         router.push('/auth');
         return;
@@ -774,17 +789,32 @@ export default function ChatPage() {
       if (response.ok) {
         const data = await response.json();
         
-        // ✅ BUSCAR PRODUTOS
+        console.log('[SEARCH] ========== RESPOSTA DO BACKEND ==========');
+        console.log('[SEARCH] Data completa:', data);
+        console.log('[SEARCH] Results:', data.results);
+        console.log('[SEARCH] Total:', data.total);
+        console.log('[SEARCH] Credits Used:', data.creditsUsed);
+        console.log('[SEARCH] Remaining Credits:', data.remainingCredits);
+        console.log('[SEARCH] Needs Question?', data.needsQuestion);
+        console.log('[SEARCH] Question:', data.question);
+        
         const products = data.results || [];
         
+        console.log('[SEARCH] Produtos encontrados:', products.length);
+        
         if (typeof data.remainingCredits === 'number') {
+          console.log('[SEARCH] Atualizando créditos de', userCredits, 'para', data.remainingCredits);
           updateCredits(data.remainingCredits, userData);
+        } else {
+          console.warn('[SEARCH] remainingCredits não retornado pelo backend');
         }
         
         const creditsUsed = data.creditsUsed || 1;
         const remainingCredits = data.remainingCredits ?? userCredits - 1;
         
+        console.log('[SEARCH] Aguardando 1s antes de mostrar produtos...');
         setTimeout(() => {
+          console.log('[SEARCH] Criando mensagem de produtos...');
           const productsMessage: Message = {
             id: crypto.randomUUID(),
             type: 'products',
@@ -792,19 +822,25 @@ export default function ChatPage() {
             products: products,
             timestamp: new Date(),
           };
+          console.log('[SEARCH] Adicionando mensagem às messages');
           setMessages(prev => [...prev, productsMessage]);
           contextManager.update({
             lastResults: products,
             lastProduct: query
           });
+          console.log('[SEARCH] Finalizando loading');
           setLoading(false);
+          console.log('[SEARCH] ========== BUSCA CONCLUÍDA ==========');
         }, 1000);
       } else {
+        const errorText = await response.text();
+        console.error('[SEARCH] Erro na resposta:', errorText);
         addMessage('ai', 'Erro na busca. Tente novamente.');
         setLoading(false);
       }
     } catch (error) {
-      console.error('Search error:', error);
+      console.error('[SEARCH] ========== ERRO NA BUSCA ==========');
+      console.error('[SEARCH] Error:', error);
       addMessage('ai', 'Erro ao processar busca. Tente novamente.');
       setLoading(false);
     }
