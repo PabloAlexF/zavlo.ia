@@ -653,10 +653,18 @@ class ProductClassifier:
             missing_fields.append("condition")
             suggested_question = "Você prefere novo ou usado?"
         
-        # 2. Verificar localização (apenas para carros/motos) - APENAS SE JÁ TEM CONDIÇÃO
-        elif best_category in ["car", "motorcycle"]:
+        # 2. Para VEÍCULOS: Verificar ANO e LOCALIZAÇÃO (SEGUNDA E TERCEIRA PRIORIDADE)
+        if best_category in ["car", "motorcycle"]:
+            detected_year = self.detect_year(normalized)
             has_location = self.detect_location(normalized)
-            if not has_location:
+            
+            # Priorizar ANO se não detectado
+            if not detected_year and not missing_fields:
+                missing_fields.append("year")
+                suggested_question = "De qual ano você está procurando? (Ex: 2020, 2018-2022)"
+            
+            # Depois verificar LOCALIZAÇÃO se ano já foi respondido
+            elif not has_location and not missing_fields:
                 missing_fields.append("location")
                 
                 # 🆕 USAR LOCALIZAÇÃO DO USUÁRIO SE DISPONÍVEL
