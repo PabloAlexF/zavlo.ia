@@ -651,7 +651,7 @@ class ProductClassifier:
         # 1. Verificar condição (novo/usado) - PRIMEIRA PRIORIDADE
         if condition == "unknown":
             missing_fields.append("condition")
-            suggested_question = "Você prefere **novo ou usado**?"
+            suggested_question = "Você prefere novo ou usado?"
         
         # 2. Verificar localização (apenas para carros/motos) - APENAS SE JÁ TEM CONDIÇÃO
         elif best_category in ["car", "motorcycle"]:
@@ -665,11 +665,11 @@ class ProductClassifier:
                 user_state = user_location.get('state')
                 
                 if user_city and user_state:
-                    suggested_question = f"Vi que você mora em **{user_city}, {user_state}**. Quer pesquisar nessa região ou em outro lugar?"
+                    suggested_question = f"Vi que você mora em {user_city}, {user_state}. Quer pesquisar nessa região ou em outro lugar?"
                 elif user_city:
-                    suggested_question = f"Vi que você mora em **{user_city}**. Quer pesquisar aí ou em outro lugar?"
+                    suggested_question = f"Vi que você mora em {user_city}. Quer pesquisar aí ou em outro lugar?"
                 else:
-                    suggested_question = "Em qual **cidade ou estado** você está procurando?"
+                    suggested_question = "Em qual cidade ou estado você está procurando?"
         
         # 🆕 DETECTAR MARCA, MODELO E ANO
         detected_brand = self.detect_brand(normalized)
