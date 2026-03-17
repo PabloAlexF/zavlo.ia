@@ -15,13 +15,17 @@ interface QuestionModalProps {
 export function QuestionModal({ question, missingFields, onAnswer, onSkip, userLocation }: QuestionModalProps) {
   const [selectedAnswer, setSelectedAnswer] = useState<string>('');
   const [locationInput, setLocationInput] = useState<string>('');
+  const [yearInput, setYearInput] = useState<string>('');
 
   const isConditionQuestion = missingFields.includes('condition');
   const isLocationQuestion = missingFields.includes('location');
+  const isYearQuestion = missingFields.includes('year');
 
   const handleSubmit = () => {
     if (isLocationQuestion && locationInput.trim()) {
       onAnswer(locationInput.trim());
+    } else if (isYearQuestion && yearInput.trim()) {
+      onAnswer(yearInput.trim());
     } else if (selectedAnswer) {
       onAnswer(selectedAnswer);
     }
@@ -55,6 +59,10 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip, userL
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-600">
           {isConditionQuestion ? (
             <Tag className="h-6 w-6 text-white" />
+          ) : isYearQuestion ? (
+            <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
           ) : (
             <MapPin className="h-6 w-6 text-white" />
           )}
@@ -100,6 +108,31 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip, userL
             </>
           )}
 
+          {isYearQuestion && (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-300 mb-3">Digite o ano ou faixa de anos:</p>
+              <input
+                type="text"
+                value={yearInput}
+                onChange={(e) => setYearInput(e.target.value)}
+                placeholder="Ex: 2020 ou 2018-2022"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                autoFocus
+              />
+              <div className="grid grid-cols-3 gap-2">
+                {['2024', '2023', '2022', '2021', '2020', '2019'].map((year) => (
+                  <button
+                    key={year}
+                    onClick={() => setYearInput(year)}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 transition-colors"
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isLocationQuestion && (
             <div className="space-y-3">
               <p className="text-sm text-slate-300 mb-3">Digite a cidade ou estado:</p>
@@ -143,7 +176,7 @@ export function QuestionModal({ question, missingFields, onAnswer, onSkip, userL
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!selectedAnswer && !locationInput.trim()}
+            disabled={!selectedAnswer && !locationInput.trim() && !yearInput.trim()}
             className="flex-1 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-3 font-medium text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-violet-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Continuar

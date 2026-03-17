@@ -477,6 +477,9 @@ export default function ChatPage() {
     if (currentField === 'condition') {
       enrichedQuery = `${originalQuery} ${answer}`.trim();
       console.log('[HYBRID] Condição adicionada:', enrichedQuery);
+    } else if (currentField === 'year') {
+      enrichedQuery = `${originalQuery} ${answer}`.trim();
+      console.log('[HYBRID] Ano adicionado:', enrichedQuery);
     } else if (currentField === 'location') {
       enrichedQuery = `${originalQuery} em ${answer}`.trim();
       console.log('[HYBRID] Localização adicionada:', enrichedQuery);
