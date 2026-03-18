@@ -153,7 +153,9 @@ export class MobiautoService {
 
     const loc = classification?.user_location;
     if (loc?.city && loc?.state) {
-      parts.push(`${this.normalizeForUrl(loc.city)}-${this.normalizeForUrl(loc.state)}`);
+      parts.push(`${this.normalizeForUrl(loc.city)}-${loc.state.toLowerCase()}`);
+    } else if (loc?.city) {
+      parts.push(this.normalizeForUrl(loc.city));
     } else {
       parts.push('brasil');
     }
@@ -161,8 +163,9 @@ export class MobiautoService {
     const params = new URLSearchParams();
     const c = classification || {};
     if (c.detected_year)          { params.set('anoInicio', String(c.detected_year)); params.set('anoFim', String(c.detected_year)); }
-    if (c.condition === 'new')    params.set('tipoAnuncio', 'new');
-    if (c.condition === 'used')   params.set('tipoAnuncio', 'used');
+    // Mobiauto usa 'tipo' para condição: 'NOVO' ou 'USADO'
+    if (c.condition === 'new')    params.set('tipo', 'NOVO');
+    if (c.condition === 'used')   params.set('tipo', 'USADO');
     if (c.detected_transmission)  params.set('cambio',      c.detected_transmission);
     if (c.detected_fuel)          params.set('combustivel', c.detected_fuel);
     if (c.detected_body_type)     params.set('carroceria',  c.detected_body_type);
