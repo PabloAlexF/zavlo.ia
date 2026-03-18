@@ -372,34 +372,41 @@ export class SearchService {
 
     // Se freeMode (plano free/usuário não logado), busca limitada
     if (filters?.freeMode) {
-      const fixedLimit = 20; // ✅ SEMPRE 20 resultados
+      const fixedLimit = 20;
+      const category = classification?.category;
       
-      this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - ${fixedLimit} resultados (freeMode=${filters.freeMode})`);
-      
-      try {
-        const results = await this.googleShoppingService.search(normalizedQuery, fixedLimit, sortBy);
-        const result = { 
-          results: results, 
-          total: results.length,
+      // Veículos: usar scrapers corretos mesmo no freeMode
+      if (category === 'car' || category === 'motorcycle') {
+        this.logger.log(`🆓 [FREE MODE] Veículo detectado - usando scrapers de veículos`);
+        // Não retorna aqui, deixa cair no bloco de scrapers abaixo
+      } else {
+        this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - ${fixedLimit} resultados (freeMode=${filters.freeMode})`);
+        
+        try {
+          const results = await this.googleShoppingService.search(normalizedQuery, fixedLimit, sortBy);
+          const result = { 
+            results: results, 
+            total: results.length,
+            creditsUsed,
+            remainingCredits
+          };
+          
+          this.logger.log(`🆓 [SEARCH DEBUG] Free search completed with ${results.length} results`);
+          
+          await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
+          return result;
+        } catch (error) {
+          this.logger.warn(`⚠️ [SEARCH DEBUG] Erro na busca gratuita: ${error.message}`);
+        }
+
+        const fallback = await this.searchInFirebase(normalizedQuery, filters);
+        this.logger.log(`🆓 [SEARCH DEBUG] Using Firebase fallback with ${fallback.results.length} results`);
+        return {
+          ...fallback,
           creditsUsed,
           remainingCredits
         };
-        
-        this.logger.log(`🆓 [SEARCH DEBUG] Free search completed with ${results.length} results`);
-        
-        await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
-        return result;
-      } catch (error) {
-        this.logger.warn(`⚠️ [SEARCH DEBUG] Erro na busca gratuita: ${error.message}`);
       }
-
-      const fallback = await this.searchInFirebase(normalizedQuery, filters);
-      this.logger.log(`🆓 [SEARCH DEBUG] Using Firebase fallback with ${fallback.results.length} results`);
-      return {
-        ...fallback,
-        creditsUsed,
-        remainingCredits
-      };
     }
 
     // GOOGLE SHOPPING SEARCH (planos pagos)
@@ -408,8 +415,11 @@ export class SearchService {
     const usedSources: string[] = []; // Declarar antes do try
 
     // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
-    const scrapers = (classification.scrapers as { name: string; score: number }[] | undefined)?.map(s => s.name) ?? ['google_shopping'];
-    const resultLimit = 20; // ✅ SEMPRE 20 resultados
+    const category = classification?.category;
+    const scrapers = (classification?.scrapers as { name: string; score: number }[] | undefined)
+      ?.map(s => s.name)
+      ?? (category === 'car' || category === 'motorcycle' ? ['webmotors', 'mobiauto'] : ['google_shopping']);
+    const resultLimit = 20;
     this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
 
     try {
