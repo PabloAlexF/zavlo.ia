@@ -136,71 +136,28 @@ export class WebmotorsService {
   private buildSearchUrl(query: string, classification?: any): string {
     const isMoto = classification?.category === 'motorcycle' || /\b(moto|motocicleta|scooter)\b/i.test(query);
     const vehicleType = isMoto ? 'motos' : 'carros';
+
+    // O scraper ribtools~webmotors-scraper recebe URL do site /comprar/...
+    // e internamente converte para a API interna. Passar apenas parâmetros
+    // seguros (marca/modelo/ano) — filtros de preço/condição/transmissão
+    // são aplicados pós-scraping no backend para evitar 400 na API interna.
     const base = `https://www.webmotors.com.br/comprar/${vehicleType}`;
 
-    // Fallback inteligente: extrai brand da query se classification incompleta
     const brand = classification?.detected_brand || this.extractBrandFromQuery(query);
-
-    if (!classification && !brand) {
-      return `${base}?q=${encodeURIComponent(query.toLowerCase().trim())}`;
-    }
-
-    const params = new URLSearchParams();
     const c = classification || {};
 
-    if (brand)                        params.set('marca',   brand);
-    if (c.detected_model) {
-      const version = c.detected_version;
-      params.set('modelo', version ? `${c.detected_model} ${version}` : c.detected_model);
-    }
+    const params = new URLSearchParams();
+    if (brand)            params.set('marca',     brand);
+    if (c.detected_model) params.set('modelo',    c.detected_model);
     if (c.detected_year) {
       params.set('anoInicio', String(c.detected_year));
       params.set('anoFim',    String(c.detected_year));
     }
-    if (c.condition === 'new')        params.set('tipoVeiculo', 'new');
-    else if (c.condition === 'used')  params.set('tipoVeiculo', 'used');
-    if (c.detected_transmission)      params.set('cambio',      this.mapTransmission(c.detected_transmission));
-    if (c.detected_fuel)              params.set('combustivel', this.mapFuel(c.detected_fuel));
-
-    // URLSearchParams já faz encoding — não usar encodeURIComponent aqui
-    if (c.user_location?.state) params.set('estado', c.user_location.state);
-    if (c.user_location?.city)  params.set('cidade', c.user_location.city);
-
-    if (c.price_range?.min_price) params.set('precoMinimo', String(c.price_range.min_price));
-    if (c.price_range?.max_price) params.set('precoMaximo', String(c.price_range.max_price));
 
     const qs  = params.toString();
     const url = qs ? `${base}?${qs}` : `${base}?q=${encodeURIComponent(query)}`;
     this.logger.log(`🔗 [WEBMOTORS] URL: ${url}`);
     return url;
-  }
-
-  /** Mapeia transmissão para valor aceito pela API Webmotors */
-  private mapTransmission(t: string): string {
-    // Valores aceitos pela API interna do Webmotors (via scraper Apify)
-    const map: Record<string, string> = {
-      manual: 'Manual',
-      automatico: 'Automático',
-      automatica: 'Automático',
-      cvt: 'CVT',
-      'semi-automatico': 'Automatizado',
-      'semi-automatica': 'Automatizado',
-    };
-    return map[t?.toLowerCase()] ?? t;
-  }
-
-  /** Mapeia combustível para valor aceito pela API Webmotors */
-  private mapFuel(f: string): string {
-    const map: Record<string, string> = {
-      flex: 'Flex',
-      gasolina: 'Gasolina',
-      etanol: 'Etanol',
-      diesel: 'Diesel',
-      eletrico: 'Elétrico',
-      hibrido: 'Híbrido',
-      gnv: 'GNV',
-    };
-    return map[f?.toLowerCase()] ?? f;
   }
 
   /** Extrai marca conhecida da query como fallback quando classification não tem detected_brand */
