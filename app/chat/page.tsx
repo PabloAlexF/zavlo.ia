@@ -481,7 +481,41 @@ export default function ChatPage() {
 
     const applyField = (field: string, value: string) => {
       if (field === 'location') {
-        c.user_location = { city: value, state: '' };
+        // Inferir estado a partir da cidade
+        const cityStateMap: Record<string, string> = {
+          'sao paulo': 'SP', 'são paulo': 'SP',
+          'rio de janeiro': 'RJ',
+          'belo horizonte': 'MG',
+          'curitiba': 'PR',
+          'porto alegre': 'RS',
+          'brasilia': 'DF', 'brasília': 'DF',
+          'salvador': 'BA',
+          'fortaleza': 'CE',
+          'recife': 'PE',
+          'manaus': 'AM',
+          'goiania': 'GO', 'goiânia': 'GO',
+          'campinas': 'SP',
+          'santos': 'SP',
+          'ribeirao preto': 'SP', 'ribeirão preto': 'SP',
+          'natal': 'RN',
+          'maceio': 'AL', 'maceió': 'AL',
+          'joao pessoa': 'PB', 'joão pessoa': 'PB',
+          'florianopolis': 'SC', 'florianópolis': 'SC',
+          'vitoria': 'ES', 'vitória': 'ES',
+          'campo grande': 'MS',
+          'cuiaba': 'MT', 'cuiabá': 'MT',
+          'porto velho': 'RO',
+          'macapa': 'AP', 'macapá': 'AP',
+          'boa vista': 'RR',
+          'palmas': 'TO',
+          'rio branco': 'AC',
+          'aracaju': 'SE',
+          'teresina': 'PI',
+          'belem': 'PA', 'belém': 'PA',
+        };
+        const key = value.toLowerCase().trim();
+        const state = cityStateMap[key] || '';
+        c.user_location = { city: value, state };
       } else if (field === 'condition') {
         const v = value.toLowerCase();
         c.condition = v.includes('novo') || v.includes('new') ? 'new'
@@ -497,10 +531,15 @@ export default function ChatPage() {
             };
           }
         } catch {
-          // texto livre — tentar extrair números
+          // texto livre — tentar extrair números e contexto
+          const isAbove = /acima|mais de|a partir|mínimo|minimo/i.test(value);
           const nums = value.match(/\d+/g)?.map(Number) ?? [];
-          if (nums.length === 2) c.price_range = { min_price: nums[0] * 1000, max_price: nums[1] * 1000 };
-          else if (nums.length === 1) c.price_range = { max_price: nums[0] * 1000 };
+          if (nums.length >= 2) {
+            c.price_range = { min_price: nums[0] * 1000, max_price: nums[1] * 1000 };
+          } else if (nums.length === 1) {
+            if (isAbove) c.price_range = { min_price: nums[0] * 1000 };
+            else         c.price_range = { max_price: nums[0] * 1000 };
+          }
         }
       } else if (field === 'year') {
         const y = parseInt(value);
