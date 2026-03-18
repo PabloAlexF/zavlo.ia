@@ -200,29 +200,117 @@ class ProductClassifier:
         
         return None
     
-    def detect_model(self, normalized: str) -> str | None:
-        """Detecta modelo do produto (smartphones principalmente)"""
+    def detect_model(self, normalized: str, brand: str = None, category: str = None) -> tuple:
+        """Detecta modelo e versão do produto. Retorna (model, version)."""
         
-        # Padrões de modelos de iPhone
-        iphone_pattern = r'iphone\s*(\d+|x|xs|xr|se|pro|max|plus|mini)'
-        match = re.search(iphone_pattern, normalized)
+        # Modelos de carros por marca
+        car_models = {
+            'honda':      ['civic', 'fit', 'hrv', 'hr-v', 'crv', 'cr-v', 'city', 'accord', 'pilot', 'odyssey'],
+            'toyota':     ['corolla', 'hilux', 'yaris', 'etios', 'sw4', 'rav4', 'camry', 'prius', 'land cruiser'],
+            'chevrolet':  ['onix', 'cruze', 'tracker', 'spin', 'cobalt', 'prisma', 'equinox', 's10', 'trailblazer', 'montana'],
+            'volkswagen': ['gol', 'polo', 'virtus', 'voyage', 'fox', 'up', 'tiguan', 't-cross', 'amarok', 'saveiro'],
+            'fiat':       ['uno', 'palio', 'siena', 'strada', 'toro', 'argo', 'cronos', 'mobi', 'pulse', 'fastback', 'doblo'],
+            'ford':       ['ka', 'fiesta', 'focus', 'fusion', 'ranger', 'ecosport', 'edge', 'bronco', 'maverick'],
+            'hyundai':    ['hb20', 'creta', 'tucson', 'ix35', 'elantra', 'sonata', 'santa fe'],
+            'nissan':     ['kicks', 'versa', 'sentra', 'frontier', 'march', 'tiida'],
+            'renault':    ['kwid', 'sandero', 'logan', 'duster', 'captur', 'oroch', 'master'],
+            'jeep':       ['renegade', 'compass', 'commander', 'wrangler', 'gladiator'],
+            'mitsubishi': ['asx', 'outlander', 'pajero', 'eclipse cross', 'l200'],
+            'kia':        ['sportage', 'cerato', 'soul', 'stinger', 'sorento', 'carnival'],
+            'bmw':        ['320i', '328i', '118i', '320', 'x1', 'x3', 'x5', 'x6', 'm3', 'm5'],
+            'mercedes':   ['c180', 'c200', 'c300', 'a200', 'gla', 'glc', 'gle', 'cla'],
+            'audi':       ['a3', 'a4', 'a5', 'q3', 'q5', 'q7', 'tt', 'r8'],
+        }
+        
+        version_keywords = [
+            'touring', 'sport', 'lx', 'ex', 'exl', 'xei', 'gli', 'gls', 'glx',
+            'xls', 'xlt', 'limited', 'platinum', 'titanium', 'se', 'sel',
+            'm sport', 'amg', 's line', 'r-line', 'black edition',
+        ]
+
+        detected_model = None
+        detected_version = None
+
+        if brand and brand.lower() in car_models:
+            for model in car_models[brand.lower()]:
+                if model in normalized:
+                    detected_model = model
+                    break
+
+        if not detected_model and (category in ('car', 'motorcycle') or brand):
+            for brand_models in car_models.values():
+                for model in brand_models:
+                    if model in normalized:
+                        detected_model = model
+                        break
+                if detected_model:
+                    break
+
+        if detected_model:
+            after_model = normalized.split(detected_model, 1)[-1].strip()
+            for ver in version_keywords:
+                if ver in after_model:
+                    detected_version = ver
+                    break
+            return detected_model, detected_version
+
+        match = re.search(r'iphone\s*(\d+|x|xs|xr|se|pro|max|plus|mini)', normalized)
         if match:
-            return match.group(0)
-        
-        # Padrões de modelos Samsung Galaxy
-        galaxy_pattern = r'galaxy\s*(s\d+|a\d+|note\d+|z\s*flip|z\s*fold)'
-        match = re.search(galaxy_pattern, normalized)
+            return match.group(0), None
+
+        match = re.search(r'galaxy\s*(s\d+|a\d+|note\d+|z\s*flip|z\s*fold)', normalized)
         if match:
-            return match.group(0)
-        
-        # Padrões de modelos Xiaomi
-        xiaomi_pattern = r'(redmi|poco|mi)\s*(note\s*)?\d+'
-        match = re.search(xiaomi_pattern, normalized)
+            return match.group(0), None
+
+        match = re.search(r'(redmi|poco|mi)\s*(note\s*)?\d+', normalized)
         if match:
-            return match.group(0)
-        
-        return None
+            return match.group(0), None
+
+        return None, None
     
+    def detect_transmission(self, normalized: str) -> str | None:
+        """Detecta transmissão do veículo"""
+        if re.search(r'\b(automatico|automatica|auto|cvt|dsg|tiptronic)\b', normalized):
+            return 'automatic'
+        if re.search(r'\b(manual|mecanico|mecanica)\b', normalized):
+            return 'manual'
+        return None
+
+    def detect_fuel(self, normalized: str) -> str | None:
+        """Detecta tipo de combustível"""
+        m = re.search(r'\b(flex|alcool|etanol|gasolina|gas)\b', normalized)
+        if m:
+            return m.group(0)
+        if re.search(r'\b(diesel|turbo diesel)\b', normalized):
+            return 'diesel'
+        if re.search(r'\b(eletrico|hibrido|hybrid|ev)\b', normalized):
+            return 'electric'
+        return None
+
+    def detect_body_type(self, normalized: str) -> str | None:
+        """Detecta carroceria do veículo"""
+        types = {
+            'hatch': r'\b(hatch|hatchback)\b',
+            'sedan': r'\bsedan\b',
+            'suv':   r'\b(suv|crossover)\b',
+            'pickup': r'\b(pickup|caminhonete|picape)\b',
+            'van':   r'\b(van|minivan|furgao)\b',
+            'coupe': r'\b(coupe|coupe)\b',
+            'convertible': r'\b(cabrio|conversivel|descapotavel)\b',
+        }
+        for body, pattern in types.items():
+            if re.search(pattern, normalized):
+                return body
+        return None
+
+    def detect_color(self, normalized: str) -> str | None:
+        """Detecta cor do veículo"""
+        colors = ['branco', 'preto', 'prata', 'cinza', 'vermelho', 'azul', 'verde', 'amarelo', 'laranja', 'marrom', 'bege']
+        for color in colors:
+            if re.search(rf'\b{color}\b', normalized):
+                return color
+        return None
+
     def detect_year(self, normalized: str) -> int | None:
         """Detecta ano do veículo (1980-2029)"""
         match = self.year_pattern_compiled.search(normalized)
@@ -637,8 +725,12 @@ class ProductClassifier:
         
         # 🆕 DETECTAR MARCA, MODELO E ANO (MOVER PARA CIMA - ANTES DE USAR)
         detected_brand = self.detect_brand(normalized)
-        detected_model = self.detect_model(normalized)
+        detected_model, detected_version = self.detect_model(normalized, brand=detected_brand, category=best_category)
         detected_year = self.detect_year(normalized) if best_category in ["car", "motorcycle"] else None
+        detected_transmission = self.detect_transmission(normalized) if best_category in ["car", "motorcycle"] else None
+        detected_fuel = self.detect_fuel(normalized) if best_category in ["car", "motorcycle"] else None
+        detected_body_type = self.detect_body_type(normalized) if best_category in ["car", "motorcycle"] else None
+        detected_color = self.detect_color(normalized) if best_category in ["car", "motorcycle"] else None
         
         # 🆕 DETECTAR CAMPOS FALTANTES (ORDEM DE PRIORIDADE)
         missing_fields = []
@@ -735,7 +827,12 @@ class ProductClassifier:
             "extracted_product": extracted_product,
             "detected_brand": detected_brand,
             "detected_model": detected_model,
+            "detected_version": detected_version,
             "detected_year": detected_year,
+            "detected_transmission": detected_transmission,
+            "detected_fuel": detected_fuel,
+            "detected_body_type": detected_body_type,
+            "detected_color": detected_color,
             "normalized_query": normalized_for_scraper,
             "search_query": " ".join(filter(None, [
                 normalized_for_scraper,

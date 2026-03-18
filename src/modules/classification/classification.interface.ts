@@ -20,6 +20,7 @@ export interface ClassificationResult {
   extracted_product?: string | null;
   detected_brand?: string | null;
   detected_model?: string | null;
+  detected_version?: string | null;
   detected_year?: number | null;
   normalized_query?: string;
   search_query?: string;

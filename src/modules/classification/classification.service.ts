@@ -1,5 +1,6 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { FirebaseService } from '@config/firebase.service';
 import { ClassificationResult, ClassificationRequest } from './classification.interface';
 
 @Injectable()
@@ -7,7 +8,10 @@ export class ClassificationService {
   private readonly logger = new Logger(ClassificationService.name);
   private readonly pythonServiceUrl: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private firebaseService: FirebaseService,
+  ) {
     this.pythonServiceUrl = this.configService.get<string>(
       'PYTHON_SERVICE_URL',
       'http://localhost:8001'
@@ -26,18 +30,16 @@ export class ClassificationService {
       let userLocation: { city?: string; state?: string } | undefined;
       if (userId) {
         try {
-          const firestore = this.configService.get('firebase.firestore');
-          if (firestore) {
-            const userDoc = await firestore.collection('users').doc(userId).get();
-            if (userDoc.exists) {
-              const userData = userDoc.data();
-              if (userData?.location) {
-                userLocation = {
-                  city: userData.location.city,
-                  state: userData.location.state
-                };
-                this.logger.log(`📍 Localização do usuário: ${userLocation.city}, ${userLocation.state}`);
-              }
+          const firestore = this.firebaseService.getFirestore();
+          const userDoc = await firestore.collection('users').doc(userId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData?.location) {
+              userLocation = {
+                city: userData.location.city,
+                state: userData.location.state
+              };
+              this.logger.log(`📍 Localização do usuário: ${userLocation.city}, ${userLocation.state}`);
             }
           }
         } catch (locationError) {
