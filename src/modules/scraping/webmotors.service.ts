@@ -135,33 +135,123 @@ export class WebmotorsService {
 
   private buildSearchUrl(query: string, classification?: any): string {
     const isMoto = classification?.category === 'motorcycle' || /\b(moto|motocicleta|scooter)\b/i.test(query);
-    const vehicleType = isMoto ? 'motos' : 'carros';
-
-    // Bug do scraper ribtools~webmotors-scraper: ele pega os params da URL
-    // e reconstrói a URL da API interna concatenando ?pandora=false no final.
-    // Se a URL já tem query string, gera URL inválida com dois '?'.
-    //
-    // Solução: passar URL sem query string. O scraper vai adicionar
-    // ?pandora=false corretamente. Os filtros são aplicados pós-scraping.
-    //
-    // Formato que o scraper espera como input: URL do site /comprar/...
-    // Ele converte internamente para /api/detail/car/... + ?pandora=false
-    const brand = classification?.detected_brand || this.extractBrandFromQuery(query);
     const c = classification || {};
+    const brand = c.detected_brand || this.extractBrandFromQuery(query);
+    const model = c.detected_model;
+    const condition = c.condition; // 'new' | 'used' | 'unknown'
+    const city  = c.user_location?.city;
+    const state = c.user_location?.state;
 
-    // Construir path estruturado sem query string
-    // /comprar/carros/honda/civic (o scraper extrai marca/modelo do path)
-    const parts = [`https://www.webmotors.com.br/comprar/${vehicleType}`];
-    if (brand)            parts.push(brand.toLowerCase());
-    if (c.detected_model) parts.push(c.detected_model.toLowerCase());
+    // Formato aceito pelo scraper (doc oficial):
+    // /carros/{local}/{marca}/{modelo}?tipoveiculo=carros&marca1=X&modelo1=Y
+    // /carros-usados/{local}?tipoveiculo=carros-usados&estadocidade=X
+    // /carros-novos/{local}?tipoveiculo=carros-novos&estadocidade=X
+    //
+    // Regra: quando há marca+modelo, sempre usar path /carros/{local}/{marca}/{modelo}
+    // com tipoveiculo=carros|carros-novos|carros-usados conforme condição.
+    // O path base é sempre /carros (não /carros-novos) quando há filtro de marca.
+    const vehicleWord = isMoto ? 'motos' : 'carros';
+    const locationSlug = this.buildLocationSlug(city, state);
 
-    let url = parts.join('/');
+    let tipoVeiculo: string;
+    if (condition === 'new')       tipoVeiculo = isMoto ? 'motos-novas'  : 'carros-novos';
+    else if (condition === 'used') tipoVeiculo = isMoto ? 'motos-usadas' : 'carros-usados';
+    else                           tipoVeiculo = vehicleWord;
 
-    // Ano vai como query string pois não faz parte do path do site
-    // MAS isso vai causar o bug do ?pandora=false novamente.
-    // Então: sem query string, filtro de ano é aplicado pós-scraping.
+    const params = new URLSearchParams();
+    params.set('tipoveiculo', tipoVeiculo);
+    params.set('lkid', '1000');
+
+    let pathBase: string;
+    if (brand && model) {
+      // Formato com marca+modelo: path sempre usa /carros/ (não /carros-novos/)
+      pathBase = `https://www.webmotors.com.br/${vehicleWord}/${locationSlug}/${brand.toLowerCase()}/${model.toLowerCase()}`;
+      params.set('marca1',  brand.toUpperCase());
+      params.set('modelo1', model.toUpperCase());
+      if (c.detected_year) {
+        params.set('anoInicio', String(c.detected_year));
+        params.set('anoFim',    String(c.detected_year));
+      }
+    } else if (brand) {
+      pathBase = `https://www.webmotors.com.br/${vehicleWord}/${locationSlug}/${brand.toLowerCase()}`;
+      params.set('marca1', brand.toUpperCase());
+    } else {
+      // Sem marca: usar path com tipoveiculo no path
+      pathBase = `https://www.webmotors.com.br/${tipoVeiculo}/${locationSlug || 'sp'}`;
+    }
+
+    // estadocidade: nome da cidade normalizado (sem acento, capitalizado)
+    if (city) params.set('estadocidade', this.normalizeCityName(city));
+
+    const url = `${pathBase}?${params.toString()}`;
     this.logger.log(`🔗 [WEBMOTORS] URL: ${url}`);
     return url;
+  }
+
+  /** Normaliza nome da cidade para o parâmetro estadocidade do Webmotors */
+  private normalizeCityName(city: string): string {
+    // Mapa para nomes oficiais usados pelo Webmotors
+    const officialNames: Record<string, string> = {
+      'sao paulo': 'São Paulo', 'são paulo': 'São Paulo',
+      'rio de janeiro': 'Rio de Janeiro',
+      'belo horizonte': 'Belo Horizonte',
+      'curitiba': 'Curitiba',
+      'porto alegre': 'Porto Alegre',
+      'brasilia': 'Brasília', 'brasília': 'Brasília',
+      'salvador': 'Salvador',
+      'fortaleza': 'Fortaleza',
+      'recife': 'Recife',
+      'manaus': 'Manaus',
+      'goiania': 'Goiânia', 'goiânia': 'Goiânia',
+      'campinas': 'Campinas',
+      'santos': 'Santos',
+      'ribeirao preto': 'Ribeirão Preto', 'ribeirão preto': 'Ribeirão Preto',
+      'natal': 'Natal',
+      'maceio': 'Maceió', 'maceió': 'Maceió',
+      'florianopolis': 'Florianópolis', 'florianópolis': 'Florianópolis',
+      'vitoria': 'Vitória', 'vitória': 'Vitória',
+      'campo grande': 'Campo Grande',
+      'joao pessoa': 'João Pessoa', 'joão pessoa': 'João Pessoa',
+    };
+    const key = city.toLowerCase().trim();
+    return officialNames[key] ?? city;
+  }
+
+  /** Monta slug de localização: "sp-sao-paulo", "mg-belo-horizonte", etc. */
+  private buildLocationSlug(city?: string, state?: string): string {
+    // Mapa de cidades conhecidas → slug do Webmotors
+    const cityMap: Record<string, string> = {
+      'sao paulo':       'sp-sao-paulo',
+      'são paulo':       'sp-sao-paulo',
+      'rio de janeiro':  'rj-rio-de-janeiro',
+      'belo horizonte':  'mg-belo-horizonte',
+      'curitiba':        'pr-curitiba',
+      'porto alegre':    'rs-porto-alegre',
+      'brasilia':        'df-brasilia',
+      'brasília':        'df-brasilia',
+      'salvador':        'ba-salvador',
+      'fortaleza':       'ce-fortaleza',
+      'recife':          'pe-recife',
+      'manaus':          'am-manaus',
+      'goiania':         'go-goiania',
+      'goiânia':         'go-goiania',
+      'campinas':        'sp-campinas',
+      'santos':          'sp-santos',
+      'ribeirao preto':  'sp-ribeirao-preto',
+      'ribeirão preto':  'sp-ribeirao-preto',
+    };
+
+    if (city) {
+      const key = city.toLowerCase().trim();
+      if (cityMap[key]) return cityMap[key];
+      // Fallback: normalizar cidade + estado
+      const slug = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-');
+      const stateSlug = state?.toLowerCase().slice(0, 2) || 'br';
+      return `${stateSlug}-${slug}`;
+    }
+
+    // Sem localização: usar SP como padrão (maior mercado)
+    return 'sp';
   }
 
   /** Extrai marca conhecida da query como fallback quando classification não tem detected_brand */
