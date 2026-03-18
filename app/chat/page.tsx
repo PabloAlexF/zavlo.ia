@@ -481,17 +481,23 @@ export default function ChatPage() {
     
     if (currentField === 'condition') {
       enrichedQuery = `${originalQuery} ${answer}`.trim();
-      console.log('[HYBRID] Condição adicionada:', enrichedQuery);
     } else if (currentField === 'year') {
       enrichedQuery = `${originalQuery} ${answer}`.trim();
-      console.log('[HYBRID] Ano adicionado:', enrichedQuery);
     } else if (currentField === 'price_range') {
-      enrichedQuery = `${originalQuery} ${answer}`.trim();
-      console.log('[HYBRID] Faixa de preço adicionada:', enrichedQuery);
-      console.log('[HYBRID] 💰 Preço estruturado será extraído pelo backend');
+      // Sugestão estruturada vinda do QuestionModal (JSON) ou texto livre
+      let priceText = answer;
+      try {
+        const parsed = JSON.parse(answer);
+        if (parsed?.value) {
+          const { min, max } = parsed.value;
+          if (min && max) priceText = `entre ${min / 1000}mil e ${max / 1000}mil`;
+          else if (max)   priceText = `ate ${max / 1000}mil`;
+          else if (min)   priceText = `acima de ${min / 1000}mil`;
+        }
+      } catch { /* texto livre — usar como está */ }
+      enrichedQuery = `${originalQuery} ${priceText}`.trim();
     } else if (currentField === 'location') {
       enrichedQuery = `${originalQuery} em ${answer}`.trim();
-      console.log('[HYBRID] Localização adicionada:', enrichedQuery);
     } else {
       enrichedQuery = `${originalQuery} ${answer}`.trim();
     }
@@ -763,8 +769,9 @@ export default function ChatPage() {
           setOriginalQuery(query);
           setLoading(false);
           
-          // ✅ Mostrar pergunta do backend
-          addMessage('ai', data.question);
+          // ✅ Mostrar apenas o texto da pergunta no chat
+          const questionText = typeof data.question === 'object' ? data.question.question : data.question;
+          addMessage('ai', questionText);
           return;
         }
         
