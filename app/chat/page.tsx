@@ -58,7 +58,7 @@ export default function ChatPage() {
   const [awaitingImageSort, setAwaitingImageSort] = useState(false);
   
   // Hybrid mode states
-  const [hybridQuestion, setHybridQuestion] = useState<string | null>(null);
+  const [hybridQuestion, setHybridQuestion] = useState<string | { question: string; suggestions?: any[] } | null>(null);
   const [hybridMissingFields, setHybridMissingFields] = useState<string[]>([]);
   const [originalQuery, setOriginalQuery] = useState<string>('');
   const [finalQuery, setFinalQuery] = useState<string>('');
@@ -469,6 +469,50 @@ export default function ChatPage() {
     setLoading(false);
   };
 
+  // Acumula respostas do modal na classification para enviar ao backend
+  const buildEnrichedClassification = (
+    base: any,
+    allFields: string[],
+    lastAnswer: string,
+    lastField: string,
+  ): any => {
+    if (!base) return base;
+    const c = { ...base };
+
+    const applyField = (field: string, value: string) => {
+      if (field === 'location') {
+        c.user_location = { city: value, state: '' };
+      } else if (field === 'condition') {
+        const v = value.toLowerCase();
+        c.condition = v.includes('novo') || v.includes('new') ? 'new'
+          : v.includes('usado') || v.includes('used') ? 'used'
+          : value;
+      } else if (field === 'price_range') {
+        try {
+          const parsed = JSON.parse(value);
+          if (parsed?.value) {
+            c.price_range = {
+              min_price: parsed.value.min ?? null,
+              max_price: parsed.value.max ?? null,
+            };
+          }
+        } catch {
+          // texto livre — tentar extrair números
+          const nums = value.match(/\d+/g)?.map(Number) ?? [];
+          if (nums.length === 2) c.price_range = { min_price: nums[0] * 1000, max_price: nums[1] * 1000 };
+          else if (nums.length === 1) c.price_range = { max_price: nums[0] * 1000 };
+        }
+      } else if (field === 'year') {
+        const y = parseInt(value);
+        if (!isNaN(y)) c.detected_year = y;
+      }
+    };
+
+    // Aplicar o último campo respondido
+    applyField(lastField, lastAnswer);
+    return c;
+  };
+
   const handleHybridAnswer = async (answer: string) => {
     console.log('[HYBRID] Resposta recebida:', answer);
     console.log('[HYBRID] Campo atual:', hybridMissingFields[0]);
@@ -505,17 +549,25 @@ export default function ChatPage() {
     // ✅ REMOVER O CAMPO ATUAL DA LISTA
     const remainingFields = hybridMissingFields.slice(1);
     console.log('[HYBRID] Campos restantes:', remainingFields);
-    
+
+    // ✅ Atualizar classification com a resposta atual (acumula a cada pergunta)
+    const updatedClassification = buildEnrichedClassification(
+      currentClassification,
+      hybridMissingFields,
+      answer,
+      currentField,
+    );
+    setCurrentClassification(updatedClassification);
+
     if (remainingFields.length > 0) {
       console.log('[HYBRID] Próxima pergunta:', remainingFields[0]);
       // ✅ ATUALIZAR LISTA DE CAMPOS FALTANTES
       setHybridMissingFields(remainingFields);
       setOriginalQuery(enrichedQuery);
       
-      // ✅ GERAR PRÓXIMA PERGUNTA LOCALMENTE (não reclassificar)
       const nextField = remainingFields[0];
-      let nextQuestion = '';
-      
+      let nextQuestion: string | { question: string; suggestions?: any[] } = '';
+
       if (nextField === 'condition') {
         nextQuestion = 'Você prefere novo ou usado?';
       } else if (nextField === 'year') {
@@ -523,25 +575,38 @@ export default function ChatPage() {
       } else if (nextField === 'location') {
         nextQuestion = 'Em qual cidade ou estado você está procurando?';
       } else if (nextField === 'price_range') {
-        nextQuestion = 'Qual sua faixa de preço? (Ex: até 50mil, entre 30mil e 60mil)';
+        const smartQ = currentClassification?.suggested_question;
+        nextQuestion = (smartQ && typeof smartQ === 'object')
+          ? smartQ
+          : { question: 'Qual sua faixa de preço?', suggestions: [
+              { label: 'até 30mil', max: 30000 },
+              { label: 'até 50mil', max: 50000 },
+              { label: 'até 80mil', max: 80000 },
+              { label: 'acima de 80mil', min: 80000 },
+            ]};
       }
-      
-      console.log('[HYBRID] Próxima pergunta gerada:', nextQuestion);
+
       setHybridQuestion(nextQuestion);
-      addMessage('ai', nextQuestion);
+      const nextQuestionText = typeof nextQuestion === 'object' ? nextQuestion.question : nextQuestion;
+      addMessage('ai', nextQuestionText);
     } else {
       console.log('[HYBRID] Todas perguntas respondidas');
       console.log('[HYBRID] Categoria atual:', currentClassification?.category);
       setHybridQuestion(null);
       setHybridMissingFields([]);
       setFinalQuery(enrichedQuery);
-      
+
+      // ✅ Enriquecer classification com dados coletados no modal
+      // currentClassification já foi atualizado incrementalmente a cada resposta
+      const enrichedClassification = updatedClassification;
+
       // ✅ Para carros/motos, buscar direto sem modal de ordenação
-      if (currentClassification?.category === 'car' || currentClassification?.category === 'motorcycle') {
+      if (enrichedClassification?.category === 'car' || enrichedClassification?.category === 'motorcycle') {
         console.log('[HYBRID] Veículo detectado - buscando direto com RELEVANCE');
-        await executeTextSearch(enrichedQuery, 'RELEVANCE', currentClassification);
+        await executeTextSearch(enrichedQuery, 'RELEVANCE', enrichedClassification);
       } else {
         console.log('[HYBRID] Produto genérico - mostrando modal de ordenação');
+        setCurrentClassification(enrichedClassification);
         setShowSortQuestion(true);
       }
     }
