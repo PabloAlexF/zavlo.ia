@@ -137,25 +137,29 @@ export class WebmotorsService {
     const isMoto = classification?.category === 'motorcycle' || /\b(moto|motocicleta|scooter)\b/i.test(query);
     const vehicleType = isMoto ? 'motos' : 'carros';
 
-    // O scraper ribtools~webmotors-scraper recebe URL do site /comprar/...
-    // e internamente converte para a API interna. Passar apenas parâmetros
-    // seguros (marca/modelo/ano) — filtros de preço/condição/transmissão
-    // são aplicados pós-scraping no backend para evitar 400 na API interna.
-    const base = `https://www.webmotors.com.br/comprar/${vehicleType}`;
-
+    // Bug do scraper ribtools~webmotors-scraper: ele pega os params da URL
+    // e reconstrói a URL da API interna concatenando ?pandora=false no final.
+    // Se a URL já tem query string, gera URL inválida com dois '?'.
+    //
+    // Solução: passar URL sem query string. O scraper vai adicionar
+    // ?pandora=false corretamente. Os filtros são aplicados pós-scraping.
+    //
+    // Formato que o scraper espera como input: URL do site /comprar/...
+    // Ele converte internamente para /api/detail/car/... + ?pandora=false
     const brand = classification?.detected_brand || this.extractBrandFromQuery(query);
     const c = classification || {};
 
-    const params = new URLSearchParams();
-    if (brand)            params.set('marca',     brand);
-    if (c.detected_model) params.set('modelo',    c.detected_model);
-    if (c.detected_year) {
-      params.set('anoInicio', String(c.detected_year));
-      params.set('anoFim',    String(c.detected_year));
-    }
+    // Construir path estruturado sem query string
+    // /comprar/carros/honda/civic (o scraper extrai marca/modelo do path)
+    const parts = [`https://www.webmotors.com.br/comprar/${vehicleType}`];
+    if (brand)            parts.push(brand.toLowerCase());
+    if (c.detected_model) parts.push(c.detected_model.toLowerCase());
 
-    const qs  = params.toString();
-    const url = qs ? `${base}?${qs}` : `${base}?q=${encodeURIComponent(query)}`;
+    let url = parts.join('/');
+
+    // Ano vai como query string pois não faz parte do path do site
+    // MAS isso vai causar o bug do ?pandora=false novamente.
+    // Então: sem query string, filtro de ano é aplicado pós-scraping.
     this.logger.log(`🔗 [WEBMOTORS] URL: ${url}`);
     return url;
   }

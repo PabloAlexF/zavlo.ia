@@ -714,6 +714,19 @@ export class SearchService {
       }
     }
 
+    // 📅 FILTRO DE ANO (pós-scraping — ano não é passado na URL do scraper)
+    if (classification?.detected_year && finalResults.length > 0) {
+      const yr = classification.detected_year;
+      const byYear = finalResults.filter(p => {
+        const itemYear = (p as any).year || (p as any).modelYear;
+        return !itemYear || itemYear === yr;
+      });
+      if (byYear.length > 0) {
+        this.logger.log(`📅 [YEAR FILTER] ${finalResults.length} → ${byYear.length} (ano: ${yr})`);
+        finalResults = byYear;
+      }
+    }
+
     const finalResult = {
       results: finalResults,
       total: finalResults.length,
