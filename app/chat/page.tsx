@@ -37,6 +37,28 @@ interface ChatHistory {
   updatedAt: Date;
 }
 
+function getNextQuestion(
+  field: string,
+  classification: any,
+): string | { question: string; suggestions?: any[] } {
+  if (field === 'condition') return 'Você prefere novo ou usado?';
+  if (field === 'year')      return 'De qual ano? (Ex: 2020, 2018-2022)';
+  if (field === 'location')  return 'Em qual cidade você está procurando? (ou "todo o Brasil")';
+  if (field === 'price_range') {
+    const smartQ = classification?.suggested_question;
+    return (smartQ && typeof smartQ === 'object') ? smartQ : {
+      question: 'Qual sua faixa de preço?',
+      suggestions: [
+        { label: 'até 30mil', max: 30000 },
+        { label: 'até 50mil', max: 50000 },
+        { label: 'até 80mil', max: 80000 },
+        { label: 'acima de 80mil', min: 80000 },
+      ],
+    };
+  }
+  return field;
+}
+
 export default function ChatPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([
@@ -57,14 +79,28 @@ export default function ChatPage() {
   const [awaitingImageConfirmation, setAwaitingImageConfirmation] = useState(false);
   const [awaitingImageSort, setAwaitingImageSort] = useState(false);
   
-  // Hybrid mode states
-  const [hybridQuestion, setHybridQuestion] = useState<string | { question: string; suggestions?: any[] } | null>(null);
-  const [hybridMissingFields, setHybridMissingFields] = useState<string[]>([]);
-  const [originalQuery, setOriginalQuery] = useState<string>('');
-  const [finalQuery, setFinalQuery] = useState<string>('');
-  const [currentClassification, setCurrentClassification] = useState<any>(null);
-  const [showSortQuestion, setShowSortQuestion] = useState(false);
-  const [selectedSort, setSelectedSort] = useState<string>('RELEVANCE');
+  // Search session — estado centralizado (evita dessincronia)
+  const [searchSession, setSearchSession] = useState<{
+    query: string;
+    classification: any;
+    missingFields: string[];
+    answers: Record<string, string>;
+    step: 'idle' | 'asking' | 'searching';
+  }>({
+    query: '',
+    classification: null,
+    missingFields: [],
+    answers: {},
+    step: 'idle',
+  });
+
+  // Derivados do searchSession (sem estado extra)
+  const hybridQuestion = searchSession.step === 'asking'
+    ? getNextQuestion(searchSession.missingFields[0], searchSession.classification)
+    : null;
+  const showSortQuestion = searchSession.step === 'searching' &&
+    searchSession.classification?.category !== 'car' &&
+    searchSession.classification?.category !== 'motorcycle';
 
   const [userCredits, setUserCredits] = useState(0);
   
@@ -469,209 +505,95 @@ export default function ChatPage() {
     setLoading(false);
   };
 
-  // Acumula respostas do modal na classification para enviar ao backend
-  const buildEnrichedClassification = (
-    base: any,
-    allFields: string[],
-    lastAnswer: string,
-    lastField: string,
-  ): any => {
-    if (!base) return base;
-    const c = { ...base };
-
-    const applyField = (field: string, value: string) => {
-      if (field === 'location') {
-        // Inferir estado a partir da cidade
-        const cityStateMap: Record<string, string> = {
-          'sao paulo': 'SP', 'são paulo': 'SP',
-          'rio de janeiro': 'RJ',
-          'belo horizonte': 'MG',
-          'curitiba': 'PR',
-          'porto alegre': 'RS',
-          'brasilia': 'DF', 'brasília': 'DF',
-          'salvador': 'BA',
-          'fortaleza': 'CE',
-          'recife': 'PE',
-          'manaus': 'AM',
-          'goiania': 'GO', 'goiânia': 'GO',
-          'campinas': 'SP',
-          'santos': 'SP',
-          'ribeirao preto': 'SP', 'ribeirão preto': 'SP',
-          'natal': 'RN',
-          'maceio': 'AL', 'maceió': 'AL',
-          'joao pessoa': 'PB', 'joão pessoa': 'PB',
-          'florianopolis': 'SC', 'florianópolis': 'SC',
-          'vitoria': 'ES', 'vitória': 'ES',
-          'campo grande': 'MS',
-          'cuiaba': 'MT', 'cuiabá': 'MT',
-          'porto velho': 'RO',
-          'macapa': 'AP', 'macapá': 'AP',
-          'boa vista': 'RR',
-          'palmas': 'TO',
-          'rio branco': 'AC',
-          'aracaju': 'SE',
-          'teresina': 'PI',
-          'belem': 'PA', 'belém': 'PA',
-        };
-        const key = value.toLowerCase().trim();
-        const state = cityStateMap[key] || '';
-        c.user_location = { city: value, state };
-      } else if (field === 'condition') {
-        const v = value.toLowerCase();
-        c.condition = v.includes('novo') || v.includes('new') ? 'new'
-          : v.includes('usado') || v.includes('used') ? 'used'
-          : value;
-      } else if (field === 'price_range') {
-        try {
-          const parsed = JSON.parse(value);
-          if (parsed?.value) {
-            c.price_range = {
-              min_price: parsed.value.min ?? null,
-              max_price: parsed.value.max ?? null,
-            };
-          }
-        } catch {
-          // texto livre — tentar extrair números e contexto
-          const isAbove = /acima|mais de|a partir|mínimo|minimo/i.test(value);
-          const nums = value.match(/\d+/g)?.map(Number) ?? [];
-          if (nums.length >= 2) {
-            c.price_range = { min_price: nums[0] * 1000, max_price: nums[1] * 1000 };
-          } else if (nums.length === 1) {
-            if (isAbove) c.price_range = { min_price: nums[0] * 1000 };
-            else         c.price_range = { max_price: nums[0] * 1000 };
-          }
-        }
-      } else if (field === 'year') {
-        const y = parseInt(value);
-        if (!isNaN(y)) c.detected_year = y;
-      }
-    };
-
-    // Aplicar o último campo respondido
-    applyField(lastField, lastAnswer);
-    return c;
-  };
+  // Helper para delay visual controlado
+  const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
   const handleHybridAnswer = async (answer: string) => {
-    console.log('[HYBRID] Resposta recebida:', answer);
-    console.log('[HYBRID] Campo atual:', hybridMissingFields[0]);
-    console.log('[HYBRID] Query original:', originalQuery);
-    
-    // Construir query enriquecida baseada no tipo de resposta
-    let enrichedQuery = originalQuery;
-    
-    const currentField = hybridMissingFields[0];
-    
-    if (currentField === 'condition') {
-      enrichedQuery = `${originalQuery} ${answer}`.trim();
-    } else if (currentField === 'year') {
-      enrichedQuery = `${originalQuery} ${answer}`.trim();
-    } else if (currentField === 'price_range') {
-      // Sugestão estruturada vinda do QuestionModal (JSON) ou texto livre
-      let priceText = answer;
-      try {
-        const parsed = JSON.parse(answer);
-        if (parsed?.value) {
-          const { min, max } = parsed.value;
-          if (min && max) priceText = `entre ${min / 1000}mil e ${max / 1000}mil`;
-          else if (max)   priceText = `ate ${max / 1000}mil`;
-          else if (min)   priceText = `acima de ${min / 1000}mil`;
-        }
-      } catch { /* texto livre — usar como está */ }
-      enrichedQuery = `${originalQuery} ${priceText}`.trim();
-    } else if (currentField === 'location') {
-      enrichedQuery = `${originalQuery} em ${answer}`.trim();
-    } else {
-      enrichedQuery = `${originalQuery} ${answer}`.trim();
-    }
-    
-    // ✅ REMOVER O CAMPO ATUAL DA LISTA
-    const remainingFields = hybridMissingFields.slice(1);
-    console.log('[HYBRID] Campos restantes:', remainingFields);
+    const { missingFields, query, answers, classification } = searchSession;
+    const currentField = missingFields[0];
+    const updatedAnswers = { ...answers, [currentField]: answer };
+    const remainingFields = missingFields.slice(1);
 
-    // ✅ Atualizar classification com a resposta atual (acumula a cada pergunta)
-    const updatedClassification = buildEnrichedClassification(
-      currentClassification,
-      hybridMissingFields,
-      answer,
-      currentField,
-    );
-    setCurrentClassification(updatedClassification);
+    // Enriquecer query textual para exibição
+    let displayAnswer = answer;
+    try {
+      const parsed = JSON.parse(answer);
+      if (parsed?.value) {
+        const { min, max } = parsed.value;
+        if (min && max) displayAnswer = `entre ${min/1000}mil e ${max/1000}mil`;
+        else if (max)   displayAnswer = `até ${max/1000}mil`;
+        else if (min)   displayAnswer = `acima de ${min/1000}mil`;
+      }
+    } catch {}
+
+    const enrichedQuery = currentField === 'location'
+      ? `${query} em ${displayAnswer}`
+      : `${query} ${displayAnswer}`;
 
     if (remainingFields.length > 0) {
-      console.log('[HYBRID] Próxima pergunta:', remainingFields[0]);
-      // ✅ ATUALIZAR LISTA DE CAMPOS FALTANTES
-      setHybridMissingFields(remainingFields);
-      setOriginalQuery(enrichedQuery);
-      
-      const nextField = remainingFields[0];
-      let nextQuestion: string | { question: string; suggestions?: any[] } = '';
-
-      if (nextField === 'condition') {
-        nextQuestion = 'Você prefere novo ou usado?';
-      } else if (nextField === 'year') {
-        nextQuestion = 'De qual ano você está procurando? (Ex: 2020, 2018-2022)';
-      } else if (nextField === 'location') {
-        nextQuestion = 'Em qual cidade ou estado você está procurando?';
-      } else if (nextField === 'price_range') {
-        const smartQ = currentClassification?.suggested_question;
-        nextQuestion = (smartQ && typeof smartQ === 'object')
-          ? smartQ
-          : { question: 'Qual sua faixa de preço?', suggestions: [
-              { label: 'até 30mil', max: 30000 },
-              { label: 'até 50mil', max: 50000 },
-              { label: 'até 80mil', max: 80000 },
-              { label: 'acima de 80mil', min: 80000 },
-            ]};
-      }
-
-      setHybridQuestion(nextQuestion);
-      const nextQuestionText = typeof nextQuestion === 'object' ? nextQuestion.question : nextQuestion;
-      addMessage('ai', nextQuestionText);
+      setSearchSession(s => ({
+        ...s,
+        query: enrichedQuery,
+        missingFields: remainingFields,
+        answers: updatedAnswers,
+      }));
+      const nextQ = getNextQuestion(remainingFields[0], classification);
+      addMessage('ai', typeof nextQ === 'object' ? nextQ.question : nextQ);
     } else {
-      console.log('[HYBRID] Todas perguntas respondidas');
-      console.log('[HYBRID] Categoria atual:', currentClassification?.category);
-      setHybridQuestion(null);
-      setHybridMissingFields([]);
-      setFinalQuery(enrichedQuery);
-
-      // ✅ Enriquecer classification com dados coletados no modal
-      // currentClassification já foi atualizado incrementalmente a cada resposta
-      const enrichedClassification = updatedClassification;
-
-      // ✅ Para carros/motos, buscar direto sem modal de ordenação
-      if (enrichedClassification?.category === 'car' || enrichedClassification?.category === 'motorcycle') {
-        console.log('[HYBRID] Veículo detectado - buscando direto com RELEVANCE');
-        await executeTextSearch(enrichedQuery, 'RELEVANCE', enrichedClassification);
-      } else {
-        console.log('[HYBRID] Produto genérico - mostrando modal de ordenação');
-        setCurrentClassification(enrichedClassification);
-        setShowSortQuestion(true);
-      }
+      // Todas perguntas respondidas — enviar answers ao backend para enriquecer
+      setSearchSession(s => ({ ...s, query: enrichedQuery, answers: updatedAnswers, step: 'searching' }));
+      await classifyWithAnswers(enrichedQuery, updatedAnswers, classification);
     }
   };
 
   const handleHybridSkip = async () => {
-    console.log('[HYBRID SKIP] Pulando perguntas');
-    console.log('[HYBRID SKIP] Categoria atual:', currentClassification?.category);
-    setHybridQuestion(null);
-    setHybridMissingFields([]);
-    setFinalQuery(originalQuery);
-    
-    // ✅ Para carros/motos, buscar direto sem modal de ordenação
-    if (currentClassification?.category === 'car' || currentClassification?.category === 'motorcycle') {
-      console.log('[HYBRID SKIP] Veículo detectado - buscando direto com RELEVANCE');
-      await executeTextSearch(originalQuery, 'RELEVANCE', currentClassification);
+    const { query, classification } = searchSession;
+    setSearchSession(s => ({ ...s, step: 'searching', missingFields: [] }));
+    if (classification?.category === 'car' || classification?.category === 'motorcycle') {
+      await executeTextSearch(query, 'RELEVANCE', classification);
     } else {
-      console.log('[HYBRID SKIP] Produto genérico - mostrando modal de ordenação');
-      setShowSortQuestion(true);
+      setSearchSession(s => ({ ...s, step: 'searching' }));
     }
   };
 
   const handleSortSelection = async (sortBy: string) => {
-    setShowSortQuestion(false);
-    setSelectedSort(sortBy);
-    await executeTextSearch(finalQuery, sortBy, currentClassification);
+    const { query, classification } = searchSession;
+    setSearchSession(s => ({ ...s, step: 'idle' }));
+    await executeTextSearch(query, sortBy, classification);
+  };
+
+  // Reenvia ao backend com as respostas para enriquecer a classification lá
+  const classifyWithAnswers = async (query: string, answers: Record<string, string>, prevClassification: any) => {
+    try {
+      const user = localStorage.getItem('zavlo_user');
+      if (!user) { router.push('/auth'); return; }
+      const userData = JSON.parse(user);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+      const response = await fetch(`${API_URL}/search/classify`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${userData.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, answers }),
+      });
+
+      if (!response.ok) throw new Error(`classify failed: ${response.status}`);
+      const data = await response.json();
+      const enrichedClassification = data.classification || prevClassification;
+
+      setSearchSession(s => ({ ...s, classification: enrichedClassification, step: 'idle' }));
+
+      if (enrichedClassification?.category === 'car' || enrichedClassification?.category === 'motorcycle') {
+        await executeTextSearch(query, 'RELEVANCE', enrichedClassification);
+      } else {
+        setSearchSession(s => ({ ...s, step: 'searching' }));
+      }
+    } catch {
+      // Fallback: usar classification anterior sem enriquecimento
+      await executeTextSearch(query, 'RELEVANCE', prevClassification);
+    }
   };
 
   const handleSend = async (messageText?: string) => {
@@ -861,36 +783,31 @@ export default function ChatPage() {
         }
         
         // ✅ SEMPRE ATUALIZAR CLASSIFICAÇÃO
-        setCurrentClassification(data.classification);
+        setSearchSession(s => ({ ...s, classification: data.classification }));
         
         // HYBRID MODE: Check if needs question
         if (data.needsQuestion && data.question) {
-          console.log('[HYBRID] Backend retornou pergunta:', data.question);
-          console.log('[HYBRID] Campos faltantes:', data.missingFields);
-          
-          setHybridQuestion(data.question);
-          setHybridMissingFields(data.missingFields || []);
-          setOriginalQuery(query);
+          setSearchSession(s => ({
+            ...s,
+            query,
+            classification: data.classification,
+            missingFields: data.missingFields || [],
+            answers: {},
+            step: 'asking',
+          }));
           setLoading(false);
-          
-          // ✅ Mostrar apenas o texto da pergunta no chat
           const questionText = typeof data.question === 'object' ? data.question.question : data.question;
           addMessage('ai', questionText);
           return;
         }
         
-        // ✅ PRODUTO VÁLIDO: Armazenar classificação e decidir próximo passo
-        setCurrentClassification(data.classification);
-        setFinalQuery(query);
+        setSearchSession(s => ({ ...s, query, classification: data.classification, step: 'idle' }));
         setLoading(false);
         
-        // ✅ Para carros/motos, buscar direto sem modal de ordenação
         if (data.classification?.category === 'car' || data.classification?.category === 'motorcycle') {
-          console.log('[CLASSIFY] Veículo detectado - buscando direto com RELEVANCE');
           await executeTextSearch(query, 'RELEVANCE', data.classification);
         } else {
-          console.log('[CLASSIFY] Produto genérico - mostrando modal de ordenação');
-          setShowSortQuestion(true);
+          setSearchSession(s => ({ ...s, step: 'searching' }));
         }
         
       } else {
@@ -986,27 +903,47 @@ export default function ChatPage() {
         const remainingCredits = data.remainingCredits ?? userCredits - 1;
         
         console.log('[SEARCH] Aguardando 1s antes de mostrar produtos...');
-        setTimeout(() => {
-          console.log('[SEARCH] Criando mensagem de produtos...');
-          
-          const productsMessage: Message = {
+        await delay(1000);
+        console.log('[SEARCH] Criando mensagem de produtos...');
+
+        if (products.length === 0) {
+            const cl = classification;
+            const brand = cl?.detected_brand ? cl.detected_brand.charAt(0).toUpperCase() + cl.detected_brand.slice(1) : null;
+            const model = cl?.detected_model ? cl.detected_model.charAt(0).toUpperCase() + cl.detected_model.slice(1) : null;
+            const city  = cl?.user_location?.city || null;
+            const cond  = cl?.condition === 'new' ? 'novo' : cl?.condition === 'used' ? 'usado' : null;
+            const year  = cl?.detected_year || null;
+
+            const vehicle = [brand, model, year, cond].filter(Boolean).join(' ');
+            const where   = city ? ` em ${city.charAt(0).toUpperCase() + city.slice(1)}` : '';
+
+            let msg = `😕 Não encontrei anúncios de **${vehicle || query}**${where} no momento.\n\n`;
+            msg += `Isso pode acontecer porque:\n`;
+            msg += `• Não há estoque disponível com esses filtros\n`;
+            msg += `• A combinação de cidade + condição + ano é muito específica\n\n`;
+            msg += `💡 **Sugestões:**\n`;
+            if (cond) msg += `• Tente buscar sem filtrar por "${cond === 'novo' ? 'novo' : 'usado'}"\n`;
+            if (city) msg += `• Expanda para cidades próximas ou todo o Brasil\n`;
+            if (year) msg += `• Tente um intervalo de anos (ex: ${year - 1}–${year + 1})\n`;
+            msg += `• Tente novamente em alguns minutos`;
+
+            addMessage('ai', msg);
+            setLoading(false);
+            console.log('[SEARCH] ========== BUSCA CONCLUÍDA (0 resultados) ==========');
+            return;
+          }
+
+        const productsMessage: Message = {
             id: crypto.randomUUID(),
             type: 'products',
-            content: `✅ Encontrei ${products.length} produtos!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
+            content: `✅ Encontrei ${products.length} ${products.length === 1 ? 'resultado' : 'resultados'}!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
             products: products,
             timestamp: new Date(),
             priceRangeApplied: data.priceRangeApplied,
           };
-          console.log('[SEARCH] Adicionando mensagem às messages');
           setMessages(prev => [...prev, productsMessage]);
-          contextManager.update({
-            lastResults: products,
-            lastProduct: query
-          });
-          console.log('[SEARCH] Finalizando loading');
+          contextManager.update({ lastResults: products, lastProduct: query });
           setLoading(false);
-          console.log('[SEARCH] ========== BUSCA CONCLUÍDA ==========');
-        }, 1000);
       } else {
         const errorText = await response.text();
         console.error('[SEARCH] Erro na resposta:', errorText);
@@ -1129,10 +1066,10 @@ export default function ChatPage() {
       {hybridQuestion && (
         <QuestionModal
           question={hybridQuestion}
-          missingFields={hybridMissingFields}
+          missingFields={searchSession.missingFields}
           onAnswer={handleHybridAnswer}
           onSkip={handleHybridSkip}
-          userLocation={currentClassification?.user_location}
+          userLocation={searchSession.classification?.user_location}
         />
       )}
 
@@ -1140,7 +1077,7 @@ export default function ChatPage() {
       {showSortQuestion && (
         <SortSelectionModal
           onSelect={handleSortSelection}
-          onCancel={() => setShowSortQuestion(false)}
+          onCancel={() => setSearchSession(s => ({ ...s, step: 'idle' }))}
         />
       )}
     </div>
