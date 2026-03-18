@@ -763,8 +763,9 @@ export default function ChatPage() {
           setOriginalQuery(query);
           setLoading(false);
           
-          // ✅ Mostrar pergunta do backend
-          addMessage('ai', data.question);
+          // ✅ Mostrar apenas o texto da pergunta no chat
+          const questionText = typeof data.question === 'object' ? data.question.question : data.question;
+          addMessage('ai', questionText);
           return;
         }
         

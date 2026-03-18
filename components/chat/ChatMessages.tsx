@@ -213,7 +213,7 @@ export function ChatMessages({
                             </OptionButton>
                           </div>
                         </div>
-                      ) : message.content.includes('Créditos insuficientes') ? (
+                      ) : typeof message.content === 'string' && message.content.includes('Créditos insuficientes') ? (
                         <div className="space-y-4">
                           <p className="whitespace-pre-wrap text-slate-200">{message.content}</p>
                           <Link href="/plans">
