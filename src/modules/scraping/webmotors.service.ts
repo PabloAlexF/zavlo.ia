@@ -159,12 +159,12 @@ export class WebmotorsService {
     }
     if (c.condition === 'new')        params.set('tipoVeiculo', 'new');
     else if (c.condition === 'used')  params.set('tipoVeiculo', 'used');
-    if (c.detected_transmission)      params.set('cambio',      c.detected_transmission);
-    if (c.detected_fuel)              params.set('combustivel', c.detected_fuel);
+    if (c.detected_transmission)      params.set('cambio',      this.mapTransmission(c.detected_transmission));
+    if (c.detected_fuel)              params.set('combustivel', this.mapFuel(c.detected_fuel));
 
-    // Encoding explícito para cidade/estado (evita espaços quebrando URL)
-    if (c.user_location?.state) params.set('estado', encodeURIComponent(c.user_location.state));
-    if (c.user_location?.city)  params.set('cidade', encodeURIComponent(c.user_location.city));
+    // URLSearchParams já faz encoding — não usar encodeURIComponent aqui
+    if (c.user_location?.state) params.set('estado', c.user_location.state);
+    if (c.user_location?.city)  params.set('cidade', c.user_location.city);
 
     if (c.price_range?.min_price) params.set('precoMinimo', String(c.price_range.min_price));
     if (c.price_range?.max_price) params.set('precoMaximo', String(c.price_range.max_price));
@@ -173,6 +173,34 @@ export class WebmotorsService {
     const url = qs ? `${base}?${qs}` : `${base}?q=${encodeURIComponent(query)}`;
     this.logger.log(`🔗 [WEBMOTORS] URL: ${url}`);
     return url;
+  }
+
+  /** Mapeia transmissão para valor aceito pela API Webmotors */
+  private mapTransmission(t: string): string {
+    // Valores aceitos pela API interna do Webmotors (via scraper Apify)
+    const map: Record<string, string> = {
+      manual: 'Manual',
+      automatico: 'Automático',
+      automatica: 'Automático',
+      cvt: 'CVT',
+      'semi-automatico': 'Automatizado',
+      'semi-automatica': 'Automatizado',
+    };
+    return map[t?.toLowerCase()] ?? t;
+  }
+
+  /** Mapeia combustível para valor aceito pela API Webmotors */
+  private mapFuel(f: string): string {
+    const map: Record<string, string> = {
+      flex: 'Flex',
+      gasolina: 'Gasolina',
+      etanol: 'Etanol',
+      diesel: 'Diesel',
+      eletrico: 'Elétrico',
+      hibrido: 'Híbrido',
+      gnv: 'GNV',
+    };
+    return map[f?.toLowerCase()] ?? f;
   }
 
   /** Extrai marca conhecida da query como fallback quando classification não tem detected_brand */
