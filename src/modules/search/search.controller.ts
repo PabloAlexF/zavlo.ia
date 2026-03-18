@@ -31,20 +31,103 @@ export class SearchController {
   @Post('classify')
   @UseGuards(OptionalJwtAuthGuard)
   async classifyQuery(
-    @Body() body: { query: string },
+    @Body() body: { query: string; answers?: Record<string, string | { value: any }> },
     @CurrentUser() user?: any,
   ) {
-    const { query } = body;
+    const { query, answers } = body;
+    const answersStr = answers
+      ? Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]))
+      : undefined;
 
-    console.log(`🔍 [CLASSIFY] Classifying query: ${query}`);
-    console.log(`   - user: ${user ? `${user.id} (${user.plan})` : 'anonymous'}`);
-
-    // ✅ APENAS CLASSIFICAR - NÃO CONSUMIR CRÉDITOS
     const classification = await this.searchService.classifyQueryOnly(query, user?.id);
 
-    console.log(`✅ [CLASSIFY] Classification result:`, classification);
+    // Se vieram respostas do modal, enriquecer a classification no backend (imutável)
+    if (answersStr && classification.classification) {
+      const base = classification.classification as any;
+      const enriched: Record<string, any> = {};
+
+      if (answersStr.location) {
+        const isBrazil = /^(brasil|todo(\s+o)?\s+brasil|qualquer|nacional|todo\s+o\s+pa[ií]s)$/i.test(answersStr.location.trim());
+        enriched.user_location = isBrazil ? null : this.parseLocation(answersStr.location);
+      }
+
+      if (answersStr.condition) {
+        const v = answersStr.condition.toLowerCase();
+        enriched.condition = v.includes('novo') || v.includes('new') ? 'new'
+          : v.includes('usado') || v.includes('used') ? 'used'
+          : 'unknown';
+      }
+
+      if (answersStr.price_range) {
+        enriched.price_range = this.parsePriceInput(answersStr.price_range);
+      }
+
+      if (answersStr.year) {
+        const y = parseInt(answersStr.year);
+        if (!isNaN(y)) enriched.detected_year = y;
+      }
+
+      enriched.missing_fields = (base.missing_fields || []).filter(
+        (f: string) => !answersStr[f]
+      );
+
+      classification.classification = { ...base, ...enriched };
+    }
 
     return classification;
+  }
+
+  private parseLocation(value: string): { city: string; state: string } {
+    const cityStateMap: Record<string, string> = {
+      'sao paulo': 'SP', 'são paulo': 'SP', 'rio de janeiro': 'RJ',
+      'belo horizonte': 'MG', 'curitiba': 'PR', 'porto alegre': 'RS',
+      'brasilia': 'DF', 'brasília': 'DF', 'salvador': 'BA',
+      'fortaleza': 'CE', 'recife': 'PE', 'manaus': 'AM',
+      'goiania': 'GO', 'goiânia': 'GO', 'campinas': 'SP',
+      'santos': 'SP', 'ribeirao preto': 'SP', 'ribeirão preto': 'SP',
+      'natal': 'RN', 'maceio': 'AL', 'maceió': 'AL',
+      'joao pessoa': 'PB', 'joão pessoa': 'PB', 'florianopolis': 'SC',
+      'florianópolis': 'SC', 'vitoria': 'ES', 'vitória': 'ES',
+      'campo grande': 'MS', 'cuiaba': 'MT', 'cuiabá': 'MT',
+      'porto velho': 'RO', 'macapa': 'AP', 'macapá': 'AP',
+      'boa vista': 'RR', 'palmas': 'TO', 'rio branco': 'AC',
+      'aracaju': 'SE', 'teresina': 'PI', 'belem': 'PA', 'belém': 'PA',
+    };
+    const key = value.toLowerCase().trim();
+    return { city: value, state: cityStateMap[key] || '' };
+  }
+
+  private parsePriceInput(value: string): { min_price?: number; max_price?: number } {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed?.value) return { min_price: parsed.value.min, max_price: parsed.value.max };
+    } catch {}
+
+    const clean = value.replace(/r\$\s?/gi, '');
+    const isAbove = /acima|mais de|a partir|m[ií]nimo/i.test(clean);
+
+    const parseMonetary = (s: string): number => {
+      if (/\d{1,3}(\.\d{3})+(,\d+)?$/.test(s))
+        return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+      return parseFloat(s.replace(',', '.'));
+    };
+
+    // Processar multiplicador por token individual (evita aplicar "mil" global)
+    const tokenRegex = /([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|\d+)\s*(milh[aã]o|milh[oõ]es|mil|k)?/gi;
+    const nums: number[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = tokenRegex.exec(clean)) !== null) {
+      const n = parseMonetary(match[1]);
+      if (isNaN(n)) continue;
+      const unit = (match[2] || '').toLowerCase();
+      if (unit.startsWith('milh'))   nums.push(n * 1_000_000);
+      else if (unit === 'mil' || unit === 'k') nums.push(n * 1_000);
+      else nums.push(n);
+    }
+
+    if (nums.length >= 2) return { min_price: Math.min(nums[0], nums[1]), max_price: Math.max(nums[0], nums[1]) };
+    if (nums.length === 1) return isAbove ? { min_price: nums[0] } : { max_price: nums[0] };
+    return {};
   }
 
   @Get('text')
