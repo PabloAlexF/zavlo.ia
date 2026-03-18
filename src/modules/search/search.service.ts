@@ -689,6 +689,44 @@ export class SearchService {
       };
     }
 
+    // 🏠 FILTRO DE LOCALIZAÇÃO (pós-scraping para webmotors/mobiauto)
+    if (classification?.user_location?.city && finalResults.length > 0) {
+      const city = classification.user_location.city.toLowerCase();
+      const byCity = finalResults.filter(p =>
+        (p as any).dealerLocation?.toLowerCase().includes(city)
+      );
+      // Só aplicar se não esvaziar os resultados
+      if (byCity.length > 0) {
+        this.logger.log(`🏠 [LOCATION FILTER] ${finalResults.length} → ${byCity.length} (cidade: ${city})`);
+        finalResults = byCity;
+      } else {
+        this.logger.log(`🏠 [LOCATION FILTER] Nenhum resultado em ${city} — mantendo todos`);
+      }
+    }
+
+    // 🔄 FILTRO DE CONDIÇÃO (pós-scraping)
+    if ((classification?.condition === 'new' || classification?.condition === 'used') && finalResults.length > 0) {
+      const cond = classification.condition;
+      const byCondition = finalResults.filter(p => (p as any).condition === cond);
+      if (byCondition.length > 0) {
+        this.logger.log(`🔄 [CONDITION FILTER] ${finalResults.length} → ${byCondition.length} (${cond})`);
+        finalResults = byCondition;
+      }
+    }
+
+    // 📅 FILTRO DE ANO (pós-scraping — ano não é passado na URL do scraper)
+    if (classification?.detected_year && finalResults.length > 0) {
+      const yr = classification.detected_year;
+      const byYear = finalResults.filter(p => {
+        const itemYear = (p as any).year || (p as any).modelYear;
+        return !itemYear || itemYear === yr;
+      });
+      if (byYear.length > 0) {
+        this.logger.log(`📅 [YEAR FILTER] ${finalResults.length} → ${byYear.length} (ano: ${yr})`);
+        finalResults = byYear;
+      }
+    }
+
     const finalResult = {
       results: finalResults,
       total: finalResults.length,
