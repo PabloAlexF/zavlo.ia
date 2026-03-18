@@ -21,7 +21,6 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
   const [priceInput, setPriceInput] = useState('');
 
   const activeType = questionType ?? missingFields[0] ?? null;
-  if (!activeType) return null;
 
   const isConditionQuestion = activeType === 'condition';
   const isLocationQuestion  = activeType === 'location';
@@ -38,48 +37,39 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
         { label: 'acima de 80mil', min: 80000 },
       ];
 
+  // Guard contra double-submit
+  const hasSubmittedRef = useRef(false);
+
+  // Resetar inputs e guard a cada nova pergunta
+  useEffect(() => {
+    hasSubmittedRef.current = false;
+    setLocationInput('');
+    setYearInput('');
+    setPriceInput('');
+  }, [activeType]);
+
+  if (!activeType) return null;
+
+  const safeSubmit = (value: string) => {
+    if (hasSubmittedRef.current || !value.trim()) return;
+    hasSubmittedRef.current = true;
+    onAnswer(value.trim());
+  };
+
+  const handleSubmit = () => {
+    if (isLocationQuestion) safeSubmit(locationInput);
+    else if (isYearQuestion) safeSubmit(yearInput);
+    else if (isPriceQuestion) safeSubmit(priceInput);
+  };
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSubmit();
+  };
+
   const isDisabled =
     (isLocationQuestion && !locationInput.trim()) ||
     (isYearQuestion     && !yearInput.trim()) ||
     (isPriceQuestion    && !priceInput.trim());
-
-  // Anti double-submit: debounce + Enter não disparam duas vezes
-  const hasSubmittedRef = useRef(false);
-  const safeSubmit = (value: string) => {
-    if (hasSubmittedRef.current) return;
-    hasSubmittedRef.current = true;
-    onAnswer(value);
-  };
-
-  // Debounce isolado por tipo de campo
-  const debounceRefs = useRef<{
-    price: ReturnType<typeof setTimeout> | null;
-    year:  ReturnType<typeof setTimeout> | null;
-    location: ReturnType<typeof setTimeout> | null;
-  }>({ price: null, year: null, location: null });
-
-  const debounceSubmit = (type: 'price' | 'year' | 'location', value: string) => {
-    if (debounceRefs.current[type]) clearTimeout(debounceRefs.current[type]!);
-    if (!value.trim()) return;
-    debounceRefs.current[type] = setTimeout(() => safeSubmit(value.trim()), 800);
-  };
-
-  // Reset do guard a cada nova pergunta
-  useEffect(() => {
-    hasSubmittedRef.current = false;
-  }, [question]);
-
-  useEffect(() => () => {
-    Object.values(debounceRefs.current).forEach((t) => { if (t) clearTimeout(t); });
-  }, []);
-
-  const handleSubmit = () => {
-    if (isLocationQuestion && locationInput.trim()) safeSubmit(locationInput.trim());
-    else if (isYearQuestion && yearInput.trim())    safeSubmit(yearInput.trim());
-    else if (isPriceQuestion && priceInput.trim())  safeSubmit(priceInput.trim());
-  };
-
-  const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSubmit(); };
 
   return (
     <motion.div
@@ -122,6 +112,7 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
         <p className="mb-6 text-sm text-slate-400">Isso ajuda a encontrar os melhores resultados para você</p>
 
         <div className="space-y-3">
+          {/* ── Condição ── */}
           {isConditionQuestion && (
             <>
               <p className="mb-3 text-sm text-slate-300">Qual condição você prefere?</p>
@@ -139,31 +130,24 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
             </>
           )}
 
+          {/* ── Preço ── */}
           {isPriceQuestion && (
             <div className="space-y-3">
               <p className="text-sm text-slate-300 mb-1">Digite ou escolha uma faixa:</p>
               <input
                 type="text"
                 value={priceInput}
-                onChange={(e) => { setPriceInput(e.target.value); debounceSubmit('price', e.target.value); }}
+                onChange={(e) => setPriceInput(e.target.value)}
                 onKeyDown={onKey}
                 placeholder="Ex: até 50mil ou entre 30mil e 60mil"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
                 autoFocus
               />
-    {priceInput && (
-              <p className="text-xs text-slate-500 flex items-center gap-1">
-                <span className="animate-pulse">●</span> Buscando automaticamente...
-              </p>
-            )}
               <div className="grid grid-cols-1 gap-2">
                 {priceSuggestions.map((s) => (
                   <button
                     key={s.label}
-                    onClick={() => {
-                      if (hasSubmittedRef.current) return;
-                      safeSubmit(JSON.stringify({ type: 'price_range', value: s }));
-                    }}
+                    onClick={() => safeSubmit(JSON.stringify({ type: 'price_range', value: s }))}
                     className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-left text-slate-300 hover:border-violet-500 hover:bg-violet-500/10 hover:text-white transition-all"
                   >
                     💰 {s.label}
@@ -173,31 +157,24 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
             </div>
           )}
 
+          {/* ── Ano ── */}
           {isYearQuestion && (
             <div className="space-y-3">
               <p className="text-sm text-slate-300 mb-1">Digite o ano ou faixa de anos:</p>
               <input
                 type="text"
                 value={yearInput}
-                onChange={(e) => { setYearInput(e.target.value); debounceSubmit('year', e.target.value); }}
+                onChange={(e) => setYearInput(e.target.value)}
                 onKeyDown={onKey}
                 placeholder="Ex: 2020 ou 2018-2022"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
                 autoFocus
               />
-            {yearInput && (
-              <p className="text-xs text-slate-500 flex items-center gap-1">
-                <span className="animate-pulse">●</span> Buscando automaticamente...
-              </p>
-            )}
               <div className="grid grid-cols-3 gap-2">
                 {['2024', '2023', '2022', '2021', '2020', '2019'].map((year) => (
                   <button
                     key={year}
-                    onClick={() => {
-                      if (hasSubmittedRef.current) return;
-                      safeSubmit(year);
-                    }}
+                    onClick={() => safeSubmit(year)}
                     className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:border-violet-500 hover:bg-violet-500/10 hover:text-white transition-colors"
                   >
                     {year}
@@ -207,31 +184,24 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
             </div>
           )}
 
+          {/* ── Localização ── */}
           {isLocationQuestion && (
             <div className="space-y-3">
               <p className="text-sm text-slate-300 mb-1">Digite a cidade ou estado:</p>
               <input
                 type="text"
                 value={locationInput}
-                onChange={(e) => { setLocationInput(e.target.value); debounceSubmit('location', e.target.value); }}
+                onChange={(e) => setLocationInput(e.target.value)}
                 onKeyDown={onKey}
                 placeholder="Ex: São Paulo, SP"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
                 autoFocus
               />
-            {locationInput && (
-              <p className="text-xs text-slate-500 flex items-center gap-1">
-                <span className="animate-pulse">●</span> Buscando automaticamente...
-              </p>
-            )}
               {(userLocation?.city || userLocation?.state) && (
                 <div className="flex gap-2">
                   {userLocation.city && (
                     <button
-                      onClick={() => {
-                        if (hasSubmittedRef.current) return;
-                        safeSubmit(userLocation.city!);
-                      }}
+                      onClick={() => safeSubmit(userLocation.city!)}
                       className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:border-violet-500 hover:bg-violet-500/10 hover:text-white transition-colors"
                     >
                       {userLocation.city}
@@ -239,10 +209,7 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
                   )}
                   {userLocation.state && (
                     <button
-                      onClick={() => {
-                        if (hasSubmittedRef.current) return;
-                        safeSubmit(userLocation.state!);
-                      }}
+                      onClick={() => safeSubmit(userLocation.state!)}
                       className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:border-violet-500 hover:bg-violet-500/10 hover:text-white transition-colors"
                     >
                       {userLocation.state}
