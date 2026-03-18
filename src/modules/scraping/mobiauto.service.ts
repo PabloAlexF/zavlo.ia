@@ -45,7 +45,7 @@ export class MobiautoService {
       this.logger.log(`📤 [MOBIAUTO] URL: ${searchUrl}`);
 
       const response = await fetch(
-        `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}`,
+        `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=90`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -154,8 +154,6 @@ export class MobiautoService {
     const loc = classification?.user_location;
     if (loc?.city && loc?.state) {
       parts.push(`${this.normalizeForUrl(loc.city)}-${loc.state.toLowerCase()}`);
-    } else if (loc?.city) {
-      parts.push(this.normalizeForUrl(loc.city));
     } else {
       parts.push('brasil');
     }

@@ -525,7 +525,7 @@ export class SearchService {
               try {
                 const results = await this.withTimeout(
                   this.webmotorsService.search(normalizedQuery, resultLimit, classification),
-                  10000,
+                  90000,
                   'Webmotors'
                 );
                 
@@ -564,7 +564,7 @@ export class SearchService {
               try {
                 const results = await this.withTimeout(
                   this.mobiautoService.search(normalizedQuery, resultLimit, classification),
-                  10000,
+                  90000,
                   'Mobiauto'
                 );
                 
