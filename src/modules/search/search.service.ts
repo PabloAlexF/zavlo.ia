@@ -5,8 +5,8 @@ import { Product } from '../products/interfaces/product.interface';
 import { GoogleShoppingService } from '../scraping/google-shopping.service';
 import { GoogleLensService } from '../scraping/google-lens.service';
 import { OlxService } from '../scraping/olx.service';
-import { MobiautoService } from '../scraping/mobiauto.service';
 import { WebmotorsService } from '../scraping/webmotors.service';
+import { MercadoLivreService } from '../scraping/mercadolivre.service';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { ClassificationService } from '../classification/classification.service';
@@ -34,8 +34,8 @@ export class SearchService {
     private googleShoppingService: GoogleShoppingService,
     private googleLensService: GoogleLensService,
     private olxService: OlxService,
-    private mobiautoService: MobiautoService,
     private webmotorsService: WebmotorsService,
+    private mercadoLivreService: MercadoLivreService,
     private usersService: UsersService,
     private analyticsService: AnalyticsService,
     private classificationService: ClassificationService,
@@ -456,7 +456,7 @@ export class SearchService {
     const category = classification?.category;
     const scrapers = (classification?.scrapers as { name: string; score: number }[] | undefined)
       ?.map(s => s.name)
-      ?? (category === 'car' || category === 'motorcycle' ? ['webmotors', 'mobiauto'] : ['google_shopping']);
+      ?? (category === 'car' || category === 'motorcycle' ? ['webmotors', 'mercadolivre'] : ['google_shopping', 'mercadolivre']);
     const resultLimit = 20;
     let searchedNationally = false;
     // Normalizar cidade: decodificar URL encoding e capitalizar
@@ -588,40 +588,31 @@ export class SearchService {
         }
       }
 
-      if (scrapers.includes('mobiauto')) {
-        // 🚀 Verificar circuit breaker
-        if (!this.isScraperAvailable('mobiauto')) {
-          this.logger.warn(`[MOBIAUTO] Pulado - circuit breaker ativo`);
+      if (scrapers.includes('mercadolivre')) {
+        if (!this.isScraperAvailable('mercadolivre')) {
+          this.logger.warn(`[MERCADOLIVRE] Pulado - circuit breaker ativo`);
         } else {
-          this.logger.log(`[MOBIAUTO] Buscando ${resultLimit} veículos...`);
-          
-          // 🚀 Usar limiter de concorrência
+          this.logger.log(`[MERCADOLIVRE] Buscando ${resultLimit} produtos...`);
           scrapingPromises.push(
             this.scraperLimit(() => (async () => {
-              // ✅ Verificar cache primeiro
-              const cached = await this.getCachedScraperResult('mobiauto', `${normalizedQuery}:${resultLimit}`);
+              const cached = await this.getCachedScraperResult('mercadolivre', `${normalizedQuery}:${resultLimit}`);
               if (cached) {
-                this.resetScraperFailures('mobiauto');
-                return { source: 'mobiauto', results: cached, cached: true };
+                this.resetScraperFailures('mercadolivre');
+                return { source: 'mercadolivre', results: cached, cached: true };
               }
-              
-              // Executar scraper
               try {
-                const { results, searchedNationally: sn } = await this.withTimeout(
-                  this.mobiautoService.search(normalizedQuery, resultLimit, classification),
-                  90000,
-                  'Mobiauto'
+                const { results } = await this.withTimeout(
+                  this.mercadoLivreService.search(normalizedQuery, resultLimit),
+                  60000,
+                  'MercadoLivre'
                 );
-                if (sn) searchedNationally = true;
-                
-                // ✅ Salvar no cache
-                await this.setCachedScraperResult('mobiauto', `${normalizedQuery}:${resultLimit}`, results);
-                this.resetScraperFailures('mobiauto');
-                return { source: 'mobiauto', results, cached: false };
+                await this.setCachedScraperResult('mercadolivre', `${normalizedQuery}:${resultLimit}`, results);
+                this.resetScraperFailures('mercadolivre');
+                return { source: 'mercadolivre', results, cached: false };
               } catch (error) {
-                this.logger.warn(`[MOBIAUTO] Erro: ${error.message}`);
-                this.recordScraperFailure('mobiauto');
-                return { source: 'mobiauto', results: [], cached: false };
+                this.logger.warn(`[MERCADOLIVRE] Erro: ${error.message}`);
+                this.recordScraperFailure('mercadolivre');
+                return { source: 'mercadolivre', results: [], cached: false };
               }
             })())
           );
@@ -1306,7 +1297,7 @@ export class SearchService {
       'google_shopping': 1.0,
       'olx': 0.8,
       'webmotors': 0.9,
-      'mobiauto': 0.85,
+      'mercadolivre': 0.85,
     };
     
     return scores[source || ''] || 0.5;

@@ -23,7 +23,7 @@ export interface Product {
   createdAt?: Date;
   updatedAt?: Date;
   scrapedAt?: Date;
-  // Campos de veículo (Webmotors / Mobiauto)
+  // Campos de veículo (Webmotors)
   make?: string;
   model?: string;
   version?: string;
@@ -37,6 +37,16 @@ export interface Product {
   fipePrice?: number;
   dealer?: string;
   dealerLocation?: string;
+  // Campos de marketplace (MercadoLivre / Google Shopping)
+  originalPrice?: number;
+  percentOff?: string;
+  reviews?: number;
+  shipping?: string;
+  installments?: string;
+  isInternational?: boolean;
+  shippedFrom?: string;
+  highlight?: string;
+  sku?: string;
 }
 
 export interface ProductFilter {
