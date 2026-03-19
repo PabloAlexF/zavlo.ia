@@ -30,8 +30,8 @@ const INTENT_PATTERNS = {
   // Comandos específicos (alta prioridade)
   help: { pattern: /\b(ajuda|help|socorro|como usar|como funciona|tutorial|comandos)\b/i, weight: 1.0 },
   credits_question: { pattern: /\b(meus? créditos?|saldo|quanto tenho|creditos|quantos creditos)\b/i, weight: 1.0 },
-  plans_question: { pattern: /\b(planos?|assinaturas?|preços?|valores?|quanto custa|pacotes?)\b/i, weight: 1.0 },
-  platform_question: { pattern: /\b(o que é|quem é|sobre|zavlo|plataforma|site|app)\b/i, weight: 1.0 },
+  plans_question: { pattern: /\b(planos?|assinaturas?|quanto custa o plano|pacotes? de creditos?|assinar)\b/i, weight: 1.0 },
+  platform_question: { pattern: /\b(zavlo|plataforma)\b|^(o que (e|é)|quem (e|é)|sobre)\s+(voc[eê]s?|o\s+zavlo|a\s+zavlo|o\s+site|o\s+app)/i, weight: 1.0 },
   
   // Apresentação
   introduction: { pattern: /\b(meu nome é|me chamo|sou o|sou a|pode me chamar de|eu sou)\b/i, weight: 1.0 },
@@ -48,8 +48,8 @@ const INTENT_PATTERNS = {
   
   // Conversação
   greeting: { pattern: /^(oi|ola|olá|bom dia|boa tarde|boa noite|hey|hello|opa|e ai|eai)\b/i, weight: 0.7 },
-  casual_talk: { pattern: /\b(tudo bem|como vai|beleza|tranquilo|legal|show|massa|top)\b/i, weight: 0.6 },
-  despedida: { pattern: /\b(tchau|adeus|até logo|até mais|falou|flw|bye|até)\b/i, weight: 0.8 },
+  casual_talk: { pattern: /\b(tudo bem|como vai|beleza|tranquilo)\b/i, weight: 0.6 },
+  despedida: { pattern: /^(tchau|adeus|até logo|até mais|falou|flw|bye|xau)\b/i, weight: 0.8 },
   
   // Pergunta (baixa prioridade, muito genérica)
   question: { pattern: /^(como|quando|onde|por que|porque|qual|quanto)\b|\?$/i, weight: 0.5 }
@@ -78,10 +78,14 @@ const PRODUCT_REGEX = PRODUCT_KEYWORDS.map(
   k => new RegExp(`\\b${k}\\b`, 'i')
 );
 
-// Patterns de preço melhorados - ✅ Suporta 2k500, 2,5k, 3.5k
+// Patterns de preço — prefixo OU sufixo obrigatório para evitar capturar anos/modelos
 const PRICE_PATTERNS = [
-  // Formatos: 1.200, 1200, 1,200, 1k, 1.5k, 2k500, 2,5k
-  /(ate|até|menos de|max|maximo|máximo)?\s*r?\$?\s*(\d+(?:[.,]\d+)?)(k|mil)?/i,
+  // Com prefixo explícito: "até 1200", "R$ 500", "menos de 800"
+  /(ate|até|menos de|abaixo de|max|maximo|máximo)\s*r?\$?\s*(\d+(?:[.,]\d+)?)(k|mil)?/i,
+  // Com R$ explícito: "R$1200", "r$ 500"
+  /r\$\s*(\d+(?:[.,]\d+)?)(k|mil)?/i,
+  // Com sufixo k/mil obrigatório: "2k", "50mil", "1.5k"
+  /(\d+(?:[.,]\d+)?)(k|mil)\b/i,
 ];
 
 // ✅ Tokenização (abre portas para melhorias futuras)
@@ -162,15 +166,6 @@ export function detectUserIntent(query: string): UserIntent {
     scores.push({ type: 'buy', score: 0.8, entities });
   }
   
-  // ✅ Entity bonus: aumenta score baseado em entidades detectadas
-  for (const score of scores) {
-    let bonus = 0;
-    if (score.entities?.product && score.entities?.price) bonus += 0.1;
-    if (score.entities?.location) bonus += 0.05;
-    if (score.entities?.userName) bonus += 0.05;
-    score.score += bonus;
-  }
-  
   // Se tem produto, aumenta score de buy/search
   if (entities?.product) {
     const buyScore = scores.find(s => s.type === 'buy');
@@ -180,10 +175,21 @@ export function detectUserIntent(query: string): UserIntent {
       scores.push({ type: 'search', score: 0.7, entities });
     }
   }
+
+  // ✅ Entity bonus: aplicado DEPOIS de todos os scores serem adicionados
+  for (const score of scores) {
+    let bonus = 0;
+    if (score.entities?.product && score.entities?.price) bonus += 0.1;
+    if (score.entities?.location) bonus += 0.05;
+    if (score.entities?.userName) bonus += 0.05;
+    score.score += bonus;
+  }
   
-  // Se é palavra única sem produto, pode ser nome
+  // Se é palavra única sem produto E tem padrão explícito de apresentação, pode ser nome
+  // Não inferir introduction por palavra única — muito propenso a falso positivo com produtos
   const words = normalized.split(/\s+/);
-  if (words.length === 1 && words[0].length >= 3 && words[0].length <= 20 && !hasProductKeywords(normalized) && !/^\d+$/.test(words[0])) {
+  const hasExplicitIntroduction = /\b(meu nome|me chamo|sou o|sou a|pode me chamar|eu sou)\b/i.test(normalized);
+  if (words.length === 1 && words[0].length >= 3 && words[0].length <= 20 && !hasProductKeywords(normalized) && !/^\d+$/.test(words[0]) && hasExplicitIntroduction) {
     scores.push({
       type: 'introduction',
       score: 0.75,
@@ -316,27 +322,23 @@ function extractPrice(query: string): number | undefined {
     if (price > 0) return Math.round(price);
   }
   
-  // Padrão normal
+  // Padrões com prefixo/sufixo obrigatório
   for (const pattern of PRICE_PATTERNS) {
     const match = query.match(pattern);
-    
-    if (match) {
-      const numberPart = match[2]; // Ex: "2.5", "2,5", "2000"
-      const multiplier = match[3]; // "k" ou "mil"
-      
-      // Normaliza separadores: 2,5 → 2.5
-      const normalized = numberPart.replace(',', '.');
-      let price = parseFloat(normalized);
-      
-      // Converte 'k' ou 'mil' para milhares
-      if (multiplier && (multiplier.toLowerCase() === 'k' || multiplier.toLowerCase() === 'mil')) {
-        price *= 1000;
-      }
-      
-      if (price > 0) {
-        return Math.round(price);
-      }
-    }
+    if (!match) continue;
+
+    // Detecta qual grupo contém o número (varia por pattern)
+    // Pattern 0: grupos (prefixo, numero, sufixo)
+    // Pattern 1: grupos (numero, sufixo) — R$
+    // Pattern 2: grupos (numero, sufixo) — k/mil
+    const numberPart = match[2] ?? match[1];
+    const multiplier = match[3] ?? match[2];
+    if (!numberPart) continue;
+
+    const normalized = numberPart.replace(',', '.');
+    let price = parseFloat(normalized);
+    if (multiplier && /^(k|mil)$/i.test(multiplier)) price *= 1000;
+    if (price > 0) return Math.round(price);
   }
   return undefined;
 }

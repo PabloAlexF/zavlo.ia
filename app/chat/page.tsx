@@ -86,12 +86,16 @@ export default function ChatPage() {
     missingFields: string[];
     answers: Record<string, string>;
     step: 'idle' | 'asking' | 'searching';
+    expansionSources: string[];
+    primarySource: string;
   }>({
     query: '',
     classification: null,
     missingFields: [],
     answers: {},
     step: 'idle',
+    expansionSources: [],
+    primarySource: '',
   });
 
   // Derivados do searchSession (sem estado extra)
@@ -505,25 +509,57 @@ export default function ChatPage() {
   // Helper para delay visual controlado
   const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
+  const handleExpandSearch = async (source: string) => {
+    const { query, classification } = searchSession;
+    const sourceLabel: Record<string, string> = {
+      olx: 'OLX',
+      webmotors: 'Webmotors',
+      google_shopping: 'Google Shopping',
+      mercadolivre: 'Mercado Livre',
+    };
+    addMessage('ai', `🔍 Buscando também no **${sourceLabel[source] || source}**... isso irá custar **1 crédito**.`);
+    const enrichedClassification = {
+      ...classification,
+      scrapers: [{ name: source, score: 1.0 }],
+    };
+    await executeTextSearch(query, 'RELEVANCE', enrichedClassification);
+  };
+
   const handleHybridAnswer = async (answer: string) => {
     const { missingFields, query, answers, classification } = searchSession;
     const currentField = missingFields[0];
-    const updatedAnswers = { ...answers, [currentField]: answer };
+    
+    // Normalizar respostas especiais
+    const normalizedAnswer = (() => {
+      if (currentField === 'condition' && answer === 'ambos') return '';
+      if (currentField === 'year' && answer === 'qualquer ano') return '';
+      if (currentField === 'location' && answer === 'todo o brasil') return '';
+      return answer;
+    })();
+    
+    const updatedAnswers = { ...answers, [currentField]: normalizedAnswer };
     const remainingFields = missingFields.slice(1);
 
     // Enriquecer query textual para exibição
     let displayAnswer = answer;
-    try {
-      const parsed = JSON.parse(answer);
-      if (parsed?.value) {
-        const { min, max } = parsed.value;
-        if (min && max) displayAnswer = `entre ${min/1000}mil e ${max/1000}mil`;
-        else if (max)   displayAnswer = `até ${max/1000}mil`;
-        else if (min)   displayAnswer = `acima de ${min/1000}mil`;
-      }
-    } catch {}
+    if (!normalizedAnswer) {
+      // Resposta de skip — não enriquecer a query
+      displayAnswer = '';
+    } else {
+      try {
+        const parsed = JSON.parse(answer);
+        if (parsed?.value) {
+          const { min, max } = parsed.value;
+          if (min && max) displayAnswer = `entre ${min/1000}mil e ${max/1000}mil`;
+          else if (max)   displayAnswer = `até ${max/1000}mil`;
+          else if (min)   displayAnswer = `acima de ${min/1000}mil`;
+        }
+      } catch {}
+    }
 
-    const enrichedQuery = currentField === 'location'
+    const enrichedQuery = !displayAnswer
+      ? query
+      : currentField === 'location'
       ? `${query} em ${displayAnswer}`
       : `${query} ${displayAnswer}`;
 
@@ -641,6 +677,49 @@ export default function ChatPage() {
     }
 
     await delay(300);
+
+    // ✅ Bug Medium #1: verificar expansionSources ANTES do detectIntent
+    // Evita que "OLX", "Mercado Livre" etc. caiam no fallback classifyQuery e consumam crédito
+    if (searchSession.expansionSources.length > 0) {
+      const lower = currentInput.toLowerCase().trim();
+      const sourceLabel: Record<string, string> = {
+        olx: 'OLX',
+        webmotors: 'Webmotors',
+        google_shopping: 'Google Shopping',
+        mercadolivre: 'Mercado Livre',
+      };
+      const sourceMap: Record<string, string> = {
+        'olx': 'olx', 'webmotors': 'webmotors',
+        'google shopping': 'google_shopping', 'google': 'google_shopping',
+        'mercado livre': 'mercadolivre', 'mercadolivre': 'mercadolivre',
+      };
+      const matchedSource = Object.entries(sourceMap).find(([k]) => lower.includes(k))?.[1];
+      if (matchedSource && searchSession.expansionSources.includes(matchedSource)) {
+        setSearchSession(s => ({ ...s, expansionSources: s.expansionSources.filter(x => x !== matchedSource) }));
+        addMessage('ai', `🔍 Buscando no **${sourceLabel[matchedSource]}**... isso irá custar **1 crédito**.`);
+        await handleExpandSearch(matchedSource);
+        return;
+      }
+      const notSatisfied = ['não', 'nao', 'no', 'n', 'nope', 'negativo', 'nada', 'ruim', 'péssimo', 'pessimo', 'insatisfeito'].some(w => lower.includes(w));
+      if (notSatisfied) {
+        const availableLabels = searchSession.expansionSources.map(s => sourceLabel[s] || s);
+        addMessage('ai',
+          `Entendido! Posso buscar em outras plataformas para você:\n\n` +
+          availableLabels.map(l => `• **${l}**`).join('\n') +
+          `\n\n⚠️ Cada plataforma custa **1 crédito**. Qual você quer?`
+        );
+        setLoading(false);
+        return;
+      }
+      const satisfied = ['sim', 'yes', 's', 'ok', 'obrigado', 'obrigada', 'valeu', 'perfeito', 'satisfeito', 'satisfeita', 'encerrar'].some(w => lower.includes(w));
+      if (satisfied) {
+        setSearchSession(s => ({ ...s, expansionSources: [] }));
+        addMessage('ai', 'Que ótimo! Se precisar de mais buscas, é só digitar. 😊');
+        setLoading(false);
+        return;
+      }
+    }
+
     const intent = detectIntent(currentInput);
 
       // Handle special commands
@@ -657,8 +736,38 @@ export default function ChatPage() {
         return;
       }
 
+      if (intent.type === 'despedida') {
+        addMessage('ai', 'Até logo! 👋 Volte sempre que precisar encontrar o melhor preço. 😊');
+        setLoading(false);
+        return;
+      }
+
+      if (intent.type === 'casual_talk') {
+        addMessage('ai', 'Tudo bem por aqui! 😄 Me diga o produto que você está procurando e eu encontro os melhores preços!');
+        setLoading(false);
+        return;
+      }
+
+      if (intent.type === 'sell') {
+        addMessage('ai', '🏪 Para anunciar um produto, acesse a seção **Vender** no menu!\n\nSe quiser **buscar** algo para comprar, é só digitar o nome do produto. 😊');
+        setLoading(false);
+        return;
+      }
+
+      if (intent.type === 'negotiation') {
+        addMessage('ai', '💬 Para negociar preços, entre em contato diretamente com o vendedor pelo anúncio!\n\nQuer que eu busque mais opções com preço menor?');
+        setLoading(false);
+        return;
+      }
+
+      if (intent.type === 'platform_question') {
+        addMessage('ai', '🤖 Sou a **Zavlo**, sua assistente de compras inteligente!\n\nBusco os melhores preços em múltiplos marketplaces (Google Shopping, Mercado Livre, OLX, Webmotors) de uma só vez.\n\nDigite o produto que procura! 🔍');
+        setLoading(false);
+        return;
+      }
+
       if (intent.type === 'help') {
-        addMessage('ai', '❓ Como usar:\n\n1️⃣ Digite o produto\n2️⃣ Responda perguntas (se houver)\n3️⃣ Veja os resultados!');
+        addMessage('ai', '❓ Como usar:\n\n1️⃣ Digite o produto\n2️⃣ Responda perguntas (se houver)\n3️⃣ Veja os resultados!\n\n💡 Exemplos:\n• "iPhone 15 Pro"\n• "Honda Civic 2020 usado"\n• "Notebook Dell gamer"');
         setLoading(false);
         return;
       }
@@ -676,8 +785,16 @@ export default function ChatPage() {
       }
 
       if (intent.type !== 'search' && intent.type !== 'buy') {
-        addMessage('ai', '🤔 Não entendi... Digite um produto para buscar!');
-        setLoading(false);
+        // ✅ Bug Medium #2: validar query antes de chamar API (evita chamadas desnecessárias)
+        const trimmed = currentInput.trim();
+        const STOPWORDS = new Set(['a', 'o', 'e', 'de', 'da', 'do', 'em', 'um', 'uma', 'para', 'com', 'por']);
+        const meaningfulTokens = trimmed.toLowerCase().split(/\s+/).filter(t => t.length >= 3 && !STOPWORDS.has(t));
+        if (trimmed.length < 3 || meaningfulTokens.length === 0) {
+          addMessage('ai', '🤔 Não entendi. Digite o nome do produto que você procura!');
+          setLoading(false);
+          return;
+        }
+        await classifyQuery(currentInput);
         return;
       }
 
@@ -757,10 +874,15 @@ export default function ChatPage() {
           return;
         }
         
-        // Check if it's a greeting
+        // Check if it's a greeting or farewell
         if (data.classification?.is_greeting) {
           setLoading(false);
-          addMessage('ai', 'Olá! 👋 Que produto você está procurando?');
+          const lower = query.toLowerCase();
+          const isFarewell = ['tchau', 'adeus', 'ate logo', 'falou', 'flw', 'bye', 'obrigado', 'obrigada', 'valeu'].some(w => lower.includes(w));
+          addMessage('ai', isFarewell
+            ? 'Até logo! 👋 Volte sempre que precisar encontrar o melhor preço. 😊'
+            : 'Olá! 👋 Que produto você está procurando?'
+          );
           return;
         }
         
@@ -770,8 +892,9 @@ export default function ChatPage() {
         
         console.log('[CLASSIFY] Categoria:', category, 'Confiança:', confidence);
         
-        // Se confiança muito baixa, não é um produto válido
-        if (confidence < 0.3) {
+        // ✅ Bug Medium #3: só bloquear se for 'general' com confiança muito baixa
+        // Categorias específicas com qualquer confiança devem prosseguir normalmente
+        if (category === 'general' && confidence < 0.4) {
           setLoading(false);
           addMessage('ai', '🤔 Não consegui identificar um produto específico.\n\n💡 Tente ser mais específico:\n• "iPhone 15 Pro"\n• "Honda Civic 2020"\n• "Notebook Dell"');
           return;
@@ -979,6 +1102,28 @@ export default function ChatPage() {
           };
           setMessages(prev => [...prev, productsMessage]);
           contextManager.update({ lastResults: products, lastProduct: query });
+
+          // Perguntar se os resultados satisfizeram
+          if (data.canExpandSearch && data.expansionSources?.length > 0) {
+            const sourceLabel: Record<string, string> = {
+              olx: 'OLX',
+              webmotors: 'Webmotors',
+              google_shopping: 'Google Shopping',
+              mercadolivre: 'Mercado Livre',
+            };
+            const primaryLabel = sourceLabel[data.primarySource] || data.primarySource || 'Mercado Livre';
+            setSearchSession(s => ({
+              ...s,
+              expansionSources: data.expansionSources,
+              primarySource: data.primarySource || '',
+              step: 'idle',
+            }));
+            addMessage('ai',
+              `🔍 Encontrei **${products.length} resultados** no **${primaryLabel}**!\n\n` +
+              `Esses resultados te satisfizeram? Se quiser, posso buscar também em outras plataformas. é só me dizer! 😊`
+            );
+          }
+
           setLoading(false);
       } else {
         const errorText = await response.text();
@@ -1045,6 +1190,7 @@ export default function ChatPage() {
               setInput(text);
               inputRef.current?.focus();
             }}
+            onImageSearchClick={() => fileInputRef.current?.click()}
             showMoreSuggestions={false}
             onToggleMore={() => {}}
             isIntroduction={false}
