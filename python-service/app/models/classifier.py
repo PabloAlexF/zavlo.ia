@@ -713,7 +713,7 @@ class ProductClassifier:
         normalized_scores = {k: v / total_score for k, v in scores.items()} if total_score > 0 else scores
 
         # Scrapers com score de prioridade
-        scraper_base_scores = {'olx': 0.7, 'webmotors': 0.8, 'mobiauto': 0.8, 'google_shopping': 0.6}
+        scraper_base_scores = {'olx': 0.7, 'webmotors': 0.8, 'mercadolivre': 0.85, 'google_shopping': 0.6}
         if condition == 'used':
             scraper_base_scores['olx'] = 0.95
         scrapers = self.categories[best_category]["scrapers"].copy()
