@@ -438,8 +438,7 @@ export default function Home() {
                 { name: 'Enjoei' },
                 { name: 'Kabum' },
                 { name: 'Webmotors' },
-                { name: 'iCarros' },
-                { name: 'Mobiauto' },
+                { name: 'Mercado Livre' },
               ].map((m) => (
                 <motion.span
                   key={m.name}

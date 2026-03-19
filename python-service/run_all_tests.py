@@ -103,11 +103,11 @@ def test_car_classification(runner: TestRunner):
     print("-" * 80)
     
     test_cases = [
-        ("Fiat Uno 2020", "car", ["webmotors", "mobiauto"]),
-        ("Toyota Corolla usado", "car", ["webmotors", "mobiauto"]),
-        ("Chevrolet Onix seminovo", "car", ["webmotors", "mobiauto"]),
-        ("Honda Civic 2023 novo", "car", ["webmotors", "mobiauto"]),
-        ("Volkswagen Gol", "car", ["webmotors", "mobiauto"]),
+        ("Fiat Uno 2020", "car", ["webmotors", "mercadolivre"]),
+        ("Toyota Corolla usado", "car", ["webmotors", "mercadolivre"]),
+        ("Chevrolet Onix seminovo", "car", ["webmotors", "mercadolivre"]),
+        ("Honda Civic 2023 novo", "car", ["webmotors", "mercadolivre"]),
+        ("Volkswagen Gol", "car", ["webmotors", "mercadolivre"]),
     ]
     
     for query, expected_category, expected_scrapers in test_cases:
@@ -135,9 +135,9 @@ def test_motorcycle_classification(runner: TestRunner):
     print("-" * 80)
     
     test_cases = [
-        ("Honda CG 160", "motorcycle", ["webmotors", "mobiauto"]),
-        ("Yamaha Fazer 250 usada", "motorcycle", ["webmotors", "mobiauto"]),
-        ("Suzuki GSX-R", "motorcycle", ["webmotors", "mobiauto"]),
+        ("Honda CG 160", "motorcycle", ["webmotors", "mercadolivre"]),
+        ("Yamaha Fazer 250 usada", "motorcycle", ["webmotors", "mercadolivre"]),
+        ("Suzuki GSX-R", "motorcycle", ["webmotors", "mercadolivre"]),
     ]
     
     for query, expected_category, expected_scrapers in test_cases:

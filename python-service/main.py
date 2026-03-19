@@ -61,7 +61,7 @@ async def health_check():
     return {
         "status": "healthy",
         "classifier": "ready",
-        "scrapers": ["google_shopping", "webmotors", "olx", "mobiauto"]
+        "scrapers": ["google_shopping", "webmotors", "olx", "mercadolivre"]
     }
 
 @app.post("/api/classify")
