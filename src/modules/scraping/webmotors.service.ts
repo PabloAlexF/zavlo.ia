@@ -65,7 +65,7 @@ export class WebmotorsService {
         version: item.version,
         year: item.fabrication_year || item.year,
         modelYear: item.model_year,
-        km: item.km || item.mileage,
+        km: item.km ?? item.mileage,
         fuelType: item.fuel_type || item.fuel,
         transmission: item.transmission,
         bodyType: item.body_type,
@@ -75,9 +75,9 @@ export class WebmotorsService {
         isArmored: item.is_armored,
         fipePrice: item.fipe_price,
         dealer: item.seller?.name || item.dealer,
-        dealerLocation: item.seller
+        dealerLocation: item.seller?.city
           ? `${item.seller.city}, ${item.seller.state}`
-          : item.location,
+          : (item.location || null),
         dealerCNPJ: item.seller?.cnpj,
         dealerPhones: item.seller?.phones || [],
         optionals: item.optionals || [],
@@ -178,8 +178,8 @@ export class WebmotorsService {
       params.set('marca1',  brand.toUpperCase());
       params.set('modelo1', model.toUpperCase());
       if (c.detected_year) {
-        params.set('anoInicio', String(c.detected_year));
-        params.set('anoFim',    String(c.detected_year));
+        params.set('anoInicio', String(c.detected_year - 1));
+        params.set('anoFim',    String(c.detected_year + 1));
       }
       if (c.price_range?.min_price) params.set('precoMinimo', String(c.price_range.min_price));
       if (c.price_range?.max_price) params.set('precoMaximo', String(c.price_range.max_price));

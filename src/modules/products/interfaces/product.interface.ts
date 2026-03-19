@@ -18,11 +18,25 @@ export interface Product {
     whatsapp?: string;
   };
   condition?: 'new' | 'used';
-  rating?: number; // Rating do produto (0-5)
-  brand?: string; // 🆕 Marca do produto (para deduplicação)
+  rating?: number;
+  brand?: string;
   createdAt: Date;
   updatedAt: Date;
   scrapedAt: Date;
+  // Campos de veículo (Webmotors / Mobiauto)
+  make?: string;
+  model?: string;
+  version?: string;
+  year?: number;
+  modelYear?: number;
+  km?: number;
+  fuelType?: string;
+  transmission?: string;
+  bodyType?: string;
+  color?: string;
+  fipePrice?: number;
+  dealer?: string;
+  dealerLocation?: string;
 }
 
 export interface ProductFilter {
