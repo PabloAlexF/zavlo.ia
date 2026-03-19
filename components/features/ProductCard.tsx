@@ -317,6 +317,16 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
                   {product.color}
                 </span>
               )}
+              {product.bodyType && (
+                <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] sm:text-xs text-gray-300">
+                  {product.bodyType}
+                </span>
+              )}
+              {product.dealerLocation && (
+                <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] sm:text-xs text-gray-400 truncate max-w-full">
+                  📍 {product.dealerLocation}
+                </span>
+              )}
             </div>
           )}
 

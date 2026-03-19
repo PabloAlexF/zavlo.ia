@@ -67,7 +67,7 @@ class ProductClassifier:
             re.compile(r'\bsemi-novo\b'), re.compile(r'\bsemi novo\b'),
             re.compile(r'\bsegunda mao\b'), re.compile(r'\bsegunda-mao\b'), 
             re.compile(r'\b2a mao\b'),
-            re.compile(r'\buso\b'), re.compile(r'\bde uso\b'), 
+            re.compile(r'\buso\b(?!\s+(?:domestico|profissional|pessoal|geral|diario|comum))'), re.compile(r'\bde uso\b'), 
             re.compile(r'\bja usado\b'), re.compile(r'\bjá usado\b')
         ]
         
@@ -84,13 +84,20 @@ class ProductClassifier:
         # Padrão de limite de resultados
         self.limit_pattern_compiled = re.compile(r'(?<!\d)(\d+)(?!\d)\s*(resultados|produtos|itens)')
         
-        # Padrão de ano para veículos
-        self.year_pattern_compiled = re.compile(r'\b(19[89]\d|20[0-2]\d)\b')
+        # Padrão de ano para veículos (cobre 1980-2029 — alinhado com detect_year)
+        self.year_pattern_compiled = re.compile(r'\b(19[8-9]\d|20[0-2]\d)\b')
+        
+        # Padrões de despedida
+        self.farewell_patterns_compiled = [
+            re.compile(r'^(tchau|adeus|ate logo|ate mais|falou|flw|bye|xau)\b'),
+            re.compile(r'\b(obrigado|obrigada|valeu|muito obrigado|muito obrigada)\b'),
+        ]
         
         # Padrões de saudação
         self.greeting_patterns_compiled = [
             re.compile(r'^ola\b'), re.compile(r'^oi\b'), 
             re.compile(r'^hey\b'), re.compile(r'^e ai\b'),
+            re.compile(r'^eai\b'), re.compile(r'^opa\b'),
             re.compile(r'^bom dia\b'), re.compile(r'^boa tarde\b'), 
             re.compile(r'^boa noite\b'),
             re.compile(r'^hello\b'), re.compile(r'^hi\b')
@@ -107,8 +114,8 @@ class ProductClassifier:
             re.compile(r'\bque\b.*\bfazer\b.*\b(buscar|procurar)\b'),
             re.compile(r'\bo que\b.*\bdigitar\b'),
             re.compile(r'\bposso\b.*\bbuscar\b.*\b(por|um)\b'),
-            re.compile(r'\bajuda\b'),
-            re.compile(r'\bhelp\b'),
+            re.compile(r'\bajuda\b(?!\s+(?:para\s+)?(?:encontrar|buscar|achar|comprar|procurar))'),
+            re.compile(r'\bhelp\b(?!\s+(?:me\s+)?(?:find|search|buy|get))'),
             re.compile(r'\bensinar\b'),
             re.compile(r'\bexplicar\b.*\b(como|funciona)\b'),
             re.compile(r'\bnao sei\b.*\b(o que|como)\b'),
@@ -125,7 +132,7 @@ class ProductClassifier:
             re.compile(r'\bcreditos?\b.*\b(tenho|restantes?|sobrando|disponiveis?)\b'),
             re.compile(r'\bmeus?\b.*\bcreditos?\b'),
             re.compile(r'\bsaldo\b.*\b(de\s+)?creditos?\b'),
-            re.compile(r'\bsaldo\b'),  # "qual meu saldo?"
+            re.compile(r'\bsaldo\b.*\b(de\s+)?creditos?\b'),  # exige contexto de créditos
             re.compile(r'\bver\b.*\bcreditos?\b'),
             re.compile(r'\bconsultar\b.*\bcreditos?\b'),
             re.compile(r'\bcreditos?\b.*\b(restam|faltam)\b')
@@ -171,6 +178,10 @@ class ProductClassifier:
         # Remover acentos usando unicodedata (mais robusto)
         query = unicodedata.normalize("NFKD", query)
         query = "".join(c for c in query if not unicodedata.combining(c))
+        
+        # Remover pontuação (mantém espaços e alfanuméricos)
+        query = re.sub(r'[^\w\s]', ' ', query)
+        query = ' '.join(query.split())
         
         # Aplicar sinônimos
         words = query.split()
@@ -330,8 +341,8 @@ class ProductClassifier:
         for word in condition_words:
             normalized = re.sub(rf'\b{word}\b', '', normalized)
         
-        # Remover palavras de localização
-        normalized = re.sub(r'\bem\s+\w+', '', normalized)
+        # Remover expressões de localização (cobre múltiplas palavras: "em sao paulo")
+        normalized = re.sub(r'\bem\s+(?:\w+\s*){1,3}', '', normalized)
         
         # Remover espaços extras
         normalized = ' '.join(normalized.split())
@@ -402,6 +413,13 @@ class ProductClassifier:
             return 20
         
         return None
+    
+    def is_farewell(self, normalized: str) -> bool:
+        """Detecta despedidas e agradecimentos"""
+        for pattern in self.farewell_patterns_compiled:
+            if pattern.search(normalized):
+                return True
+        return False
     
     def is_greeting(self, normalized: str) -> bool:
         """Detecta saudações (usando regex compiladas)"""
@@ -502,6 +520,7 @@ class ProductClassifier:
         # 🆕 DETECTAR PERGUNTAS E SAUDAÇÕES
         is_question = self.is_question_about_usage(normalized)
         is_greeting = self.is_greeting(normalized)
+        is_farewell = self.is_farewell(normalized)
         is_credits_question = self.is_credits_question(normalized)
         is_recharge_question = self.is_recharge_question(normalized)
         is_plans_question = self.is_plans_question(normalized)
@@ -605,8 +624,8 @@ class ProductClassifier:
                 "question_type": "usage"
             }
         
-        if is_greeting:
-            logger.info("Saudação detectada!")
+        if is_greeting or is_farewell:
+            logger.info("Saudação/despedida detectada!")
             return {
                 "category": "general",
                 "confidence": 1.0,
@@ -805,10 +824,12 @@ class ProductClassifier:
             if condition == "unknown" and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'):
                 missing_fields.append("condition")
                 suggested_question = "Você prefere novo ou usado?"
-        else:
+        elif best_category in ('smartphone', 'furniture', 'appliance', 'fashion', 'marketplace_used'):
+            # Categorias onde condição é relevante
             if condition == "unknown" and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'):
                 missing_fields.append("condition")
                 suggested_question = "Você prefere novo ou usado?"
+        # Para 'general': não perguntar condição (produto desconhecido, não faz sentido)
         
         # Incluir localização do usuário no resultado
         user_location = user_context.get('location', {})

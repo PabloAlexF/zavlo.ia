@@ -59,7 +59,8 @@ class ContextManager {
   private readonly CHANGE_PRODUCT_REGEX = /^(agora|mudar para|trocar para)\s+(.+)$/i;
   
   private readonly GENERIC_WORDS = new Set([
-    'celular', 'telefone', 'notebook', 'laptop', 'produto', 'item', 'coisa'
+    'celular', 'telefone', 'notebook', 'laptop', 'produto', 'item', 'coisa',
+    'carro', 'moto', 'veiculo', 'automovel', 'motocicleta', 'smartphone'
   ]);
 
   // ✅ Helper para atualização imutável
@@ -178,8 +179,14 @@ class ContextManager {
     
     if (!possibleProduct) return null;
 
-    if (possibleProduct !== this.context.lastProduct) {
-      // Produto mudou - resetar contexto
+    const lastProduct = this.context.lastProduct;
+    const isRefinement = lastProduct && possibleProduct.startsWith(lastProduct);
+
+    if (!lastProduct || isRefinement) {
+      // Primeiro produto ou refinamento (ex: 'iphone 15' → 'iphone 15 pro') — preserva contexto
+      this.setContext({ lastProduct: possibleProduct });
+    } else if (possibleProduct !== lastProduct) {
+      // Produto realmente diferente — reseta contexto
       this.setContext({
         lastProduct: possibleProduct,
         lastBrand: undefined,
@@ -187,9 +194,6 @@ class ContextManager {
         lastPriceMax: undefined,
         lastLocation: undefined
       });
-    } else if (!this.context.lastProduct) {
-      // Primeiro produto
-      this.setContext({ lastProduct: possibleProduct });
     }
 
     return possibleProduct;

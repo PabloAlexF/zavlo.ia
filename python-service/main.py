@@ -24,13 +24,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
+import os
+
 # CORS (permitir requisições do NestJS)
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Inicializar classificador (carrega config/categories.json)
