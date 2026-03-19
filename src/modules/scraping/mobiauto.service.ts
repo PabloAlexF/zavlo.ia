@@ -57,7 +57,7 @@ export class MobiautoService {
         source: 'Mobiauto',
         url: `https://www.mobiauto.com.br/comprar/${item.id}`,
         sourceUrl: item.from_url || `https://www.mobiauto.com.br/comprar/${item.id}`,
-        condition: item.km === 0 ? 'new' : 'used',
+        condition: item.km === 0 && item.km != null ? 'new' : 'used',
         category: 'vehicle',
         scrapedAt: new Date().toISOString(),
         make: item.trim?.make?.name,
@@ -70,7 +70,7 @@ export class MobiautoService {
         transmission: item.trim?.transmission?.name,
         bodyType: item.trim?.bodystyle?.name,
         color: item.color || item.trim?.color?.name,
-        fipePrice: item.fipe_price || null,
+        fipePrice: item.fipe_price ?? null,
         doors: item.trim?.doors,
         dealer: item.dealer?.name,
         dealerLocation: item.dealer?.location
