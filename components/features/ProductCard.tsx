@@ -1,17 +1,17 @@
 'use client';
 
 import { memo, useState, useCallback } from 'react';
-import Image from 'next/image';
-import { Product } from '@/types';
-import Link from 'next/link';
 import { useUser } from '@/contexts/UserContext';
 import { getUser } from '@/utils/auth';
 import { toast } from 'sonner';
-import { Heart, ExternalLink, Star, Package, CheckCircle } from 'lucide-react';
+import { Heart, ExternalLink, Star, Package, CheckCircle, Gauge, Fuel, Settings2, Palette } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
 }
+
+const IS_VEHICLE_SOURCE = (source: string) =>
+  source === 'Webmotors' || source === 'Mobiauto';
 
 // Mapeamento de nomes amigáveis dos marketplaces
 function getSourceName(source: string): string {
@@ -35,6 +35,8 @@ function getSourceColor(source: string): string {
     'enjoei.com.br': 'from-pink-500 to-rose-500',
     'mercadolivre.com.br': 'from-yellow-400 to-yellow-500',
     'magazineluiza.com.br': 'from-blue-400 to-blue-500',
+    'Webmotors': 'from-red-500 to-red-600',
+    'Mobiauto': 'from-blue-500 to-blue-600',
   };
   return colorMap[source] || 'from-blue-500 to-purple-500';
 }
@@ -54,6 +56,8 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
   const images = product.images || [];
   const hasImage = images.length > 0;
   const hasMultipleImages = images.length > 1;
+  const isVehicle = IS_VEHICLE_SOURCE(product.source);
+
   // Normalizar location com fallback seguro
   const location = typeof product.location === 'string' 
     ? product.location 
@@ -229,7 +233,7 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
             {product.title}
           </h3>
           
-          {/* Preço */}
+          {/* Preço + FIPE */}
           <div className="space-y-0.5 sm:space-y-1">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
@@ -241,6 +245,15 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
                 </span>
               )}
             </div>
+            {isVehicle && product.fipePrice && product.fipePrice > 0 && (
+              <p className="text-[10px] sm:text-xs text-gray-400">
+                FIPE: R$ {product.fipePrice.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {product.price > product.fipePrice
+                  ? <span className="text-red-400 ml-1">(+{Math.round((product.price / product.fipePrice - 1) * 100)}% acima)</span>
+                  : <span className="text-green-400 ml-1">({Math.round((1 - product.price / product.fipePrice) * 100)}% abaixo)</span>
+                }
+              </p>
+            )}
             {product.originalPrice && product.originalPrice > product.price && (
               <p className="text-[10px] sm:text-xs text-gray-500 line-through">
                 De: R$ {product.originalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -266,6 +279,43 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
             </span>
           </div>
           
+          {/* Badges veículo: ano, km, câmbio, combustível, cor */}
+          {isVehicle && (
+            <div className="flex flex-wrap gap-1 sm:gap-1.5">
+              {(product.year || product.modelYear) && (
+                <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] sm:text-xs text-gray-300">
+                  {product.year && product.modelYear && product.year !== product.modelYear
+                    ? `${product.year}/${product.modelYear}`
+                    : product.year || product.modelYear}
+                </span>
+              )}
+              {product.km != null && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] sm:text-xs text-gray-300">
+                  <Gauge className="w-2.5 h-2.5" />
+                  {product.km.toLocaleString('pt-BR')} km
+                </span>
+              )}
+              {product.transmission && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] sm:text-xs text-gray-300">
+                  <Settings2 className="w-2.5 h-2.5" />
+                  {product.transmission}
+                </span>
+              )}
+              {product.fuelType && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] sm:text-xs text-gray-300">
+                  <Fuel className="w-2.5 h-2.5" />
+                  {product.fuelType}
+                </span>
+              )}
+              {product.color && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] sm:text-xs text-gray-300">
+                  <Palette className="w-2.5 h-2.5" />
+                  {product.color}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Badges: Condição */}
           {product.condition && (
             <div className="flex flex-wrap gap-1 sm:gap-1.5">
