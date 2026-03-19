@@ -168,14 +168,14 @@ export const CREDIT_USAGE = {
 };
 export const MARKETPLACES_BY_PLAN = {
     [PlanType.FREE]: ['olx', 'mercadolivre', 'enjoei'],
-    [PlanType.BASIC]: ['olx', 'mercadolivre', 'enjoei', 'webmotors', 'icarros', 'mobiauto'],
+    [PlanType.BASIC]: ['olx', 'mercadolivre', 'enjoei', 'webmotors', 'icarros', ''],
     [PlanType.PRO]: [
         'olx',
         'mercadolivre',
         'enjoei',
         'webmotors',
         'icarros',
-        'mobiauto',
+        '',
         'amazon',
         'kabum',
         'shopee',
@@ -186,7 +186,7 @@ export const MARKETPLACES_BY_PLAN = {
         'enjoei',
         'webmotors',
         'icarros',
-        'mobiauto',
+        '',
         'amazon',
         'kabum',
         'shopee',

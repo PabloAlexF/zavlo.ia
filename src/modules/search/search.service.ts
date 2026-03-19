@@ -646,7 +646,7 @@ export class SearchService {
       
       // Ordenar produtos consolidados se necessário
       // Google Shopping e OLX já retornam ordenados
-      // Webmotors e Mobiauto precisam ser ordenados localmente
+      // Webmotors e MercadoLivre precisam ser ordenados localmente
       if (sortBy !== 'RELEVANCE' && sortBy !== 'BEST_MATCH') {
         this.logger.log(`🔄 [SORT] Ordenando ${products.length} produtos por ${sortBy}`);
         products = this.sortProducts(products, sortBy);
