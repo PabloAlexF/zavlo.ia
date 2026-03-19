@@ -17,53 +17,15 @@ export class PaymentsService {
     this.logger.debug('Access token present:', !!this.accessToken);
   }
 
-  async debugInfo() {
-    const hasToken = !!this.accessToken;
-    const tokenValue = this.accessToken || 'NO_TOKEN_SET';
-    
-    return {
-      hasAccessToken: hasToken,
-      tokenStart: hasToken ? tokenValue.substring(0, 20) + '...' : 'NO_TOKEN',
-      envCheck: !!this.configService.get('MERCADOPAGO_ACCESS_TOKEN'),
-      nodeEnv: this.configService.get('NODE_ENV'),
-      port: this.configService.get('PORT'),
-      mercadopagoConfigured: hasToken && tokenValue.length > 10,
+  private resolveCreditsForPlan(plan: string, amount: number): { credits: number; billingCycle: 'monthly' | 'yearly' } {
+    const billingCycle = amount >= 200 ? 'yearly' : 'monthly';
+    const map: Record<string, { monthly: number; yearly: number }> = {
+      basic:    { monthly: 15,  yearly: 180  },
+      pro:      { monthly: 48,  yearly: 576  },
+      business: { monthly: 200, yearly: 2400 },
     };
-  }
-
-  async testConnection() {
-    try {
-      this.logger.log('Testing Mercado Pago connection...');
-      
-      if (!this.accessToken) {
-        return { 
-          error: 'MERCADOPAGO_ACCESS_TOKEN not configured',
-          solution: 'Add MERCADOPAGO_ACCESS_TOKEN to your .env file',
-          hint: 'Get your token from https://www.mercadopago.com.br/developers/panel/credentials'
-        };
-      }
-      
-      const response = await axios.get(
-        'https://api.mercadopago.com/v1/payment_methods',
-        {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-        }
-      );
-      
-      return {
-        success: true,
-        message: 'Mercado Pago connection successful',
-        methods: response.data.length,
-      };
-    } catch (error) {
-      this.logger.error('Mercado Pago connection failed:', error.response?.data || error.message);
-      return {
-        error: 'Connection failed',
-        details: error.response?.data || error.message,
-      };
-    }
+    const credits = map[plan]?.[billingCycle] ?? 15;
+    return { credits, billingCycle };
   }
 
   async createCardPayment(data: {
@@ -120,23 +82,11 @@ export class PaymentsService {
       this.logger.log('[CARD] Payment created:', response.data.id);
       this.logger.log('[CARD] Status:', response.data.status);
 
-      // Se aprovado, atualizar usuário imediatamente
       if (response.data.status === 'approved') {
-        const billingCycle = data.amount >= 200 ? 'yearly' : 'monthly';
-        let creditsToAdd = 15;
-        
-        if (data.plan === 'basic') {
-          creditsToAdd = billingCycle === 'yearly' ? 180 : 15;
-        } else if (data.plan === 'pro') {
-          creditsToAdd = billingCycle === 'yearly' ? 576 : 48;
-        } else if (data.plan === 'business') {
-          creditsToAdd = billingCycle === 'yearly' ? 2400 : 200;
-        }
-
-        await this.usersService.addCredits(data.userId, creditsToAdd);
+        const { credits, billingCycle } = this.resolveCreditsForPlan(data.plan, data.amount);
+        await this.usersService.addCredits(data.userId, credits);
         await this.usersService.updatePlan(data.userId, data.plan as any, billingCycle);
-        
-        this.logger.log(`[CARD] ✅ User updated: ${creditsToAdd} credits, plan ${data.plan}`);
+        this.logger.log(`[CARD] ✅ User updated: ${credits} credits, plan ${data.plan}`);
       }
 
       return {
@@ -312,12 +262,6 @@ export class PaymentsService {
         };
       }
       
-      this.logger.log('[PIX] Access token check:', {
-        hasToken: !!this.accessToken,
-        tokenStart: this.accessToken.substring(0, 20),
-        tokenLength: this.accessToken.length,
-      });
-      
       // Generate idempotency key
       const idempotencyKey = `${data.userId}-${data.plan}-${Date.now()}`;
       
@@ -361,17 +305,8 @@ export class PaymentsService {
         notification_url: `${this.configService.get('API_URL') || 'https://zavlo-ia.onrender.com/api/v1'}/payments/webhook`,
       };
       
-      this.logger.log('[PIX] Request payload:', JSON.stringify(payload, null, 2));
-      this.logger.log('[PIX] Payer object:', JSON.stringify(payerData, null, 2));
-      this.logger.log('[PIX] Idempotency-Key:', idempotencyKey);
-      this.logger.log('[PIX] Making request to Mercado Pago...');
-      this.logger.log('[PIX] URL:', 'https://api.mercadopago.com/v1/payments');
-      this.logger.log('[PIX] Headers:', {
-        Authorization: `Bearer ${this.accessToken.substring(0, 20)}...`,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': idempotencyKey,
-      });
-      
+      this.logger.log(`[PIX] Sending payment request, idempotency-key: ${idempotencyKey}`);
+
       const response = await axios.post(
         'https://api.mercadopago.com/v1/payments',
         payload,
@@ -472,35 +407,12 @@ export class PaymentsService {
                 };
               }
               
-              // 1. Determine credits based on plan and cycle
-              let creditsToAdd = 15; // default basic monthly
-              const billingCycle = amount >= 100 ? 'yearly' : 'monthly';
-              
-              if (planName === 'basic') {
-                creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês
-              } else if (planName === 'pro') {
-                creditsToAdd = billingCycle === 'yearly' ? 576 : 48; // 48/mês
-              } else if (planName === 'business') {
-                creditsToAdd = billingCycle === 'yearly' ? 2400 : 200; // 200/mês
-              }
-              
+              const { credits: creditsToAdd, billingCycle } = this.resolveCreditsForPlan(planName, amount);
               await this.usersService.addCredits(userId, creditsToAdd);
-              this.logger.log(`[WEBHOOK] ✅ Added ${creditsToAdd} credits to user ${userId}`);
-              
-              // 2. Update user plan
               await this.usersService.updatePlan(userId, planName as any, billingCycle);
-              this.logger.log(`[WEBHOOK] ✅ Updated user plan to ${planName} (${billingCycle})`);
-              
-              // 3. Email confirmation (TODO: implement email service)
-              this.logger.log(`[WEBHOOK] 📧 Email confirmation would be sent here`);
-              
-              return { 
-                received: true, 
-                processed: true,
-                userId,
-                credits: creditsToAdd,
-                plan: planName
-              };
+              this.logger.log(`[WEBHOOK] ✅ user=${userId} plan=${planName} credits=${creditsToAdd}`);
+
+              return { received: true, processed: true, userId, credits: creditsToAdd, plan: planName };
             } else {
               this.logger.warn('[WEBHOOK] Invalid external_reference format:', externalRef);
             }
@@ -611,8 +523,6 @@ export class PaymentsService {
         };
       }
 
-      this.logger.log('[BOLETO] Request payload:', JSON.stringify(payload, null, 2));
-
       const response = await axios.post(
         'https://api.mercadopago.com/v1/payments',
         payload,
@@ -700,29 +610,11 @@ export class PaymentsService {
           };
         }
         
-        // 1. Determine credits based on plan and cycle
-        let creditsToAdd = 15; // default basic monthly
-        const billingCycle = amount >= 200 ? 'yearly' : 'monthly';
-        
-        if (planName === 'basic') {
-          creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês
-        } else if (planName === 'pro') {
-          creditsToAdd = billingCycle === 'yearly' ? 576 : 48; // 48/mês
-        } else if (planName === 'business') {
-          creditsToAdd = billingCycle === 'yearly' ? 2400 : 200; // 200/mês
-        }
-        
+        const { credits: creditsToAdd, billingCycle } = this.resolveCreditsForPlan(planName, amount);
         await this.usersService.addCredits(userId, creditsToAdd);
-        this.logger.log(`[PIX CONFIRM] ✅ Added ${creditsToAdd} credits to user ${userId}`);
-        
-        // 2. Update user plan
         await this.usersService.updatePlan(userId, planName as any, billingCycle);
-        this.logger.log(`[PIX CONFIRM] ✅ Updated user plan to ${planName} (${billingCycle})`);
-        
-        // 3. Send confirmation email (TODO: implement email service)
-        this.logger.log(`[PIX CONFIRM] 📧 Email confirmation would be sent here`);
-        // await this.emailService.sendPaymentConfirmation(userId, planName, amount);
-        
+        this.logger.log(`[PIX CONFIRM] ✅ user=${userId} plan=${planName} credits=${creditsToAdd}`);
+
         return {
           success: true,
           status: 'approved',

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Param, Get, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Param, Get, Req, ForbiddenException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { PlanExpirationService } from './plan-expiration.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -34,18 +34,26 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @Post(':userId/credits')
   async addCredits(
+    @Req() req: any,
     @Param('userId') userId: string,
     @Body('credits') credits: number,
   ) {
+    if (req.user.userId !== userId && req.user.role !== 'admin') {
+      throw new ForbiddenException('Acesso negado');
+    }
     return this.usersService.addCredits(userId, credits);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':userId/credits/set')
   async setCredits(
+    @Req() req: any,
     @Param('userId') userId: string,
     @Body('credits') credits: number,
   ) {
+    if (req.user.userId !== userId && req.user.role !== 'admin') {
+      throw new ForbiddenException('Acesso negado');
+    }
     return this.usersService.setCredits(userId, credits);
   }
 

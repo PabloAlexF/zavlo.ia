@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Logger } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Logger, Headers, UnauthorizedException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PaymentsService } from './payments.service';
 import { PixSimpleService } from './pix-simple.service';
@@ -13,43 +13,17 @@ export class PaymentsController {
     private pixSimpleService: PixSimpleService
   ) {}
 
-  @Get('pix-simple')
-  async pixSimple() {
-    return this.pixSimpleService.createSimplePix();
-  }
-
-  @Get('debug')
-  async debugPayment() {
-    return this.paymentsService.debugInfo();
-  }
-
-  @Get('test')
-  async testPayment() {
-    return this.paymentsService.testConnection();
-  }
-
   @Post('card')
   @UseGuards(JwtAuthGuard)
   async createCardPayment(
     @CurrentUser() user: any,
-    @Body() body: {
-      plan: string;
-      amount: number;
-      cardToken: string;
-      installments: number;
-      payer: any;
-    },
+    @Body() body: { plan: string; amount: number; cardToken: string; installments: number; payer: any },
   ) {
     const userId = user?.userId || user?.id;
-    this.logger.log(`Criando pagamento com cartão para usuário: ${userId}`);
     return this.paymentsService.createCardPayment({
-      plan: body.plan,
-      amount: body.amount,
-      userId: userId,
-      userEmail: user.email,
-      cardToken: body.cardToken,
-      installments: body.installments || 1,
-      payer: body.payer,
+      plan: body.plan, amount: body.amount, userId,
+      userEmail: user.email, cardToken: body.cardToken,
+      installments: body.installments || 1, payer: body.payer,
     });
   }
 
@@ -60,12 +34,8 @@ export class PaymentsController {
     @Body() body: { plan: string; amount: number },
   ) {
     const userId = user?.userId || user?.id;
-    this.logger.log(`Criando pagamento para usuário: ${userId}`);
     return this.paymentsService.createPayment({
-      plan: body.plan,
-      amount: body.amount,
-      userId: userId,
-      userEmail: user.email,
+      plan: body.plan, amount: body.amount, userId, userEmail: user.email,
     });
   }
 
@@ -73,26 +43,11 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   async createPixPayment(
     @CurrentUser() user: any,
-    @Body() body: { 
-      plan: string; 
-      amount: number;
-      userEmail?: string;
-      payer?: {
-        firstName?: string;
-        lastName?: string;
-        email?: string;
-        phone?: string;
-        cpf?: string;
-      };
-    },
+    @Body() body: { plan: string; amount: number; userEmail?: string; payer?: { firstName?: string; lastName?: string; email?: string; phone?: string; cpf?: string } },
   ) {
     const userId = user?.userId || user?.id;
-    this.logger.log(`Criando PIX para usuário: ${userId}`);
-    this.logger.log(`Dados do pagador:`, body.payer);
     return this.paymentsService.createPixPayment({
-      plan: body.plan,
-      amount: body.amount,
-      userId: userId,
+      plan: body.plan, amount: body.amount, userId,
       userEmail: body.userEmail || body.payer?.email || user.email,
       payer: body.payer,
     });
@@ -105,18 +60,12 @@ export class PaymentsController {
     @Body() body: { paymentId: string },
   ) {
     const userId = user?.userId || user?.id;
-    const paymentId = body.paymentId;
-    this.logger.log(`Confirmando PIX ${paymentId} para usuário: ${userId}`);
-    return this.paymentsService.confirmPixPayment(paymentId, userId);
+    return this.paymentsService.confirmPixPayment(body.paymentId, userId);
   }
 
   @Post('pix/:paymentId/cancel')
   @UseGuards(JwtAuthGuard)
-  async cancelPixPayment(
-    @CurrentUser() user: any,
-  ) {
-    const userId = user?.userId || user?.id;
-    this.logger.log(`Cancelando PIX para usuário: ${userId}`);
+  async cancelPixPayment() {
     return { success: true, message: 'Pagamento cancelado' };
   }
 
@@ -124,68 +73,25 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   async createBoletoPayment(
     @CurrentUser() user: any,
-    @Body() body: { 
-      plan: string; 
-      amount: number;
-      userEmail?: string;
-      payer: {
-        firstName: string;
-        lastName: string;
-        email: string;
-        phone: string;
-        cpf: string;
-        address: {
-          zipCode: string;
-          street: string;
-          number: string;
-          complement?: string;
-          neighborhood: string;
-          city: string;
-          state: string;
-        };
-      };
-    },
+    @Body() body: { plan: string; amount: number; userEmail?: string; payer: { firstName: string; lastName: string; email: string; phone: string; cpf: string; address: { zipCode: string; street: string; number: string; complement?: string; neighborhood: string; city: string; state: string } } },
   ) {
     const userId = user?.userId || user?.id;
-    this.logger.log(`Criando Boleto para usuário: ${userId}`);
     return this.paymentsService.createBoletoPayment({
-      plan: body.plan,
-      amount: body.amount,
-      userId: userId,
+      plan: body.plan, amount: body.amount, userId,
       userEmail: body.userEmail || body.payer.email || user.email,
       payer: body.payer,
-    });
-  }
-
-  @Post('pix-test')
-  async createPixPaymentTest(
-    @Body() body: { plan: string; amount: number },
-  ) {
-    return this.paymentsService.createPixPayment({
-      plan: body.plan,
-      amount: body.amount,
-      userId: 'test-user',
-      userEmail: 'test@zavlo.ia',
     });
   }
 
   @Post('webhook')
   async handleWebhook(
     @Body() body: any,
+    @Headers('x-signature') signature: string,
   ) {
+    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+    if (webhookSecret && signature !== webhookSecret) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
     return this.paymentsService.handleWebhook(body);
-  }
-
-  // Checkout Pro test - works with TEST tokens
-  @Post('create-test')
-  async createPaymentTest(
-    @Body() body: { plan: string; amount: number },
-  ) {
-    return this.paymentsService.createPayment({
-      plan: body.plan,
-      amount: body.amount,
-      userId: 'test-user',
-      userEmail: 'test@zavlo.ia',
-    });
   }
 }
