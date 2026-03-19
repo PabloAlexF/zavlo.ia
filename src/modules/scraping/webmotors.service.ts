@@ -57,7 +57,7 @@ export class WebmotorsService {
         source: 'Webmotors',
         url: item.url || item.link,
         sourceUrl: item.url || item.link,
-        condition: item.km === 0 || item.vehicle_type === 'new' ? 'new' : 'used',
+        condition: item.vehicle_type === 'new' ? 'new' : item.vehicle_type === 'used' ? 'used' : (item.km === 0 && item.km != null ? 'new' : 'used'),
         category: 'vehicle',
         scrapedAt: new Date().toISOString(),
         make: item.make || item.brand,
