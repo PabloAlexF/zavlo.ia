@@ -18,6 +18,24 @@ export interface Product {
   };
   condition?: 'new' | 'used';
   createdAt: string;
+  // Campos de veículo (Webmotors / Mobiauto)
+  make?: string;
+  model?: string;
+  version?: string;
+  year?: number;
+  modelYear?: number;
+  km?: number;
+  fuelType?: string;
+  transmission?: string;
+  bodyType?: string;
+  color?: string;
+  fipePrice?: number;
+  dealer?: string;
+  dealerLocation?: string;
+  originalPrice?: number;
+  percentOff?: string;
+  rating?: number;
+  reviews?: number;
 }
 
 export interface SearchFilters {
