@@ -376,23 +376,21 @@ export default function ChatPage() {
           .replace(/^Este é um\\s*/i, '')
           .trim();
 
-        setTimeout(() => {
-          setUploadedImage(null);
-          setImageFile(null);
-          setDetectedProductName(productName);
-          
-          const confirmationMessage: Message = {
-            id: crypto.randomUUID(),
-            type: 'image_confirmation',
-            content: `✅ Produto identificado!\n\n📦 ${productName}\n\n💳 Já gasto: -${creditsUsed} crédito(s)\n💰 Saldo: ${remainingCredits} créditos\n\n🔍 Deseja buscar preços? (custará +1 crédito)`,
-            timestamp: new Date(),
-            detectedProduct: productName,
-            creditCost: creditsUsed,
-          };
-          setMessages(prev => [...prev, confirmationMessage]);
-          setAwaitingImageConfirmation(true);
-          setLoading(false);
-        }, 800);
+        await delay(800);
+        setUploadedImage(null);
+        setImageFile(null);
+        setDetectedProductName(productName);
+        const confirmationMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'image_confirmation',
+          content: `✅ Produto identificado!\n\n📦 ${productName}\n\n💳 Já gasto: -${creditsUsed} crédito(s)\n💰 Saldo: ${remainingCredits} créditos\n\n🔍 Deseja buscar preços? (custará +1 crédito)`,
+          timestamp: new Date(),
+          detectedProduct: productName,
+          creditCost: creditsUsed,
+        };
+        setMessages(prev => [...prev, confirmationMessage]);
+        setAwaitingImageConfirmation(true);
+        setLoading(false);
       } else {
         addMessage('ai', 'Erro na busca por imagem. Tente novamente.');
         setUploadedImage(null);
@@ -468,20 +466,19 @@ export default function ChatPage() {
         const creditsUsed = data.creditsUsed || 1;
         const remainingCredits = data.remainingCredits ?? userCredits - 1;
 
-        setTimeout(() => {
-          const productsMessage: Message = {
-            id: crypto.randomUUID(),
-            type: 'products',
-            content: `✅ Encontrei ${products.length} produtos!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
-            products: products,
-            timestamp: new Date(),
-            creditCost: creditsUsed,
-          };
-          setMessages(prev => [...prev, productsMessage]);
-          setAwaitingImageSort(false);
-          setDetectedProductName('');
-          setLoading(false);
-        }, 1000);
+        await delay(1000);
+        const productsMessage: Message = {
+          id: crypto.randomUUID(),
+          type: 'products',
+          content: `✅ Encontrei ${products.length} produtos!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
+          products: products,
+          timestamp: new Date(),
+          creditCost: creditsUsed,
+        };
+        setMessages(prev => [...prev, productsMessage]);
+        setAwaitingImageSort(false);
+        setDetectedProductName('');
+        setLoading(false);
       } else {
         addMessage('ai', 'Erro ao buscar preços. Tente novamente.');
         setAwaitingImageSort(false);
@@ -548,7 +545,7 @@ export default function ChatPage() {
 
   const handleHybridSkip = async () => {
     const { query, classification } = searchSession;
-    setSearchSession(s => ({ ...s, step: 'searching', missingFields: [] }));
+    setSearchSession(s => ({ ...s, step: 'idle', missingFields: [] }));
     if (classification?.category === 'car' || classification?.category === 'motorcycle') {
       await executeTextSearch(query, 'RELEVANCE', classification);
     } else {
@@ -637,15 +634,14 @@ export default function ChatPage() {
     setLoading(true);
 
     if (userCredits < 1) {
-      setTimeout(() => {
-        addMessage('ai', '💳 Créditos insuficientes! Você precisa de pelo menos 1 crédito para fazer buscas.');
-        setLoading(false);
-      }, 500);
+      await delay(300);
+      addMessage('ai', '💳 Créditos insuficientes! Você precisa de pelo menos 1 crédito para fazer buscas.');
+      setLoading(false);
       return;
     }
 
-    setTimeout(() => {
-      const intent = detectIntent(currentInput);
+    await delay(300);
+    const intent = detectIntent(currentInput);
 
       // Handle special commands
       if (intent.type === 'introduction') {
@@ -688,7 +684,6 @@ export default function ChatPage() {
       // ✅ VALIDAÇÃO: Verificar se é realmente um produto pesquisável
       // Não executar busca diretamente, apenas classificar
       classifyQuery(currentInput);
-    }, 500);
   };
 
   const classifyQuery = async (query: string) => {
