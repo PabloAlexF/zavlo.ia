@@ -1,23 +1,23 @@
 export interface Product {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   price: number;
   images: string[];
   category: string;
   source: string;
   sourceUrl: string;
-  location: {
+  location?: {
     state: string;
     city: string;
     cep?: string;
   };
-  seller: {
+  seller?: {
     name: string;
     phone?: string;
   };
   condition?: 'new' | 'used';
-  createdAt: string;
+  createdAt?: string;
   // Campos de veículo (Webmotors / Mobiauto)
   make?: string;
   model?: string;
