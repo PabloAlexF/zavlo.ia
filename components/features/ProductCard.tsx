@@ -6,14 +6,14 @@ import { Product } from '@/types';
 import { useUser } from '@/contexts/UserContext';
 import { getUser } from '@/utils/auth';
 import { toast } from 'sonner';
-import { Heart, ExternalLink, Star, Package, CheckCircle, Gauge, Fuel, Settings2, Palette } from 'lucide-react';
+import { Heart, ExternalLink, Star, Package, CheckCircle, Gauge, Fuel, Settings2, Palette, Truck, CreditCard, Store, Globe, Tag } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
 }
 
-const IS_VEHICLE_SOURCE = (source: string) =>
-  source === 'Webmotors';
+const IS_VEHICLE_SOURCE = (source: string) => source === 'Webmotors';
+const IS_ML_SOURCE = (source: string) => source === 'MercadoLivre';
 
 // Mapeamento de nomes amigáveis dos marketplaces
 function getSourceName(source: string): string {
@@ -320,20 +320,60 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
             </div>
           )}
 
-          {/* Badges: Condição */}
-          {product.condition && (
+          {/* Badges: Condição + Highlight */}
+          {(product.condition || product.highlight) && (
             <div className="flex flex-wrap gap-1 sm:gap-1.5">
-              <span className={`flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium ${
-                product.condition === 'new' 
-                  ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400' 
-                  : 'bg-orange-500/10 border border-orange-500/30 text-orange-400'
-              }`}>
-                {product.condition === 'new' ? (
-                  <><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Novo</>
-                ) : (
-                  <><Package className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Usado</>
-                )}
-              </span>
+              {product.condition && (
+                <span className={`flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium ${
+                  product.condition === 'new'
+                    ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400'
+                    : 'bg-orange-500/10 border border-orange-500/30 text-orange-400'
+                }`}>
+                  {product.condition === 'new' ? (
+                    <><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Novo</>
+                  ) : (
+                    <><Package className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Usado</>
+                  )}
+                </span>
+              )}
+              {product.highlight && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-yellow-500/10 border border-yellow-500/30 rounded text-[10px] sm:text-xs font-medium text-yellow-400">
+                  <Tag className="w-2.5 h-2.5" />
+                  {product.highlight}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Bloco MercadoLivre: frete, parcelamento, vendedor, internacional */}
+          {IS_ML_SOURCE(product.source) && (
+            <div className="space-y-1">
+              {product.shipping && (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs">
+                  <Truck className="w-3 h-3 text-green-400 flex-shrink-0" />
+                  <span className="text-green-400 font-medium">{product.shipping}</span>
+                </div>
+              )}
+              {product.installments && (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs">
+                  <CreditCard className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                  <span className="text-gray-300">{product.installments}</span>
+                </div>
+              )}
+              {product.seller?.name && (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs">
+                  <Store className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                  <span className="text-gray-400">Vendido por <span className="text-gray-300 font-medium">{product.seller.name}</span></span>
+                </div>
+              )}
+              {product.isInternational && (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs">
+                  <Globe className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                  <span className="text-blue-400">
+                    Compra internacional{product.shippedFrom ? ` · ${product.shippedFrom}` : ''}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
