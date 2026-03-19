@@ -17,9 +17,16 @@ function PixPaymentContent() {
   const [cancelling, setCancelling] = useState(false);
 
   const paymentId = searchParams.get('paymentId');
-  const qrCode = searchParams.get('qrCode');
   const amount = searchParams.get('amount');
   const plan = searchParams.get('plan');
+  const [qrCode, setQrCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (paymentId) {
+      const stored = sessionStorage.getItem(`pix_qr_${paymentId}`);
+      if (stored) setQrCode(stored);
+    }
+  }, [paymentId]);
 
   const copyToClipboard = () => {
     if (qrCode) {

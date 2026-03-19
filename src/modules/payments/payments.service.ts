@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
+import { FirebaseService } from '@config/firebase.service';
 import axios from 'axios';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class PaymentsService {
   constructor(
     private configService: ConfigService,
     private usersService: UsersService,
+    private firebaseService: FirebaseService,
   ) {
     this.accessToken = this.configService.get('MERCADOPAGO_ACCESS_TOKEN');
     this.logger.log('PaymentsService initialized');
@@ -53,7 +55,6 @@ export class PaymentsService {
         token: data.cardToken,
         description: `Plano ${data.plan} - Zavlo.ia`,
         installments: data.installments,
-        payment_method_id: 'visa', // Será detectado automaticamente pelo token
         payer: {
           email: data.payer.email,
           identification: {
@@ -61,11 +62,11 @@ export class PaymentsService {
             number: data.payer.identification?.number,
           },
         },
-        external_reference: `${data.userId}-${data.plan}`,
+        external_reference: `${data.userId}|${data.plan}`,
         statement_descriptor: 'ZAVLO.IA',
       };
 
-      this.logger.log('[CARD] Payload:', JSON.stringify(payload, null, 2));
+      this.logger.log('[CARD] Creating payment:', { plan: data.plan, amount: data.amount, userId: data.userId });
 
       const response = await axios.post(
         'https://api.mercadopago.com/v1/payments',
@@ -300,7 +301,7 @@ export class PaymentsService {
         description: `Plano ${data.plan} - Zavlo.ia`,
         payment_method_id: 'pix',
         payer: payerData,
-        external_reference: `${data.userId}-${data.plan}`,
+        external_reference: `${data.userId}|${data.plan}`,
         statement_descriptor: 'ZAVLO.IA',
         notification_url: `${this.configService.get('API_URL') || 'https://zavlo-ia.onrender.com/api/v1'}/payments/webhook`,
       };
@@ -381,17 +382,28 @@ export class PaymentsService {
           
           this.logger.log('[WEBHOOK] Payment details:', paymentDetails);
           
+          // Idempotência: verificar se paymentId já foi processado
+          const alreadyProcessed = await this.isPaymentProcessed(String(paymentId));
+          if (alreadyProcessed) {
+            this.logger.warn(`[WEBHOOK] Payment ${paymentId} already processed, skipping.`);
+            return { received: true, processed: false, reason: 'already_processed' };
+          }
+
           // Process payment status
           if (paymentDetails.status === 'approved') {
             this.logger.log('[WEBHOOK] Payment approved:', paymentId);
-            
-            // Extract userId and planName from external_reference (format: userId-planName)
+
+            // Extract userId and planName from external_reference (format: userId|planName)
             const externalRef = paymentDetails.external_reference || '';
-            const [userId, planName] = externalRef.split('-');
+            const separatorIdx = externalRef.indexOf('|');
+            const userId = externalRef.substring(0, separatorIdx);
+            const planName = externalRef.substring(separatorIdx + 1);
             const amount = paymentDetails.transaction_amount;
             
             if (userId && planName) {
               this.logger.log(`[WEBHOOK] Processing payment for user ${userId}, plan ${planName}`);
+
+              await this.markPaymentProcessed(String(paymentId));
               
               // Check if it's a credits purchase
               if (planName.startsWith('credits-')) {
@@ -427,6 +439,29 @@ export class PaymentsService {
     }
   }
   
+  private async isPaymentProcessed(paymentId: string): Promise<boolean> {
+    try {
+      const firestore = this.firebaseService.getFirestore();
+      if (!firestore) return false;
+      const doc = await firestore.collection('processed_payments').doc(paymentId).get();
+      return doc.exists;
+    } catch {
+      return false;
+    }
+  }
+
+  private async markPaymentProcessed(paymentId: string): Promise<void> {
+    try {
+      const firestore = this.firebaseService.getFirestore();
+      if (!firestore) return;
+      await firestore.collection('processed_payments').doc(paymentId).set({
+        processedAt: new Date(),
+      });
+    } catch (error) {
+      this.logger.error('[WEBHOOK] Failed to mark payment as processed:', error.message);
+    }
+  }
+
   async getPaymentDetails(paymentId: string) {
     try {
       const response = await axios.get(
@@ -509,7 +544,7 @@ export class PaymentsService {
             federal_unit: data.payer.address.state,
           },
         },
-        external_reference: `${data.userId}-${data.plan}`,
+        external_reference: `${data.userId}|${data.plan}`,
         statement_descriptor: 'ZAVLO.IA',
         date_of_expiration: expirationDate.toISOString(),
         notification_url: `${this.configService.get('API_URL') || 'https://zavlo-ia.onrender.com/api/v1'}/payments/webhook`,
@@ -582,11 +617,20 @@ export class PaymentsService {
       this.logger.log(`[PIX CONFIRM] Payment amount: ${paymentDetails.transaction_amount}`);
       this.logger.log(`[PIX CONFIRM] External reference: ${paymentDetails.external_reference}`);
       
+      // Validar ownership: external_reference deve conter o userId do token
+      const externalRefCheck = paymentDetails.external_reference || '';
+      const ownerUserId = externalRefCheck.substring(0, externalRefCheck.indexOf('|'));
+      if (ownerUserId && ownerUserId !== userId) {
+        this.logger.warn(`[PIX CONFIRM] Ownership mismatch: token=${userId}, payment owner=${ownerUserId}`);
+        return { success: false, status: 'forbidden', message: 'Pagamento não pertence a este usuário.' };
+      }
+
       // Check if payment is approved
       if (paymentDetails.status === 'approved') {
-        // Extract plan from external_reference (format: userId-planName)
+        // Extract plan from external_reference (format: userId|planName)
         const externalRef = paymentDetails.external_reference || '';
-        const planName = externalRef.split('-')[1] || 'basic';
+        const separatorIdx = externalRef.indexOf('|');
+        const planName = externalRef.substring(separatorIdx + 1) || 'basic';
         const amount = paymentDetails.transaction_amount;
         
         this.logger.log(`[PIX CONFIRM] Processing approved payment for plan: ${planName}`);

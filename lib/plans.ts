@@ -1,28 +1,9 @@
-export const PLAN_LIMITS = {
-  free: {
-    textSearches: 1,
-    imageSearches: 0,
-    name: 'Gratuito'
-  },
-  basic: {
-    textSearches: 15,
-    imageSearches: 5,
-    name: 'Básico'
-  },
-  pro: {
-    textSearches: 48,
-    imageSearches: 15,
-    name: 'Pro'
-  },
-  business: {
-    textSearches: 200,
-    imageSearches: 50,
-    name: 'Business'
-  }
-} as const;
-
-export type PlanType = keyof typeof PLAN_LIMITS;
-
-export const getPlanLimits = (plan: string) => {
-  return PLAN_LIMITS[plan as PlanType] || PLAN_LIMITS.free;
+export const PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
+  basic:    { monthly: 39.90, yearly: 399.00 },
+  pro:      { monthly: 89.90, yearly: 899.00 },
+  business: { monthly: 299.00, yearly: 2990.00 },
 };
+
+export function getPlanPrice(plan: string, cycle: 'monthly' | 'yearly'): number {
+  return PLAN_PRICES[plan]?.[cycle] ?? 0;
+}

@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { motion } from 'framer-motion';
+import { PLAN_PRICES } from '@/lib/plans';
 import { Check, Zap, Shield, ArrowRight, Sparkles } from 'lucide-react';
 
 interface PlanDetails {
@@ -78,9 +79,9 @@ function ConfirmPlanContent() {
   };
 
   const plan = planDetails[planName];
-  const finalPrice = cycle === 'yearly' ? plan.yearlyPrice : plan.price;
-  const monthlyEquivalent = cycle === 'yearly' ? plan.yearlyPrice / 12 : plan.price;
-  const savings = cycle === 'yearly' ? (plan.price * 12 - plan.yearlyPrice).toFixed(2) : '0';
+  const finalPrice = cycle === 'yearly' ? (PLAN_PRICES[planName]?.yearly ?? 0) : (PLAN_PRICES[planName]?.monthly ?? 0);
+  const monthlyEquivalent = cycle === 'yearly' ? finalPrice / 12 : finalPrice;
+  const savings = cycle === 'yearly' ? ((PLAN_PRICES[planName]?.monthly ?? 0) * 12 - finalPrice).toFixed(2) : '0';
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] relative">

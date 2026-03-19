@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import Script from 'next/script';
+import { PLAN_PRICES } from '@/lib/plans';
 
 // Declarar tipo do Mercado Pago SDK
 declare global {
@@ -32,15 +33,9 @@ function CheckoutContent() {
   const [mpLoaded, setMpLoaded] = useState(false);
   const [mp, setMp] = useState<any>(null);
 
-  const planPrices: Record<string, { monthly: number; yearly: number }> = {
-    basic: { monthly: 39.90, yearly: 399 },
-    pro: { monthly: 89.90, yearly: 899 },
-    business: { monthly: 299, yearly: 2990 },
-  };
-
-  const price = cycle === 'yearly' 
-    ? planPrices[planName].yearly 
-    : planPrices[planName].monthly;
+  const price = cycle === 'yearly'
+    ? PLAN_PRICES[planName]?.yearly ?? 0
+    : PLAN_PRICES[planName]?.monthly ?? 0;
 
   // Inicializar Mercado Pago SDK
   useEffect(() => {
@@ -49,7 +44,6 @@ function CheckoutContent() {
       if (publicKey && window.MercadoPago) {
         const mercadopago = new window.MercadoPago(publicKey);
         setMp(mercadopago);
-        console.log('✅ Mercado Pago SDK inicializado');
       }
     }
   }, [mpLoaded, mp]);
@@ -104,37 +98,26 @@ function CheckoutContent() {
     }
 
     setLoading(true);
-    console.log('⏳ Loading ativado');
 
     try {
       const user = localStorage.getItem('zavlo_user');
-      console.log('👤 Usuário do localStorage:', user ? 'Encontrado' : 'Não encontrado');
-      
       if (!user) {
-        console.log('❌ Usuário não logado');
         toast.error('Você precisa estar logado');
         router.push('/auth');
         return;
       }
 
       const userData = JSON.parse(user);
-      console.log('👤 Dados do usuário:', { userId: userData.userId, email: userData.email });
-      
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
-      console.log('🌐 API URL:', API_URL);
 
       // PAGAMENTO COM CARTÃO - DIRETO (SEM SAIR DA PÁGINA)
       if (paymentMethod === 'card') {
-        console.log('💳 Processando pagamento com cartão...');
-        
         if (!mp) {
-          console.log('❌ Mercado Pago SDK não carregado');
           toast.error('Mercado Pago não carregado. Recarregue a página.');
           setLoading(false);
           return;
         }
 
-        console.log('✅ Mercado Pago SDK disponível');
         toast.info('Processando cartão...');
 
         // Criar token do cartão
@@ -151,27 +134,13 @@ function CheckoutContent() {
           identificationNumber: cpfClean,
         };
 
-        console.log('🔐 Dados do cartão para tokenização:', {
-          cardNumber: cardData.cardNumber.slice(0, 6) + '...',
-          cardholderName: cardData.cardholderName,
-          expirationMonth: cardData.cardExpirationMonth,
-          expirationYear: cardData.cardExpirationYear,
-          cpf: cpfClean.slice(0, 3) + '...',
-        });
-
-        console.log('🔄 Criando token do cartão...');
         const token = await mp.createCardToken(cardData);
         
-        console.log('📝 Resposta do token:', token);
-        
         if (!token || !token.id) {
-          console.log('❌ Token inválido ou não criado');
           toast.error('Erro ao processar cartão. Verifique os dados.');
           setLoading(false);
           return;
         }
-
-        console.log('✅ Token do cartão criado:', token.id);
 
         // Enviar pagamento para backend com valor atualizado
         const paymentPayload = {
@@ -188,8 +157,6 @@ function CheckoutContent() {
           },
         };
 
-        console.log('📤 Enviando pagamento para backend:', paymentPayload);
-
         const response = await fetch(`${API_URL}/payments/card`, {
           method: 'POST',
           headers: {
@@ -202,38 +169,23 @@ function CheckoutContent() {
         console.log('📥 Resposta do backend - Status:', response.status);
 
         const data = await response.json();
-        console.log('📥 Resposta do backend - Data:', data);
 
         if (!response.ok || data.error) {
-          console.log('❌ Erro na resposta do backend:', data);
           throw new Error(data.message || 'Erro ao processar pagamento');
         }
 
-        // Verificar status
-        console.log('🔍 Status do pagamento:', data.status);
-        
         if (data.status === 'approved') {
-          console.log('✅ Pagamento aprovado!');
           toast.success('Pagamento aprovado!');
-          
-          // Atualizar dados do usuário
           const updatedUser = { ...userData, plan: planName };
           localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
           window.dispatchEvent(new Event('userChanged'));
-          console.log('✅ Dados do usuário atualizados no localStorage');
-
-          setTimeout(() => {
-            console.log('🔄 Redirecionando para página de sucesso...');
-            router.push('/checkout/success');
-          }, 1500);
+          setTimeout(() => router.push('/checkout/success'), 1500);
           return;
         } else if (data.status === 'pending') {
-          console.log('⏳ Pagamento pendente');
           toast.info('Pagamento pendente de aprovação');
           router.push('/dashboard');
           return;
         } else {
-          console.log('❌ Pagamento recusado - Status:', data.status);
           toast.error('Pagamento recusado. Tente outro cartão.');
           setLoading(false);
           return;
@@ -242,16 +194,10 @@ function CheckoutContent() {
 
       // PAGAMENTO COM PIX
       if (paymentMethod === 'pix') {
-        console.log('💰 Processando pagamento com PIX...');
-        
-        // Validar email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const emailToUse = formData.email || userData.email;
         
-        console.log('📧 Email para PIX:', emailToUse);
-        
         if (!emailRegex.test(emailToUse)) {
-          console.log('❌ Email inválido:', emailToUse);
           toast.error('Email inválido. Verifique o email informado.');
           setLoading(false);
           return;
@@ -271,8 +217,6 @@ function CheckoutContent() {
           },
         };
 
-        console.log('📤 Enviando requisição PIX:', pixPayload);
-
         const response = await fetch(`${API_URL}/payments/pix`, {
           method: 'POST',
           headers: {
@@ -285,18 +229,15 @@ function CheckoutContent() {
         console.log('📥 Resposta PIX - Status:', response.status);
 
         const data = await response.json();
-        console.log('📥 Resposta PIX - Data:', data);
-        console.log('📋 Detalhes completos do erro:', JSON.stringify(data.details, null, 2));
 
         if (!response.ok) {
-          console.log('❌ Erro na resposta PIX:', data);
           throw new Error(data.message || data.merchant_message || 'Erro ao processar pagamento');
         }
 
         if (data.qr_code) {
-          console.log('✅ QR Code PIX gerado!');
           toast.success('QR Code PIX gerado!');
-          router.push(`/checkout/pix?paymentId=${data.id}&qrCode=${encodeURIComponent(data.qr_code)}&amount=${totalWithFee.toFixed(2)}&plan=${planName}`);
+          sessionStorage.setItem(`pix_qr_${data.id}`, data.qr_code);
+          router.push(`/checkout/pix?paymentId=${data.id}&amount=${totalWithFee.toFixed(2)}&plan=${planName}`);
           return;
         } else {
           console.log('❌ QR Code não retornado:', data);
@@ -306,8 +247,6 @@ function CheckoutContent() {
 
       // PAGAMENTO COM BOLETO
       if (paymentMethod === 'boleto') {
-        console.log('💰 Processando pagamento com Boleto...');
-        
         const boletoPayload = {
           plan: planName,
           amount: totalWithFee,  // Valor com taxa incluída
@@ -331,8 +270,6 @@ function CheckoutContent() {
           },
         };
 
-        console.log('📤 Enviando requisição Boleto:', boletoPayload);
-
         const response = await fetch(`${API_URL}/payments/boleto`, {
           method: 'POST',
           headers: {
@@ -345,32 +282,24 @@ function CheckoutContent() {
         console.log('📥 Resposta Boleto - Status:', response.status);
 
         const data = await response.json();
-        console.log('📥 Resposta Boleto - Data:', data);
 
         if (!response.ok) {
-          console.log('❌ Erro na resposta Boleto:', data);
           throw new Error(data.message || data.merchant_message || 'Erro ao processar pagamento');
         }
 
         if (data.barcode || data.ticket_url) {
-          console.log('✅ Boleto gerado!');
           toast.success('Boleto gerado!');
           router.push(`/checkout/boleto?paymentId=${data.id}&barcode=${encodeURIComponent(data.barcode || '')}&ticketUrl=${encodeURIComponent(data.ticket_url || '')}&amount=${totalWithFee.toFixed(2)}&plan=${planName}`);
           return;
         } else {
-          console.log('❌ Boleto não retornado:', data);
           throw new Error('Boleto não foi gerado. Tente novamente.');
         }
       }
 
-      console.log('❌ Fluxo de pagamento não completado');
       toast.error('Erro ao processar pagamento. Tente novamente.');
     } catch (error: any) {
-      console.error('❌ ERRO NO PAGAMENTO:', error);
-      console.error('Stack trace:', error.stack);
       toast.error(error.message || 'Erro ao processar pagamento');
     } finally {
-      console.log('🏁 Finalizando processo de pagamento');
       setLoading(false);
     }
   };
@@ -380,14 +309,8 @@ function CheckoutContent() {
       {/* Mercado Pago SDK */}
       <Script
         src="https://sdk.mercadopago.com/js/v2"
-        onLoad={() => {
-          console.log('✅ Mercado Pago SDK carregado');
-          setMpLoaded(true);
-        }}
-        onError={() => {
-          console.error('❌ Erro ao carregar Mercado Pago SDK');
-          toast.error('Erro ao carregar sistema de pagamento');
-        }}
+        onLoad={() => setMpLoaded(true)}
+        onError={() => toast.error('Erro ao carregar sistema de pagamento')}
       />
       
       <Header />
