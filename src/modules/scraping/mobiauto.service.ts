@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
-const KNOWN_BRANDS = ['honda','toyota','chevrolet','volkswagen','fiat','ford','hyundai','nissan','renault','jeep','mitsubishi','kia','bmw','mercedes','audi','yamaha','kawasaki','suzuki','honda'];
+const KNOWN_BRANDS = ['honda','toyota','chevrolet','volkswagen','fiat','ford','hyundai','nissan','renault','jeep','mitsubishi','kia','bmw','mercedes','audi','yamaha','kawasaki','suzuki'];
 
 @Injectable()
 export class MobiautoService {
@@ -16,7 +16,7 @@ export class MobiautoService {
     this.apiToken = this.configService.get('APIFY_API_KEY');
   }
 
-  async search(query: string, limit = 20, classification?: any): Promise<any[]> {
+  async search(query: string, limit = 20, classification?: any): Promise<{ results: any[]; searchedNationally: boolean }> {
     try {
       const safeQuery = query.replace(/[\r\n]/g, ' ');
       this.logger.log(`🚗 [MOBIAUTO] Buscando: "${safeQuery}" (limit: ${limit})`);
@@ -27,43 +27,23 @@ export class MobiautoService {
       const cached = this.cache.get(cacheKey);
       if (cached && cached.expiresAt > Date.now()) {
         this.logger.log(`⚡ [MOBIAUTO] Cache hit: ${cacheKey}`);
-        return cached.data.slice(0, limit);
+        return { results: cached.data.slice(0, limit), searchedNationally: false };
       }
 
-      const input = {
-        urls: [searchUrl],
-        max_items_per_url: limit,
-        ignore_url_failures: true,
-        max_retries_per_url: 2,
-        proxy: {
-          useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL'],
-          apifyProxyCountry: 'BR',
-        },
-      };
+      let results = await this.runApify(searchUrl, limit);
+      let searchedNationally = false;
 
-      this.logger.log(`📤 [MOBIAUTO] URL: ${searchUrl}`);
-
-      const response = await fetch(
-        `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=90`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(input),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error(`❌ [MOBIAUTO] Apify API error ${response.status}: ${errorText}`);
-        throw new Error(`Mobiauto Apify API error: ${response.status}`);
+      // Fallback nacional se busca com cidade retornou vazio
+      if (results.length === 0 && classification?.user_location?.city) {
+        this.logger.warn(`⚠️ [MOBIAUTO] 0 resultados em ${classification.user_location.city} — tentando busca nacional`);
+        const nationalUrl = this.buildSearchUrl(query, { ...classification, user_location: null });
+        results = await this.runApify(nationalUrl, limit);
+        if (results.length > 0) searchedNationally = true;
       }
 
-      const results = await response.json();
-
-      if (!Array.isArray(results) || results.length === 0) {
+      if (results.length === 0) {
         this.logger.warn(`⚠️ [MOBIAUTO] Nenhum resultado para: ${safeQuery}`);
-        return [];
+        return { results: [], searchedNationally };
       }
 
       this.logger.log(`✅ [MOBIAUTO] ${results.length} resultados encontrados`);
@@ -101,11 +81,45 @@ export class MobiautoService {
 
       const ranked = this.rankResults(mapped, classification);
       this.cache.set(cacheKey, { data: ranked, expiresAt: Date.now() + this.CACHE_TTL_MS });
-      return ranked.slice(0, limit);
+      return { results: ranked.slice(0, limit), searchedNationally };
     } catch (error) {
       this.logger.error(`❌ [MOBIAUTO] Erro: ${error.message}`);
-      return [];
+      return { results: [], searchedNationally: false };
     }
+  }
+
+  private async runApify(searchUrl: string, limit: number): Promise<any[]> {
+    const input = {
+      urls: [searchUrl],
+      max_items_per_url: limit,
+      ignore_url_failures: true,
+      max_retries_per_url: 2,
+      proxy: {
+        useApifyProxy: true,
+        apifyProxyGroups: ['RESIDENTIAL'],
+        apifyProxyCountry: 'BR',
+      },
+    };
+
+    this.logger.log(`📤 [MOBIAUTO] URL: ${searchUrl}`);
+
+    const response = await fetch(
+      `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=90`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error(`❌ [MOBIAUTO] Apify API error ${response.status}: ${errorText}`);
+      throw new Error(`Mobiauto Apify API error: ${response.status}`);
+    }
+
+    const results = await response.json();
+    return Array.isArray(results) ? results : [];
   }
 
   private rankResults(results: any[], classification?: any): any[] {
@@ -161,9 +175,13 @@ export class MobiautoService {
     const params = new URLSearchParams();
     const c = classification || {};
     if (c.detected_year)          { params.set('anoInicio', String(c.detected_year)); params.set('anoFim', String(c.detected_year)); }
-    // Mobiauto usa 'tipo' para condição: 'NOVO' ou 'USADO'
-    if (c.condition === 'new')    params.set('tipo', 'NOVO');
-    if (c.condition === 'used')   params.set('tipo', 'USADO');
+    // Condição: só passar na URL se o ano não contradiz (carro antigo não pode ser novo)
+    const currentYear = new Date().getFullYear();
+    const yearIsOld = c.detected_year && c.detected_year < currentYear - 3;
+    if (!yearIsOld) {
+      if (c.condition === 'new')  params.set('tipo', 'NOVO');
+      if (c.condition === 'used') params.set('tipo', 'USADO');
+    }
     if (c.detected_transmission)  params.set('cambio',      c.detected_transmission);
     if (c.detected_fuel)          params.set('combustivel', c.detected_fuel);
     if (c.detected_body_type)     params.set('carroceria',  c.detected_body_type);

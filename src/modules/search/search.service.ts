@@ -229,6 +229,8 @@ export class SearchService {
     missingFields?: string[];
     classification?: any;
     priceRangeApplied?: { min?: number; max?: number; target?: number };
+    searchedNationally?: boolean;
+    originalCity?: string;
   }> {
     const startTime = Date.now();
     let creditsUsed = 0;
@@ -366,7 +368,10 @@ export class SearchService {
         results: filteredResults,
         total: filteredResults.length,
         creditsUsed,
-        remainingCredits
+        remainingCredits,
+        // Garantir campos presentes mesmo em entradas antigas do cache
+        searchedNationally: cachedResult.searchedNationally ?? undefined,
+        originalCity: cachedResult.originalCity ?? undefined,
       };
     }
 
@@ -420,6 +425,8 @@ export class SearchService {
       ?.map(s => s.name)
       ?? (category === 'car' || category === 'motorcycle' ? ['webmotors', 'mobiauto'] : ['google_shopping']);
     const resultLimit = 20;
+    let searchedNationally = false;
+    const originalCity = classification?.user_location?.city || undefined;
     this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
 
     try {
@@ -523,11 +530,12 @@ export class SearchService {
               
               // Executar scraper
               try {
-                const results = await this.withTimeout(
+                const { results, searchedNationally: sn } = await this.withTimeout(
                   this.webmotorsService.search(normalizedQuery, resultLimit, classification),
                   90000,
                   'Webmotors'
                 );
+                if (sn) searchedNationally = true;
                 
                 // ✅ Salvar no cache
                 await this.setCachedScraperResult('webmotors', `${normalizedQuery}:${resultLimit}`, results);
@@ -562,11 +570,12 @@ export class SearchService {
               
               // Executar scraper
               try {
-                const results = await this.withTimeout(
+                const { results, searchedNationally: sn } = await this.withTimeout(
                   this.mobiautoService.search(normalizedQuery, resultLimit, classification),
                   90000,
                   'Mobiauto'
                 );
+                if (sn) searchedNationally = true;
                 
                 // ✅ Salvar no cache
                 await this.setCachedScraperResult('mobiauto', `${normalizedQuery}:${resultLimit}`, results);
@@ -656,13 +665,6 @@ export class SearchService {
       }
     }
 
-    const result = {
-      results: products,
-      total: products.length,
-      creditsUsed,
-      remainingCredits
-    };
-
     // ✅ PROBLEMA 2 CORRIGIDO: Aplicar filtros ANTES de cachear (sem mutação)
     let finalResults = products;
     let priceRangeApplied: { min?: number; max?: number; target?: number } | undefined;
@@ -705,13 +707,21 @@ export class SearchService {
     }
 
     // 🔄 FILTRO DE CONDIÇÃO (pós-scraping)
-    if ((classification?.condition === 'new' || classification?.condition === 'used') && finalResults.length > 0) {
+    // Ignorar condição 'new' se o ano detectado indica carro antigo (> 3 anos)
+    const currentYear = new Date().getFullYear();
+    const yearIsOld = classification?.detected_year && classification.detected_year < currentYear - 3;
+    const conditionIsNew = classification?.condition === 'new';
+    const skipConditionFilter = conditionIsNew && yearIsOld;
+
+    if (!skipConditionFilter && (classification?.condition === 'new' || classification?.condition === 'used') && finalResults.length > 0) {
       const cond = classification.condition;
       const byCondition = finalResults.filter(p => (p as any).condition === cond);
       if (byCondition.length > 0) {
         this.logger.log(`🔄 [CONDITION FILTER] ${finalResults.length} → ${byCondition.length} (${cond})`);
         finalResults = byCondition;
       }
+    } else if (skipConditionFilter) {
+      this.logger.log(`🔄 [CONDITION FILTER] Ignorado — condition=new mas ano=${classification.detected_year} indica carro antigo`);
     }
 
     // 📅 FILTRO DE ANO (pós-scraping — ano não é passado na URL do scraper)
@@ -732,7 +742,9 @@ export class SearchService {
       total: finalResults.length,
       creditsUsed,
       remainingCredits,
-      priceRangeApplied
+      priceRangeApplied,
+      searchedNationally: searchedNationally || undefined,
+      originalCity: searchedNationally ? originalCity : undefined,
     };
 
     // Cache results for 1 hour (com filtros já aplicados)
