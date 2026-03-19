@@ -1,18 +1,18 @@
 export interface Product {
   id?: string;
   title: string;
-  description: string;
+  description?: string;
   price: number;
   images: string[];
   category: string;
-  source: string; // OLX, Mercado Livre, etc
+  source: string;
   sourceUrl: string;
-  location: {
+  location?: {
     state: string;
     city: string;
     cep?: string;
   };
-  seller: {
+  seller?: {
     name: string;
     phone?: string;
     whatsapp?: string;
@@ -20,9 +20,9 @@ export interface Product {
   condition?: 'new' | 'used';
   rating?: number;
   brand?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  scrapedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+  scrapedAt?: Date;
   // Campos de veículo (Webmotors / Mobiauto)
   make?: string;
   model?: string;
