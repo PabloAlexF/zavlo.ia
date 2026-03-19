@@ -16,9 +16,13 @@ export class MobiautoService {
     this.apiToken = this.configService.get('APIFY_API_KEY');
   }
 
+  private sanitizeForLog(value: string): string {
+    return String(value).replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+  }
+
   async search(query: string, limit = 20, classification?: any): Promise<{ results: any[]; searchedNationally: boolean }> {
     try {
-      const safeQuery = query.replace(/[\r\n]/g, ' ');
+      const safeQuery = this.sanitizeForLog(query);
       this.logger.log(`🚗 [MOBIAUTO] Buscando: "${safeQuery}" (limit: ${limit})`);
 
       const searchUrl = this.buildSearchUrl(query, classification);
@@ -35,14 +39,14 @@ export class MobiautoService {
 
       // Fallback nacional se busca com cidade retornou vazio
       if (results.length === 0 && classification?.user_location?.city) {
-        this.logger.warn(`⚠️ [MOBIAUTO] 0 resultados em ${classification.user_location.city} — tentando busca nacional`);
+        this.logger.warn(`⚠️ [MOBIAUTO] 0 resultados em ${this.sanitizeForLog(classification.user_location.city)} — tentando busca nacional`);
         const nationalUrl = this.buildSearchUrl(query, { ...classification, user_location: null });
         results = await this.runApify(nationalUrl, limit);
         if (results.length > 0) searchedNationally = true;
       }
 
       if (results.length === 0) {
-        this.logger.warn(`⚠️ [MOBIAUTO] Nenhum resultado para: ${safeQuery}`);
+        this.logger.warn(`⚠️ [MOBIAUTO] Nenhum resultado para: "${safeQuery}"`);
         return { results: [], searchedNationally };
       }
 
@@ -57,7 +61,7 @@ export class MobiautoService {
         source: 'Mobiauto',
         url: `https://www.mobiauto.com.br/comprar/${item.id}`,
         sourceUrl: item.from_url || `https://www.mobiauto.com.br/comprar/${item.id}`,
-        condition: item.km === 0 && item.km != null ? 'new' : 'used',
+        condition: item.km === 0 && item.km != null ? 'new' : item.km == null ? undefined : 'used',
         category: 'vehicle',
         scrapedAt: new Date().toISOString(),
         make: item.trim?.make?.name,

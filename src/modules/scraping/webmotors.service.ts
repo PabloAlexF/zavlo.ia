@@ -16,9 +16,13 @@ export class WebmotorsService {
     this.apiToken = this.configService.get('APIFY_API_KEY');
   }
 
+  private sanitizeForLog(value: string): string {
+    return String(value).replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+  }
+
   async search(query: string, limit = 20, classification?: any): Promise<{ results: any[]; searchedNationally: boolean }> {
     try {
-      const safeQuery = query.replace(/[\r\n]/g, ' ');
+      const safeQuery = this.sanitizeForLog(query);
       this.logger.log(`🚙 [WEBMOTORS] Buscando: "${safeQuery}" (limit: ${limit})`);
 
       const searchUrl = this.buildSearchUrl(query, classification);
@@ -35,14 +39,14 @@ export class WebmotorsService {
 
       // Fallback nacional se busca com cidade retornou vazio
       if (results.length === 0 && classification?.user_location?.city) {
-        this.logger.warn(`⚠️ [WEBMOTORS] 0 resultados em ${classification.user_location.city} — tentando busca nacional`);
+        this.logger.warn(`⚠️ [WEBMOTORS] 0 resultados em ${this.sanitizeForLog(classification.user_location.city)} — tentando busca nacional`);
         const nationalUrl = this.buildSearchUrl(query, { ...classification, user_location: null });
         results = await this.runApify(nationalUrl, limit);
         if (results.length > 0) searchedNationally = true;
       }
 
       if (results.length === 0) {
-        this.logger.warn(`⚠️ [WEBMOTORS] Nenhum resultado para: ${safeQuery}`);
+        this.logger.warn(`⚠️ [WEBMOTORS] Nenhum resultado para: "${safeQuery}"`);
         return { results: [], searchedNationally };
       }
 

@@ -85,6 +85,15 @@ export class SearchService {
     return true;
   }
 
+  private safeParse<T>(raw: string, fallback: T): T {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed !== null && typeof parsed === 'object' ? (parsed as T) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   /* ============================================
      CACHE POR SCRAPER (OTIMIZAÇÃO GIGANTE)
   ============================================ */
@@ -95,7 +104,8 @@ export class SearchService {
     
     if (cached) {
       this.logger.log(`✅ [CACHE] Hit for ${source}: ${query}`);
-      return JSON.parse(cached);
+      const parsed = this.safeParse<Product[]>(cached, []);
+      return Array.isArray(parsed) ? parsed : [];
     }
     
     return null;
@@ -357,26 +367,41 @@ export class SearchService {
     const cached = await this.redisService.get(cacheKey);
     if (cached) {
       this.logger.log(`[CACHE] Hit`);
-      const cachedResult = JSON.parse(cached);
-      
+      const cachedResult = this.safeParse<any>(cached, null);
+      if (!cachedResult) {
+        this.logger.warn('[CACHE] Entrada inválida no cache — ignorando');
+      } else {
+
+      // Deduzir crédito e buscar saldo mesmo em cache hit
+      if (userId) {
+        try {
+          await this.usersService.useCredit(userId, 1);
+          creditsUsed = 1;
+          const user = await this.usersService.findById(userId);
+          remainingCredits = user?.credits || 0;
+        } catch (creditError: any) {
+          this.logger.warn(`[CACHE] Falha ao deduzir crédito no cache hit: ${creditError.message}`);
+        }
+      }
+
       // Aplicar filtros de preço se especificados
       let filteredResults = cachedResult.results;
       if (filters?.minPrice || filters?.maxPrice) {
         filteredResults = this.applyPriceFilter(cachedResult.results, filters.minPrice, filters.maxPrice);
       }
       
-      return {
-        ...cachedResult,
-        results: filteredResults,
-        total: filteredResults.length,
-        creditsUsed,
-        remainingCredits,
-        // Garantir campos presentes mesmo em entradas antigas do cache
-        searchedNationally: cachedResult.searchedNationally ?? undefined,
-        originalCity: cachedResult.originalCity ?? undefined,
-        cityFilterApplied: cachedResult.cityFilterApplied ?? undefined,
-        relaxedFilters: cachedResult.relaxedFilters ?? undefined,
-      };
+        return {
+          ...cachedResult,
+          results: filteredResults,
+          total: filteredResults.length,
+          creditsUsed,
+          remainingCredits,
+          searchedNationally: cachedResult.searchedNationally ?? undefined,
+          originalCity: cachedResult.originalCity ?? undefined,
+          cityFilterApplied: cachedResult.cityFilterApplied ?? undefined,
+          relaxedFilters: cachedResult.relaxedFilters ?? undefined,
+        };
+      }
     }
 
     // Se freeMode (plano free/usuário não logado), busca limitada
@@ -777,7 +802,7 @@ export class SearchService {
       remainingCredits,
       priceRangeApplied,
       searchedNationally: searchedNationally || undefined,
-      originalCity: (searchedNationally || !cityFilterApplied) && originalCity ? originalCity : undefined,
+      originalCity: originalCity || undefined,
       cityFilterApplied: cityFilterApplied ? true : (originalCity ? false : undefined),
       relaxedFilters: relaxedFilters.length > 0 ? relaxedFilters : undefined,
     };
@@ -880,7 +905,10 @@ export class SearchService {
 
     const cached = await this.redisService.get(cacheKey);
 
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsed = this.safeParse<string[]>(cached, []);
+      return Array.isArray(parsed) ? parsed : [];
+    }
 
     const firestore = this.firebaseService.getFirestore();
 
@@ -1172,7 +1200,7 @@ export class SearchService {
     for (const product of products) {
       // Gerar chave única baseada em título + marca + preço + source
       const normalizedTitle = this.normalizeQuery(product.title || '');
-      const brand = this.normalizeQuery(product.brand || '');
+      const brand = this.normalizeQuery((product as any).make || product.brand || '');
       const price = this.extractPrice(String(product.price)) || 0;
       const source = product.source || 'unknown';
       
