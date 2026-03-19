@@ -35,7 +35,7 @@ export const api = {
 
 export async function fetcher(url: string, options?: RequestInit) {
   const token = localStorage.getItem('token');
-  
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -46,7 +46,11 @@ export async function fetcher(url: string, options?: RequestInit) {
   });
 
   if (!response.ok) {
-    throw new Error('Erro na requisição');
+    const errorBody = await response.json().catch(() => ({}));
+    const error = new Error(errorBody?.message || `Erro ${response.status}`) as any;
+    error.status = response.status;
+    error.data = errorBody;
+    throw error;
   }
 
   return response.json();

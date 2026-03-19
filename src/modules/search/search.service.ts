@@ -452,8 +452,10 @@ export class SearchService {
 
     // GOOGLE SHOPPING SEARCH (planos pagos)
     let products: Product[] = [];
-    const fixedLimit = 20; // ✅ SEMPRE 20 resultados
-    const usedSources: string[] = []; // Declarar antes do try
+    const fixedLimit = 20;
+    const usedSources: string[] = [];
+    let availableExpansionSources: string[] = [];
+    let primarySource = '';
 
     // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
     const category = classification?.category;
@@ -475,8 +477,6 @@ export class SearchService {
       // Se o primeiro retornar >= SATISFACTORY_THRESHOLD resultados, parar e oferecer expansão.
       // Veículos (webmotors) sempre executam sem threshold.
       const isVehicle = category === 'car' || category === 'motorcycle';
-      let primarySource = '';
-      let availableExpansionSources: string[] = [];
 
       for (const scraper of scrapers) {
         if (!this.isScraperAvailable(scraper)) {
@@ -536,19 +536,12 @@ export class SearchService {
 
         // Se não é veículo e já temos resultados suficientes, parar e oferecer expansão
         if (!isVehicle && products.length >= SATISFACTORY_THRESHOLD) {
-          // Calcular quais scrapers ainda não foram usados
           availableExpansionSources = scrapers
             .filter(s => !usedSources.some(u => u.startsWith(s)))
             .filter(s => this.isScraperAvailable(s));
           this.logger.log(`🎯 [STRATEGY] ${products.length} resultados satisfatórios em "${scraper}" — parando. Expansão disponível: ${availableExpansionSources.join(', ') || 'nenhuma'}`);
           break;
         }
-      }
-
-      // Guardar fontes de expansão no resultado para o frontend oferecer ao usuário
-      if (availableExpansionSources.length > 0) {
-        (this as any)._lastExpansionSources = availableExpansionSources;
-        (this as any)._lastPrimarySource = primarySource;
       }
 
       this.logger.log(`📊 [TOTAL] ${products.length} produtos consolidados de ${scrapers.length} fonte(s)`);
@@ -710,13 +703,10 @@ export class SearchService {
       originalCity: originalCity || undefined,
       cityFilterApplied: cityFilterApplied ? true : (originalCity ? false : undefined),
       relaxedFilters: relaxedFilters.length > 0 ? relaxedFilters : undefined,
-      canExpandSearch: (this as any)._lastExpansionSources?.length > 0 ? true : undefined,
-      expansionSources: (this as any)._lastExpansionSources?.length > 0 ? (this as any)._lastExpansionSources : undefined,
-      primarySource: (this as any)._lastPrimarySource || undefined,
+      canExpandSearch: availableExpansionSources.length > 0 ? true : undefined,
+      expansionSources: availableExpansionSources.length > 0 ? availableExpansionSources : undefined,
+      primarySource: primarySource || undefined,
     };
-    // Limpar estado temporário
-    delete (this as any)._lastExpansionSources;
-    delete (this as any)._lastPrimarySource;
 
     // Cache results for 1 hour (com filtros já aplicados)
     await this.redisService.set(

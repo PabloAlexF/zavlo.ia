@@ -136,13 +136,10 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (currentChatId && messages.length > 1) {
-        saveChatToHistory();
-      }
-    }, 1000);
+    if (!currentChatId || messages.length <= 1) return;
+    const timeout = setTimeout(() => saveChatToHistory(), 2000);
     return () => clearTimeout(timeout);
-  }, [messages, currentChatId]);
+  }, [messages.length, currentChatId]);
 
   const loadUserCredits = async () => {
     try {

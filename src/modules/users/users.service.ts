@@ -7,21 +7,18 @@ import { User } from './interfaces/user.interface';
 export class UsersService {
   constructor(private firebaseService: FirebaseService) {}
 
+  private readonly logger = new Logger(UsersService.name);
+
+  private readonly logger = new Logger(UsersService.name);
+
   async findById(userId: string): Promise<User | null> {
-    const logger = new Logger(UsersService.name);
     const firestore = this.firebaseService.getFirestore();
     const userDoc = await firestore.collection('users').doc(userId).get();
 
-    if (!userDoc.exists) {
-      logger.warn(`🔍 [USER DEBUG] User ${userId} not found`);
-      return null;
-    }
+    if (!userDoc.exists) return null;
 
     const userData = userDoc.data();
     delete userData.password;
-    
-    logger.log(`🔍 [USER DEBUG] Found user ${userId}: credits=${userData.credits}, plan=${userData.plan}, freeTrialUsed=${userData.freeTrialUsed}`);
-    logger.log(`📍 [USER DEBUG] Location data:`, userData.location);
 
     return { id: userDoc.id, ...userData } as User;
   }
@@ -37,10 +34,6 @@ export class UsersService {
   }
 
   async updatePlan(userId: string, plan: PlanType, billingCycle: 'monthly' | 'yearly'): Promise<User | null> {
-    const logger = new Logger(UsersService.name);
-    
-    logger.log(`💾 [DB] Atualizando plano do usuário ${userId} para: ${plan}`);
-    
     const firestore = this.firebaseService.getFirestore();
     const now = new Date();
     const expiresAt = new Date();
@@ -60,31 +53,22 @@ export class UsersService {
         updatedAt: now,
       });
       
-      logger.log(`✅ [DB] Plano atualizado no Firebase com sucesso`);
-      
-      const updatedUser = await this.findById(userId);
-      logger.log(`🔍 [DB] Usuário recarregado: plano=${updatedUser?.plan}`);
-      
-      return updatedUser;
+      return this.findById(userId);
     } catch (error) {
-      logger.error(`❌ [DB] Erro ao atualizar plano no Firebase: ${error.message}`);
+      this.logger.error(`Erro ao atualizar plano: ${error.message}`);
       throw error;
     }
   }
 
   async addCredits(userId: string, credits: number) {
     const firestore = this.firebaseService.getFirestore();
-    const userDoc = await firestore.collection('users').doc(userId).get();
-    
-    if (!userDoc.exists) {
-      throw new BadRequestException('User not found');
-    }
+    const userRef = firestore.collection('users').doc(userId);
 
-    const currentCredits = userDoc.data()?.credits || 0;
-    
-    await firestore.collection('users').doc(userId).update({
-      credits: currentCredits + credits,
-      updatedAt: new Date(),
+    await firestore.runTransaction(async (tx) => {
+      const userDoc = await tx.get(userRef);
+      if (!userDoc.exists) throw new BadRequestException('User not found');
+      const current = userDoc.data()?.credits || 0;
+      tx.update(userRef, { credits: current + credits, updatedAt: new Date() });
     });
 
     return this.findById(userId);
@@ -199,85 +183,37 @@ export class UsersService {
   }
 
   async useCredit(userId: string, amount: number = 1) {
-    const logger = new Logger(UsersService.name);
     const firestore = this.firebaseService.getFirestore();
-    
-    logger.log(`🔍 [CREDITS DEBUG] Starting useCredit for user ${userId}, amount: ${amount}`);
-    
-    const userDoc = await firestore.collection('users').doc(userId).get();
-    
-    if (!userDoc.exists) {
-      logger.error(`❌ [CREDITS DEBUG] User ${userId} not found`);
-      throw new BadRequestException('User not found');
-    }
+    const userRef = firestore.collection('users').doc(userId);
 
-    const userData = userDoc.data();
-    const currentCredits = userData?.credits || 0;
-    const freeTrialUsed = userData?.freeTrialUsed || false;
-    const plan = userData?.plan || 'free';
-    
-    logger.log(`💳 [CREDITS DEBUG] User ${userId} data:`);
-    logger.log(`   - currentCredits: ${currentCredits}`);
-    logger.log(`   - amount to deduct: ${amount}`);
-    logger.log(`   - freeTrialUsed: ${freeTrialUsed}`);
-    logger.log(`   - plan: ${plan}`);
-    
-    // Se tem crédito de teste E ainda não usou = usar teste
-    if (currentCredits > 0 && !freeTrialUsed) {
-      const newCredits = currentCredits - amount;
-      logger.log(`💳 [CREDITS DEBUG] Using free trial credit: ${currentCredits} -> ${newCredits}`);
-      
-      try {
-        await firestore.collection('users').doc(userId).update({
-          credits: newCredits,
-          freeTrialUsed: true,
-          updatedAt: new Date(),
+    await firestore.runTransaction(async (tx) => {
+      const userDoc = await tx.get(userRef);
+
+      if (!userDoc.exists) throw new BadRequestException('User not found');
+
+      const userData = userDoc.data();
+      const currentCredits = userData?.credits || 0;
+      const freeTrialUsed = userData?.freeTrialUsed || false;
+
+      if (currentCredits < amount) {
+        throw new BadRequestException({
+          error: 'INSUFFICIENT_CREDITS',
+          message: 'Insufficient credits',
+          currentCredits,
+          requiredCredits: amount,
+          action: 'buy_credits',
         });
-        logger.log(`✅ [CREDITS DEBUG] Free trial credit deducted successfully`);
-        
-        // Verificar se realmente foi atualizado
-        const updatedDoc = await firestore.collection('users').doc(userId).get();
-        const updatedData = updatedDoc.data();
-        logger.log(`🔍 [CREDITS DEBUG] After update - credits: ${updatedData?.credits}, freeTrialUsed: ${updatedData?.freeTrialUsed}`);
-        
-        return;
-      } catch (error) {
-        logger.error(`❌ [CREDITS DEBUG] Error updating free trial credit: ${error.message}`);
-        throw error;
       }
-    }
-    
-    // Créditos normais
-    if (currentCredits < amount) {
-      logger.warn(`❌ [CREDITS DEBUG] Insufficient credits: has ${currentCredits}, needs ${amount}`);
-      throw new BadRequestException({
-        error: 'INSUFFICIENT_CREDITS',
-        message: 'Insufficient credits',
-        currentCredits,
-        requiredCredits: amount,
-        action: 'buy_credits'
-      });
-    }
 
-    const newCredits = currentCredits - amount;
-    logger.log(`💳 [CREDITS DEBUG] Deducting normal credit: ${currentCredits} -> ${newCredits}`);
-    
-    try {
-      await firestore.collection('users').doc(userId).update({
-        credits: newCredits,
+      const update: Record<string, any> = {
+        credits: currentCredits - amount,
         updatedAt: new Date(),
-      });
-      logger.log(`✅ [CREDITS DEBUG] Normal credit deducted successfully`);
-      
-      // Verificar se realmente foi atualizado
-      const updatedDoc = await firestore.collection('users').doc(userId).get();
-      const updatedData = updatedDoc.data();
-      logger.log(`🔍 [CREDITS DEBUG] After update - credits: ${updatedData?.credits}`);
-      
-    } catch (error) {
-      logger.error(`❌ [CREDITS DEBUG] Error updating normal credit: ${error.message}`);
-      throw error;
-    }
+      };
+
+      if (!freeTrialUsed) update.freeTrialUsed = true;
+
+      tx.update(userRef, update);
+    });
   }
 
   async getPlanLimits(plan: string) {

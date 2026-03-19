@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Req, ForbiddenException, UseGuards, BadRequestException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, ForbiddenException, UseGuards, BadRequestException, UploadedFile, UseInterceptors, Logger } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { SearchService } from './search.service';
@@ -11,6 +11,8 @@ import { CurrentUser } from '@common/decorators/current-user.decorator';
 
 @Controller('search')
 export class SearchController {
+  private readonly logger = new Logger(SearchController.name);
+
   constructor(
     private searchService: SearchService,
     private cloudinaryService: CloudinaryService,
@@ -144,24 +146,15 @@ export class SearchController {
     const { query, useRealScraping, limit, ...filters } = searchDto;
     const clientIp = this.getClientIp(req);
 
-    console.log(`🔍 [CONTROLLER DEBUG] Search request:`);
-    console.log(`   - query: ${query}`);
-    console.log(`   - sortBy: ${sortBy}`);
-    console.log(`   - minPrice: ${minPrice}`);
-    console.log(`   - maxPrice: ${maxPrice}`);
-    console.log(`   - classification provided: ${!!classificationStr}`);
-    console.log(`   - user: ${user ? `${user.id} (${user.plan})` : 'anonymous'}`);
-    console.log(`   - clientIp: ${clientIp}`);
-    console.log(`   - filters:`, filters);
+    this.logger.log(`[SEARCH] query="${query}" user=${user?.id ?? 'anonymous'} ip=${clientIp}`);
 
     // ✅ Parse classificação se fornecida
     let classification;
     if (classificationStr) {
       try {
         classification = JSON.parse(classificationStr);
-        console.log(`✅ [CONTROLLER] Using provided classification, skipping re-classification`);
-      } catch (error) {
-        console.warn(`⚠️ [CONTROLLER] Invalid classification JSON, will re-classify`);
+      } catch {
+        this.logger.warn('[SEARCH] Invalid classification JSON, will re-classify');
       }
     }
 
@@ -178,11 +171,8 @@ export class SearchController {
     // REGRA: 1 BUSCA DE TEXTO GRATUITA POR IP
     // ============================================
     const hasUsed = await this.ipLimitService.hasUsedFreeSearch(clientIp);
-    console.log(`🔍 [CONTROLLER DEBUG] IP ${clientIp} hasUsed free search: ${hasUsed}`);
 
     if (!hasUsed) {
-      // IP ainda não usou = busca gratuita
-      console.log(`✅ [CONTROLLER DEBUG] Using free search for IP ${clientIp}`);
       await this.ipLimitService.markFreeSearchUsed(clientIp);
       return this.searchService.searchByText(
         query,
@@ -193,7 +183,6 @@ export class SearchController {
 
     // IP já usou a busca gratuita
     if (!user) {
-      console.log(`❌ [CONTROLLER DEBUG] IP ${clientIp} already used free search and no user logged in`);
       throw new ForbiddenException({
         error: 'FREE_LIMIT_EXCEEDED',
         message: 'Você já fez sua busca gratuita. Faça login ou assine um plano para continuar.',
@@ -201,11 +190,7 @@ export class SearchController {
       });
     }
 
-    console.log(`🔍 [CONTROLLER DEBUG] User ${user.id} with plan ${user.plan} proceeding with search`);
-
-    // Usuário logado - usa créditos/plano
     if (user.plan === 'free') {
-      console.log(`🔍 [CONTROLLER DEBUG] Free plan user - using freeMode`);
       return this.searchService.searchByText(
         query,
         { ...searchFilters, useRealScraping: true, freeMode: true, limit: limit || 10 },
@@ -213,7 +198,6 @@ export class SearchController {
       );
     }
 
-    console.log(`🔍 [CONTROLLER DEBUG] Paid plan user - using full search`);
     return this.searchService.searchByText(
       query,
       { ...searchFilters, useRealScraping: useRealScraping === 'true', limit: limit || 50 },
@@ -306,37 +290,6 @@ export class SearchController {
     }
 
     return this.searchService.searchProductPrices(body.productName, user.id);
-  }
-
-  @Get('debug/credits')
-  @UseGuards(JwtAuthGuard)
-  async debugCredits(@CurrentUser() user: any) {
-    console.log(`🔍 [DEBUG] Checking credits for user ${user.id}`);
-    
-    const userDetails = await this.searchService.getUserDetails(user.id);
-    
-    console.log(`🔍 [DEBUG] User details:`, userDetails);
-    
-    return {
-      userId: user.id,
-      userDetails,
-      timestamp: new Date().toISOString()
-    };
-  }
-
-  @Post('debug/use-credit')
-  @UseGuards(JwtAuthGuard)
-  async debugUseCredit(@CurrentUser() user: any) {
-    console.log(`🔍 [DEBUG] Manually using 1 credit for user ${user.id}`);
-    
-    try {
-      const result = await this.searchService.debugUseCredit(user.id);
-      console.log(`✅ [DEBUG] Credit used successfully:`, result);
-      return result;
-    } catch (error) {
-      console.error(`❌ [DEBUG] Error using credit:`, error);
-      throw error;
-    }
   }
 
   @Get('suggestions')
