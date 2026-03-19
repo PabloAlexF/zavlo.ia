@@ -116,15 +116,20 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
           {isConditionQuestion && (
             <>
               <p className="mb-3 text-sm text-slate-300">Qual condição você prefere?</p>
-              {['novo', 'usado'].map((option) => (
+              {[
+                { value: 'novo', label: 'Novo', desc: '0km, lacrado ou nunca usado' },
+                { value: 'usado', label: 'Usado', desc: 'Seminovo ou segunda mão' },
+                { value: 'ambos', label: 'Tanto faz', desc: 'Ver todas as opções' },
+              ].map((option) => (
                 <motion.button
-                  key={option}
+                  key={option.value}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => safeSubmit(option)}
+                  onClick={() => safeSubmit(option.value)}
                   className="w-full rounded-xl border-2 border-white/10 bg-white/5 p-4 text-left transition-all hover:border-violet-500 hover:bg-violet-500/10"
                 >
-                  <span className="font-semibold text-white capitalize text-base">{option}</span>
+                  <span className="font-semibold text-white text-base">{option.label}</span>
+                  <p className="mt-0.5 text-xs text-slate-500">{option.desc}</p>
                 </motion.button>
               ))}
             </>
@@ -171,7 +176,7 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
                 autoFocus
               />
               <div className="grid grid-cols-3 gap-2">
-                {['2024', '2023', '2022', '2021', '2020', '2019'].map((year) => (
+                {['2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2015'].map((year) => (
                   <button
                     key={year}
                     onClick={() => safeSubmit(year)}
@@ -180,6 +185,12 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
                     {year}
                   </button>
                 ))}
+                <button
+                  onClick={() => safeSubmit('qualquer ano')}
+                  className="col-span-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400 hover:border-violet-500 hover:bg-violet-500/10 hover:text-white transition-colors"
+                >
+                  Qualquer ano
+                </button>
               </div>
             </div>
           )}
@@ -198,13 +209,13 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
                 autoFocus
               />
               {(userLocation?.city || userLocation?.state) && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {userLocation.city && (
                     <button
                       onClick={() => safeSubmit(userLocation.city!)}
-                      className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 hover:border-violet-500 hover:bg-violet-500/10 hover:text-white transition-colors"
+                      className="flex-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-300 hover:border-violet-500 hover:bg-violet-500/20 transition-colors"
                     >
-                      {userLocation.city}
+                      📍 {userLocation.city}
                     </button>
                   )}
                   {userLocation.state && (
@@ -215,7 +226,21 @@ export function QuestionModal({ question, missingFields, questionType, onAnswer,
                       {userLocation.state}
                     </button>
                   )}
+                  <button
+                    onClick={() => safeSubmit('todo o brasil')}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400 hover:border-violet-500 hover:bg-violet-500/10 hover:text-white transition-colors"
+                  >
+                    🇧🇷 Todo o Brasil
+                  </button>
                 </div>
+              )}
+              {!userLocation?.city && !userLocation?.state && (
+                <button
+                  onClick={() => safeSubmit('todo o brasil')}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400 hover:border-violet-500 hover:bg-violet-500/10 hover:text-white transition-colors"
+                >
+                  🇧🇷 Todo o Brasil
+                </button>
               )}
             </div>
           )}

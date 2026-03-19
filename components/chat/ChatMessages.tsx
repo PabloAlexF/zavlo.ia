@@ -1,8 +1,9 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, MapPin, Loader2, User, Edit2, CreditCard } from 'lucide-react';
+import { Sparkles, MapPin, User, Edit2, CreditCard } from 'lucide-react';
 import { ProductCard } from '@/components/features/ProductCard';
+import { SearchingAnimation } from '@/components/chat/SearchingAnimation';
 import Link from 'next/link';
 
 interface Message {
@@ -166,35 +167,7 @@ export function ChatMessages({
                   <div className="max-w-[90%] sm:max-w-[78%]">
                     <AIBubble>
                       {message.content === 'searching_animation' ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2.5">
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                            >
-                              <Loader2 className="h-4 w-4 text-teal-300/70" />
-                            </motion.div>
-                            <span className="text-slate-300">Buscando produtos...</span>
-                          </div>
-                          <div className="space-y-1.5 pl-6">
-                            {['Analisando marketplaces', 'Comparando preços', 'Organizando resultados'].map((text, i) => (
-                              <motion.div
-                                key={i}
-                                initial={{ opacity: 0, x: -6 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.35 }}
-                                className="flex items-center gap-2 text-xs text-slate-500"
-                              >
-                                <motion.div
-                                  animate={{ opacity: [0.3, 1, 0.3] }}
-                                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.35 }}
-                                  className="h-1 w-1 rounded-full bg-teal-400/60"
-                                />
-                                {text}
-                              </motion.div>
-                            ))}
-                          </div>
-                        </div>
+                        <SearchingAnimation />
                       ) : message.content === 'location_question' ? (
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 text-slate-300">
@@ -356,7 +329,7 @@ export function ChatMessages({
               {/* ── Produtos ── */}
               {message.type === 'products' && message.products && message.products.length > 0 && (
                 <div className="space-y-5">
-                  {/* 💰 Badge de faixa de preço aplicada (DADOS ESTRUTURADOS) */}
+                  {/* 💰 Badge de faixa de preço aplicada */}
                   {message.priceRangeApplied && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
@@ -376,64 +349,21 @@ export function ChatMessages({
                   )}
                   
                   <motion.div
-                    initial={{ opacity: 0 }}
+                    initial={{ opacity: 1 }}
                     animate={{ opacity: 1 }}
                     className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3"
                   >
-                    {[...message.products]
-                      .sort((a, b) => {
-                        // 🧠 Ranking inteligente por score
-                        const scoreProduct = (p: any) => {
-                          let score = 0;
-                          
-                          // Preço (mais barato = melhor) - peso 40%
-                          const price = p.price || Infinity;
-                          if (price !== Infinity) {
-                            score += (1 / price) * 100000;
-                          }
-                          
-                          // Rating (se existir) - peso 30%
-                          if (p.rating) {
-                            score += p.rating * 60;
-                          }
-                          
-                          // Fonte confiável - peso 20%
-                          const sourceBonus: Record<string, number> = {
-                            'google_shopping': 50,
-                            'webmotors': 45,
-                            'mobiauto': 40,
-                            'olx': 35,
-                          };
-                          score += sourceBonus[p.source] || 20;
-                          
-                          // Imagem disponível - peso 10%
-                          if (p.image) {
-                            score += 30;
-                          }
-                          
-                          return score;
-                        };
-                        
-                        return scoreProduct(b) - scoreProduct(a);
-                      })
-                      .map((product, idx) => (
-                        <motion.div
-                          key={product.id || idx}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.04 }}
-                        >
-                          <ProductCard product={product} />
-                        </motion.div>
-                      ))}
+                    {message.products.map((product, idx) => (
+                      <motion.div
+                        key={product.id || idx}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.04 }}
+                      >
+                        <ProductCard product={product} />
+                      </motion.div>
+                    ))}
                   </motion.div>
-
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <AIAvatar />
-                    <AIBubble>
-                      Encontrei <span className="font-semibold text-violet-400">{message.products.length} produtos</span>. Quer buscar outro?
-                    </AIBubble>
-                  </div>
                 </div>
               )}
             </motion.div>

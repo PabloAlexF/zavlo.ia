@@ -9,27 +9,28 @@
         "corolla", "civic", "onix", "gol", "polo", "hb20", "creta",
         "compass", "renegade", "kicks", "tracker", "t-cross"
       ],
-      "scrapers": ["webmotors", "mercadolivre"],
+      "scrapers": ["mercadolivre", "webmotors", "olx"],
       "priority": 9
     },
     "motorcycle": {
       "keywords": [
         "moto", "motos", "motocicleta", "motocicletas", "scooter",
-        "honda", "yamaha", "suzuki", "kawasaki", "harley",
+        "yamaha", "suzuki", "kawasaki", "harley", "ducati",
         "cg", "fazer", "cb", "xre", "bros", "titan", "fan",
-        "biz", "pcx", "nmax", "mt", "r1", "ninja", "z"
+        "biz", "pcx", "nmax", "mt", "r1", "ninja", "z",
+        "motociclismo", "cilindradas", "cc"
       ],
-      "scrapers": ["webmotors", "mercadolivre"],
+      "scrapers": ["mercadolivre", "webmotors", "olx"],
       "priority": 9
     },
     "smartphone": {
       "keywords": [
-        "iphone", "samsung", "xiaomi", "motorola", "lg", "asus",
+        "iphone", "samsung", "xiaomi", "motorola", "lg",
         "smartphone", "celular", "telefone", "galaxy", "redmi",
         "poco", "realme", "oneplus", "pixel", "moto g", "moto e",
-        "note", "pro max", "ultra", "fold", "flip"
+        "galaxy note", "pro max", "ultra", "galaxy fold", "galaxy flip"
       ],
-      "scrapers": ["google_shopping", "olx"],
+      "scrapers": ["google_shopping", "mercadolivre", "olx"],
       "priority": 8
     },
     "electronics": {
@@ -41,7 +42,7 @@
         "macbook", "dell", "lenovo", "acer", "asus", "gamer",
         "rtx", "gtx", "ryzen", "intel", "i5", "i7", "i9"
       ],
-      "scrapers": ["google_shopping", "olx"],
+      "scrapers": ["google_shopping", "mercadolivre", "olx"],
       "priority": 7
     },
     "furniture": {
@@ -50,7 +51,7 @@
         "armario", "armário", "estante", "rack", "criado-mudo",
         "movel", "móvel", "moveis", "móveis", "colchao", "colchão"
       ],
-      "scrapers": ["olx", "google_shopping"],
+      "scrapers": ["google_shopping", "mercadolivre", "olx"],
       "priority": 6
     },
     "appliance": {
@@ -59,7 +60,7 @@
         "secadora", "freezer", "ar-condicionado", "ventilador",
         "liquidificador", "batedeira", "aspirador", "ferro de passar"
       ],
-      "scrapers": ["google_shopping", "olx"],
+      "scrapers": ["google_shopping", "mercadolivre", "olx"],
       "priority": 6
     },
     "fashion": {
@@ -70,7 +71,7 @@
         "puma", "reebok", "vans", "converse", "air max", "jordan",
         "yeezy", "ultraboost", "roupa", "roupas"
       ],
-      "scrapers": ["google_shopping", "olx"],
+      "scrapers": ["google_shopping", "mercadolivre", "olx"],
       "priority": 5
     },
     "marketplace_used": {
@@ -78,12 +79,12 @@
         "usado", "usada", "usados", "usadas", "seminovo", "seminova",
         "segunda mao", "segunda mão", "usado em bom estado"
       ],
-      "scrapers": ["olx"],
+      "scrapers": ["olx", "mercadolivre"],
       "priority": 8
     },
     "general": {
       "keywords": [],
-      "scrapers": ["google_shopping"],
+      "scrapers": ["google_shopping", "mercadolivre", "olx"],
       "priority": 1
     }
   },
@@ -103,6 +104,9 @@
     "telefone": "smartphone",
     "automovel": "carro",
     "veiculo": "carro",
+    "caminhonete": "carro",
+    "picape": "carro",
+    "pickup": "carro",
     "motocicleta": "moto",
     "pc": "computador",
     "tv": "televisao",

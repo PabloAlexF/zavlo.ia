@@ -25,7 +25,7 @@ const NOT_CORRECTION_PATTERNS = [
 
 // Palavras que indicam refinamento (não mudança completa)
 const REFINEMENT_PATTERNS = [
-  /\b(também|e|mais|além|junto|com)\b/i,
+  /\b(também|além|junto)\b/i,
   /\b(específico|especifico|detalhe|característica|caracteristica)\b/i,
 ];
 
@@ -75,11 +75,12 @@ export function detectContextChange(
   }
   
   // Verifica se é uma nova busca (sem relação com anterior)
+  // Threshold 0.15: permissivo o suficiente para não resetar refinamentos
   if (conversationHistory.length > 0) {
     const lastMessage = conversationHistory[conversationHistory.length - 1];
     const similarity = calculateSimilarity(normalized, lastMessage.toLowerCase());
     
-    if (similarity < 0.3) {
+    if (similarity < 0.15) {
       const extracted = extractProductFromCorrection(currentMessage);
       return {
         hasChange: true,
