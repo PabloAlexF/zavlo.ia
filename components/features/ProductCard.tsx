@@ -47,18 +47,18 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
   const { user } = useUser();
   const fallbackUser = getUser(); // Fallback para casos sem context
   const currentUser = user || fallbackUser;
-  
+
+  // Derivados do produto — declarados antes dos useState para evitar TDZ
+  const images = product.images || [];
+  const hasImage = images.length > 0;
+  const hasMultipleImages = images.length > 1;
+  const isVehicle = IS_VEHICLE_SOURCE(product.source);
+
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(hasImage);
   const [imageRetries, setImageRetries] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
-  
-  // Normalizar images para sempre ser array
-  const images = product.images || [];
-  const hasImage = images.length > 0;
-  const hasMultipleImages = images.length > 1;
-  const isVehicle = IS_VEHICLE_SOURCE(product.source);
 
   // Normalizar location com fallback seguro
   const location = typeof product.location === 'string' 
