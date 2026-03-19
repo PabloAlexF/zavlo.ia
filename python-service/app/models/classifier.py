@@ -172,6 +172,10 @@ class ProductClassifier:
         query = unicodedata.normalize("NFKD", query)
         query = "".join(c for c in query if not unicodedata.combining(c))
         
+        # Remover pontuação (mantém espaços e alfanuméricos)
+        query = re.sub(r'[^\w\s]', ' ', query)
+        query = ' '.join(query.split())
+        
         # Aplicar sinônimos
         words = query.split()
         normalized_words = [self.synonyms.get(word, word) for word in words]

@@ -1,5 +1,5 @@
 export interface Product {
-  id: string;
+  id?: string;
   title: string;
   description?: string;
   price: number;
@@ -15,7 +15,9 @@ export interface Product {
   seller?: {
     name: string;
     phone?: string;
+    whatsapp?: string;
   };
+  brand?: string;
   condition?: 'new' | 'used';
   createdAt?: string;
   // Campos de veículo (Webmotors)

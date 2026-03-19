@@ -9,7 +9,8 @@
         "corolla", "civic", "onix", "gol", "polo", "hb20", "creta",
         "compass", "renegade", "kicks", "tracker", "t-cross"
       ],
-      "scrapers": ["webmotors", "mercadolivre"]
+      "scrapers": ["webmotors", "mercadolivre"],
+      "priority": 9
     },
     "motorcycle": {
       "keywords": [
@@ -18,7 +19,8 @@
         "cg", "fazer", "cb", "xre", "bros", "titan", "fan",
         "biz", "pcx", "nmax", "mt", "r1", "ninja", "z"
       ],
-      "scrapers": ["webmotors", "mercadolivre"]
+      "scrapers": ["webmotors", "mercadolivre"],
+      "priority": 9
     },
     "smartphone": {
       "keywords": [
