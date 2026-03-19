@@ -1,6 +1,8 @@
 'use client';
 
 import { memo, useState, useCallback } from 'react';
+import Image from 'next/image';
+import { Product } from '@/types';
 import { useUser } from '@/contexts/UserContext';
 import { getUser } from '@/utils/auth';
 import { toast } from 'sonner';
@@ -48,7 +50,7 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
   
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(hasImage);
   const [imageRetries, setImageRetries] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
   
@@ -108,7 +110,7 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
     }
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
       const response = await fetch(`${API_URL}/favorites`, {
         method: 'POST',
         headers: {
@@ -135,7 +137,7 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
       console.error('Erro ao favoritar:', error);
       toast.error("Erro ao favoritar");
     }
-  }, [currentUser, product, images, isFavorite]);
+  }, [currentUser, product, images]);
 
   return (
     <div className="group transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/20">
@@ -155,7 +157,7 @@ export const ProductCard = memo(function ProductCard({ product }: ProductCardPro
                 style={{ objectFit: 'cover' }}
                 sizes="(max-width: 768px) 100vw, 25vw"
                 onError={handleImageError}
-                onLoadingComplete={handleImageLoad}
+                onLoad={handleImageLoad}
                 priority={false}
               />
 
