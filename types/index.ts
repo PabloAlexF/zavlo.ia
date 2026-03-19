@@ -18,7 +18,7 @@ export interface Product {
   };
   condition?: 'new' | 'used';
   createdAt?: string;
-  // Campos de veículo (Webmotors / Mobiauto)
+  // Campos de veículo (Webmotors)
   make?: string;
   model?: string;
   version?: string;
@@ -36,6 +36,13 @@ export interface Product {
   percentOff?: string;
   rating?: number;
   reviews?: number;
+  // Campos de marketplace (MercadoLivre)
+  shipping?: string;
+  installments?: string;
+  isInternational?: boolean;
+  shippedFrom?: string;
+  highlight?: string;
+  sku?: string;
 }
 
 export interface SearchFilters {
