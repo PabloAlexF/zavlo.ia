@@ -231,6 +231,8 @@ export class SearchService {
     priceRangeApplied?: { min?: number; max?: number; target?: number };
     searchedNationally?: boolean;
     originalCity?: string;
+    cityFilterApplied?: boolean;
+    relaxedFilters?: string[];
   }> {
     const startTime = Date.now();
     let creditsUsed = 0;
@@ -372,6 +374,8 @@ export class SearchService {
         // Garantir campos presentes mesmo em entradas antigas do cache
         searchedNationally: cachedResult.searchedNationally ?? undefined,
         originalCity: cachedResult.originalCity ?? undefined,
+        cityFilterApplied: cachedResult.cityFilterApplied ?? undefined,
+        relaxedFilters: cachedResult.relaxedFilters ?? undefined,
       };
     }
 
@@ -393,7 +397,11 @@ export class SearchService {
             results: results, 
             total: results.length,
             creditsUsed,
-            remainingCredits
+            remainingCredits,
+            searchedNationally: undefined,
+            originalCity: undefined,
+            cityFilterApplied: undefined,
+            relaxedFilters: undefined,
           };
           
           this.logger.log(`🆓 [SEARCH DEBUG] Free search completed with ${results.length} results`);
@@ -426,7 +434,11 @@ export class SearchService {
       ?? (category === 'car' || category === 'motorcycle' ? ['webmotors', 'mobiauto'] : ['google_shopping']);
     const resultLimit = 20;
     let searchedNationally = false;
-    const originalCity = classification?.user_location?.city || undefined;
+    // Normalizar cidade: decodificar URL encoding e capitalizar
+    const rawCity = classification?.user_location?.city || undefined;
+    const originalCity = rawCity
+      ? rawCity.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
+      : undefined;
     this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
 
     try {
@@ -669,38 +681,50 @@ export class SearchService {
     let finalResults = products;
     let priceRangeApplied: { min?: number; max?: number; target?: number } | undefined;
     
-    // 💰 FILTRO DE PREÇO ESTRUTURADO
+    // Flags para avisar o frontend quais filtros foram relaxados
+    const relaxedFilters: string[] = [];
+
+    // 💰 FILTRO DE PREÇO ESTRUTURADO (com fallback gracioso)
     if (classification?.price_range) {
       const priceRange = classification.price_range;
       this.logger.log(`💰 [PRICE FILTER] Aplicando filtro estruturado:`, priceRange);
-      
-      finalResults = this.applyStructuredPriceFilter(products, priceRange);
-      priceRangeApplied = {
-        min: priceRange.min_price,
-        max: priceRange.max_price,
-        target: priceRange.target_price
-      };
-      
-      this.logger.log(`💰 [PRICE FILTER] Resultados: ${products.length} → ${finalResults.length}`);
+
+      const filtered = this.applyStructuredPriceFilter(products, priceRange);
+      this.logger.log(`💰 [PRICE FILTER] Resultados: ${products.length} → ${filtered.length}`);
+
+      if (filtered.length > 0) {
+        finalResults = filtered;
+        priceRangeApplied = {
+          min: priceRange.min_price,
+          max: priceRange.max_price,
+          target: priceRange.target_price
+        };
+      } else {
+        this.logger.warn(`💰 [PRICE FILTER] Nenhum resultado no orçamento — exibindo todos sem filtro de preço`);
+        relaxedFilters.push('price');
+      }
     } else if (filters?.minPrice || filters?.maxPrice) {
-      // Fallback para filtros legados
-      finalResults = this.applyPriceFilter(products, filters.minPrice, filters.maxPrice);
-      priceRangeApplied = {
-        min: filters.minPrice,
-        max: filters.maxPrice
-      };
+      const filtered = this.applyPriceFilter(products, filters.minPrice, filters.maxPrice);
+      if (filtered.length > 0) {
+        finalResults = filtered;
+        priceRangeApplied = { min: filters.minPrice, max: filters.maxPrice };
+      } else {
+        this.logger.warn(`💰 [PRICE FILTER] Nenhum resultado no orçamento legado — exibindo todos`);
+        relaxedFilters.push('price');
+      }
     }
 
-    // 🏠 FILTRO DE LOCALIZAÇÃO (pós-scraping para webmotors/mobiauto)
+    // 🏠 FILTRO DE LOCALIZAÇÃO (pós-scraping — só aplica se seller não for null)
+    let cityFilterApplied = false;
     if (classification?.user_location?.city && finalResults.length > 0) {
-      const city = classification.user_location.city.toLowerCase();
+      const city = classification.user_location.city.replace(/\+/g, ' ').toLowerCase().trim();
       const byCity = finalResults.filter(p =>
         (p as any).dealerLocation?.toLowerCase().includes(city)
       );
-      // Só aplicar se não esvaziar os resultados
       if (byCity.length > 0) {
         this.logger.log(`🏠 [LOCATION FILTER] ${finalResults.length} → ${byCity.length} (cidade: ${city})`);
         finalResults = byCity;
+        cityFilterApplied = true;
       } else {
         this.logger.log(`🏠 [LOCATION FILTER] Nenhum resultado em ${city} — mantendo todos`);
       }
@@ -719,12 +743,14 @@ export class SearchService {
       if (byCondition.length > 0) {
         this.logger.log(`🔄 [CONDITION FILTER] ${finalResults.length} → ${byCondition.length} (${cond})`);
         finalResults = byCondition;
+      } else {
+        this.logger.warn(`🔄 [CONDITION FILTER] Nenhum resultado com condition=${cond} — mantendo todos`);
       }
     } else if (skipConditionFilter) {
       this.logger.log(`🔄 [CONDITION FILTER] Ignorado — condition=new mas ano=${classification.detected_year} indica carro antigo`);
     }
 
-    // 📅 FILTRO DE ANO (pós-scraping — ano não é passado na URL do scraper)
+    // 📅 FILTRO DE ANO (com fallback gracioso)
     if (classification?.detected_year && finalResults.length > 0) {
       const yr = classification.detected_year;
       const byYear = finalResults.filter(p => {
@@ -734,6 +760,9 @@ export class SearchService {
       if (byYear.length > 0) {
         this.logger.log(`📅 [YEAR FILTER] ${finalResults.length} → ${byYear.length} (ano: ${yr})`);
         finalResults = byYear;
+      } else {
+        this.logger.warn(`📅 [YEAR FILTER] Nenhum resultado para ano=${yr} — exibindo todos sem filtro de ano`);
+        relaxedFilters.push('year');
       }
     }
 
@@ -744,7 +773,9 @@ export class SearchService {
       remainingCredits,
       priceRangeApplied,
       searchedNationally: searchedNationally || undefined,
-      originalCity: searchedNationally ? originalCity : undefined,
+      originalCity: (searchedNationally || !cityFilterApplied) && originalCity ? originalCity : undefined,
+      cityFilterApplied: cityFilterApplied ? true : (originalCity ? false : undefined),
+      relaxedFilters: relaxedFilters.length > 0 ? relaxedFilters : undefined,
     };
 
     // Cache results for 1 hour (com filtros já aplicados)
