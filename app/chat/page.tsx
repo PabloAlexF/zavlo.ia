@@ -326,12 +326,11 @@ export default function ChatPage() {
     setMessages(prev => [...prev, userMessage]);
 
     if (userCredits < 1) {
-      setTimeout(() => {
-        addMessage('ai', 'Créditos insuficientes para busca por imagem!');
-        setLoading(false);
-        setUploadedImage(null);
-        setImageFile(null);
-      }, 500);
+      await delay(500);
+      addMessage('ai', 'Créditos insuficientes para busca por imagem!');
+      setLoading(false);
+      setUploadedImage(null);
+      setImageFile(null);
       return;
     }
 
@@ -371,9 +370,9 @@ export default function ChatPage() {
         const creditsUsed = data.creditsUsed || 1;
         const remainingCredits = data.remainingCredits ?? userCredits - 1;
         let productName = (data.productName || 'Produto não identificado')
-          .replace(/^Esta imagem mostra uma?\\s*/i, '')
-          .replace(/^Esta é uma?\\s*/i, '')
-          .replace(/^Este é um\\s*/i, '')
+          .replace(/^Esta imagem mostra uma?\s*/i, '')
+          .replace(/^Esta é uma?\s*/i, '')
+          .replace(/^Este é um\s*/i, '')
           .trim();
 
         await delay(800);
@@ -439,7 +438,8 @@ export default function ChatPage() {
       
       const params = new URLSearchParams({
         query: detectedProductName,
-        sortBy: sortBy
+        sortBy: sortBy,
+        classification: JSON.stringify({ category: 'general', scrapers: [{ name: 'google_shopping', score: 1.0 }] }),
       });
       
       const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
@@ -683,7 +683,7 @@ export default function ChatPage() {
 
       // ✅ VALIDAÇÃO: Verificar se é realmente um produto pesquisável
       // Não executar busca diretamente, apenas classificar
-      classifyQuery(currentInput);
+      await classifyQuery(currentInput);
   };
 
   const classifyQuery = async (query: string) => {
@@ -870,6 +870,16 @@ export default function ChatPage() {
         return;
       }
 
+      if (response.status === 403) {
+        const errData = await response.json().catch(() => ({}));
+        const isFreeLimit = errData?.error === 'FREE_LIMIT_EXCEEDED' || errData?.message?.includes('gratuita');
+        addMessage('ai', isFreeLimit
+          ? '🔒 Você já usou sua busca gratuita. Faça login ou assine um plano para continuar buscando!'
+          : 'Acesso negado. Verifique seu plano.');
+        setLoading(false);
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
         
@@ -927,6 +937,12 @@ export default function ChatPage() {
             console.log('[SEARCH] ========== BUSCA CONCLUÍDA (0 resultados) ==========');
             return;
           }
+
+        // Aviso amigável quando o backend expandiu para busca nacional
+        if (data.searchedNationally && data.originalCity) {
+          const cityLabel = data.originalCity.charAt(0).toUpperCase() + data.originalCity.slice(1);
+          addMessage('ai', `📍 Não encontrei resultados específicos em **${cityLabel}**, então expandi a busca para **todo o Brasil**. Veja os resultados abaixo — você pode filtrar pelo vendedor mais próximo!`);
+        }
 
         const productsMessage: Message = {
             id: crypto.randomUUID(),
