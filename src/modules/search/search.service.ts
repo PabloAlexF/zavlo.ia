@@ -243,6 +243,9 @@ export class SearchService {
     originalCity?: string;
     cityFilterApplied?: boolean;
     relaxedFilters?: string[];
+    canExpandSearch?: boolean;
+    expansionSources?: string[];
+    primarySource?: string;
   }> {
     const startTime = Date.now();
     let creditsUsed = 0;
@@ -456,7 +459,8 @@ export class SearchService {
     const category = classification?.category;
     const scrapers = (classification?.scrapers as { name: string; score: number }[] | undefined)
       ?.map(s => s.name)
-      ?? (category === 'car' || category === 'motorcycle' ? ['webmotors', 'mercadolivre'] : ['google_shopping', 'mercadolivre']);
+      ?? (category === 'car' || category === 'motorcycle' ? ['mercadolivre', 'webmotors', 'olx'] : ['google_shopping', 'mercadolivre', 'olx']);
+    const SATISFACTORY_THRESHOLD = 20; // ML retornou suficiente → parar e oferecer expansão
     const resultLimit = 20;
     let searchedNationally = false;
     // Normalizar cidade: decodificar URL encoding e capitalizar
@@ -467,174 +471,84 @@ export class SearchService {
     this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
 
     try {
-      // ✅ PROBLEMA 1 CORRIGIDO: Retornar source no objeto para evitar race condition
-      const scrapingPromises = [];
+      // ✅ ESTRATÉGIA: Executar scrapers sequencialmente.
+      // Se o primeiro retornar >= SATISFACTORY_THRESHOLD resultados, parar e oferecer expansão.
+      // Veículos (webmotors) sempre executam sem threshold.
+      const isVehicle = category === 'car' || category === 'motorcycle';
+      let primarySource = '';
+      let availableExpansionSources: string[] = [];
 
-      if (scrapers.includes('google_shopping')) {
-        // 🚀 Verificar circuit breaker
-        if (!this.isScraperAvailable('google_shopping')) {
-          this.logger.warn(`[GOOGLE SHOPPING] Pulado - circuit breaker ativo`);
+      for (const scraper of scrapers) {
+        if (!this.isScraperAvailable(scraper)) {
+          this.logger.warn(`[${scraper.toUpperCase()}] Pulado - circuit breaker ativo`);
+          continue;
+        }
+
+        let scraperResults: Product[] = [];
+        let cached = false;
+
+        // Verificar cache
+        const cacheKey = `${normalizedQuery}:${resultLimit}`;
+        const cachedData = await this.getCachedScraperResult(scraper, cacheKey);
+        if (cachedData) {
+          scraperResults = cachedData;
+          cached = true;
+          this.resetScraperFailures(scraper);
         } else {
-          this.logger.log(`[GOOGLE SHOPPING] Buscando ${resultLimit} produtos com sortBy=${sortBy}...`);
-          
-          // 🚀 Usar limiter de concorrência
-          scrapingPromises.push(
-            this.scraperLimit(() => (async () => {
-              // ✅ Verificar cache primeiro
-              const cached = await this.getCachedScraperResult('google_shopping', `${normalizedQuery}:${sortBy}:${resultLimit}`);
-              if (cached) {
-                this.resetScraperFailures('google_shopping'); // Sucesso via cache
-                return { source: 'google_shopping', results: cached, cached: true };
-              }
-              
-              // Executar scraper
-              try {
-                const results = await this.withTimeout(
-                  this.googleShoppingService.search(normalizedQuery, resultLimit, sortBy),
-                  8000,
-                  'GoogleShopping'
-                );
-                
-                // ✅ Salvar no cache
-                await this.setCachedScraperResult('google_shopping', `${normalizedQuery}:${sortBy}:${resultLimit}`, results);
-                this.resetScraperFailures('google_shopping'); // Sucesso
-                return { source: 'google_shopping', results, cached: false };
-              } catch (error) {
-                this.logger.warn(`[GOOGLE SHOPPING] Erro: ${error.message}`);
-                this.recordScraperFailure('google_shopping'); // Registrar falha
-                return { source: 'google_shopping', results: [], cached: false };
-              }
-            })())
-          );
+          try {
+            if (scraper === 'mercadolivre') {
+              const { results } = await this.withTimeout(
+                this.mercadoLivreService.search(normalizedQuery, resultLimit),
+                60000, 'MercadoLivre'
+              );
+              scraperResults = results;
+            } else if (scraper === 'webmotors') {
+              const { results, searchedNationally: sn } = await this.withTimeout(
+                this.webmotorsService.search(normalizedQuery, resultLimit, classification),
+                90000, 'Webmotors'
+              );
+              if (sn) searchedNationally = true;
+              scraperResults = results;
+            } else if (scraper === 'olx') {
+              scraperResults = await this.withTimeout(
+                this.olxService.search(normalizedQuery, resultLimit, sortBy),
+                8000, 'OLX'
+              );
+            } else if (scraper === 'google_shopping') {
+              scraperResults = await this.withTimeout(
+                this.googleShoppingService.search(normalizedQuery, resultLimit, sortBy),
+                8000, 'GoogleShopping'
+              );
+            }
+            await this.setCachedScraperResult(scraper, cacheKey, scraperResults);
+            this.resetScraperFailures(scraper);
+          } catch (error) {
+            this.logger.warn(`[${scraper.toUpperCase()}] Erro: ${error.message}`);
+            this.recordScraperFailure(scraper);
+          }
+        }
+
+        this.logger.log(`✅ [${scraper.toUpperCase()}] ${scraperResults.length} produtos (cached: ${cached})`);
+        products.push(...scraperResults);
+        usedSources.push(cached ? `${scraper}:cached` : scraper);
+
+        if (primarySource === '') primarySource = scraper;
+
+        // Se não é veículo e já temos resultados suficientes, parar e oferecer expansão
+        if (!isVehicle && products.length >= SATISFACTORY_THRESHOLD) {
+          // Calcular quais scrapers ainda não foram usados
+          availableExpansionSources = scrapers
+            .filter(s => !usedSources.some(u => u.startsWith(s)))
+            .filter(s => this.isScraperAvailable(s));
+          this.logger.log(`🎯 [STRATEGY] ${products.length} resultados satisfatórios em "${scraper}" — parando. Expansão disponível: ${availableExpansionSources.join(', ') || 'nenhuma'}`);
+          break;
         }
       }
 
-      if (scrapers.includes('olx')) {
-        // 🚀 Verificar circuit breaker
-        if (!this.isScraperAvailable('olx')) {
-          this.logger.warn(`[OLX] Pulado - circuit breaker ativo`);
-        } else {
-          this.logger.log(`[OLX] Buscando ${resultLimit} produtos com sortBy=${sortBy}...`);
-          
-          // 🚀 Usar limiter de concorrência
-          scrapingPromises.push(
-            this.scraperLimit(() => (async () => {
-              // ✅ Verificar cache primeiro
-              const cached = await this.getCachedScraperResult('olx', `${normalizedQuery}:${sortBy}:${resultLimit}`);
-              if (cached) {
-                this.resetScraperFailures('olx');
-                return { source: 'olx', results: cached, cached: true };
-              }
-              
-              // Executar scraper
-              try {
-                const results = await this.withTimeout(
-                  this.olxService.search(normalizedQuery, resultLimit, sortBy),
-                  8000,
-                  'OLX'
-                );
-                
-                // ✅ Salvar no cache
-                await this.setCachedScraperResult('olx', `${normalizedQuery}:${sortBy}:${resultLimit}`, results);
-                this.resetScraperFailures('olx');
-                return { source: 'olx', results, cached: false };
-              } catch (error) {
-                this.logger.warn(`[OLX] Erro: ${error.message}`);
-                this.recordScraperFailure('olx');
-                return { source: 'olx', results: [], cached: false };
-              }
-            })())
-          );
-        }
-      }
-
-      if (scrapers.includes('webmotors')) {
-        // 🚀 Verificar circuit breaker
-        if (!this.isScraperAvailable('webmotors')) {
-          this.logger.warn(`[WEBMOTORS] Pulado - circuit breaker ativo`);
-        } else {
-          this.logger.log(`[WEBMOTORS] Buscando ${resultLimit} veículos...`);
-          
-          // 🚀 Usar limiter de concorrência
-          scrapingPromises.push(
-            this.scraperLimit(() => (async () => {
-              // ✅ Verificar cache primeiro
-              const cached = await this.getCachedScraperResult('webmotors', `${normalizedQuery}:${resultLimit}`);
-              if (cached) {
-                this.resetScraperFailures('webmotors');
-                return { source: 'webmotors', results: cached, cached: true };
-              }
-              
-              // Executar scraper
-              try {
-                const { results, searchedNationally: sn } = await this.withTimeout(
-                  this.webmotorsService.search(normalizedQuery, resultLimit, classification),
-                  90000,
-                  'Webmotors'
-                );
-                if (sn) searchedNationally = true;
-                
-                // ✅ Salvar no cache
-                await this.setCachedScraperResult('webmotors', `${normalizedQuery}:${resultLimit}`, results);
-                this.resetScraperFailures('webmotors');
-                return { source: 'webmotors', results, cached: false };
-              } catch (error) {
-                this.logger.warn(`[WEBMOTORS] Erro: ${error.message}`);
-                this.recordScraperFailure('webmotors');
-                return { source: 'webmotors', results: [], cached: false };
-              }
-            })())
-          );
-        }
-      }
-
-      if (scrapers.includes('mercadolivre')) {
-        if (!this.isScraperAvailable('mercadolivre')) {
-          this.logger.warn(`[MERCADOLIVRE] Pulado - circuit breaker ativo`);
-        } else {
-          this.logger.log(`[MERCADOLIVRE] Buscando ${resultLimit} produtos...`);
-          scrapingPromises.push(
-            this.scraperLimit(() => (async () => {
-              const cached = await this.getCachedScraperResult('mercadolivre', `${normalizedQuery}:${resultLimit}`);
-              if (cached) {
-                this.resetScraperFailures('mercadolivre');
-                return { source: 'mercadolivre', results: cached, cached: true };
-              }
-              try {
-                const { results } = await this.withTimeout(
-                  this.mercadoLivreService.search(normalizedQuery, resultLimit),
-                  60000,
-                  'MercadoLivre'
-                );
-                await this.setCachedScraperResult('mercadolivre', `${normalizedQuery}:${resultLimit}`, results);
-                this.resetScraperFailures('mercadolivre');
-                return { source: 'mercadolivre', results, cached: false };
-              } catch (error) {
-                this.logger.warn(`[MERCADOLIVRE] Erro: ${error.message}`);
-                this.recordScraperFailure('mercadolivre');
-                return { source: 'mercadolivre', results: [], cached: false };
-              }
-            })())
-          );
-        }
-      }
-
-      // Aguardar todos os scrapers (com resiliência)
-      // ✅ Promise.allSettled: Um scraper falhando não derruba os outros
-      const scrapingResults = await Promise.allSettled(scrapingPromises);
-      
-      // Consolidar resultados (apenas fulfilled)
-      for (const result of scrapingResults) {
-        if (result.status === 'fulfilled') {
-          const { source, results, cached } = result.value;
-          this.logger.log(`✅ [${source.toUpperCase()}] ${results.length} produtos encontrados`);
-          products.push(...results);
-          
-          // Adicionar source à lista (com indicador de cache)
-          usedSources.push(cached ? `${source}:cached` : source);
-        } else {
-          this.logger.error(`❌ [SCRAPER] Falha: ${result.reason}`);
-        }
+      // Guardar fontes de expansão no resultado para o frontend oferecer ao usuário
+      if (availableExpansionSources.length > 0) {
+        (this as any)._lastExpansionSources = availableExpansionSources;
+        (this as any)._lastPrimarySource = primarySource;
       }
 
       this.logger.log(`📊 [TOTAL] ${products.length} produtos consolidados de ${scrapers.length} fonte(s)`);
@@ -796,7 +710,13 @@ export class SearchService {
       originalCity: originalCity || undefined,
       cityFilterApplied: cityFilterApplied ? true : (originalCity ? false : undefined),
       relaxedFilters: relaxedFilters.length > 0 ? relaxedFilters : undefined,
+      canExpandSearch: (this as any)._lastExpansionSources?.length > 0 ? true : undefined,
+      expansionSources: (this as any)._lastExpansionSources?.length > 0 ? (this as any)._lastExpansionSources : undefined,
+      primarySource: (this as any)._lastPrimarySource || undefined,
     };
+    // Limpar estado temporário
+    delete (this as any)._lastExpansionSources;
+    delete (this as any)._lastPrimarySource;
 
     // Cache results for 1 hour (com filtros já aplicados)
     await this.redisService.set(

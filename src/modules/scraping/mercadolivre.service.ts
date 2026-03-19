@@ -32,7 +32,7 @@ export class MercadoLivreService {
 
       const input = {
         keyword: query,
-        maxPages: Math.ceil(limit / 48), // ~48 itens por página no ML
+        maxPages: 1, // 1 página = ~48 itens, limitamos no slice
         maxPagesOfertas: 1,
         promoted: false,
         scrapeOfertas: false,
