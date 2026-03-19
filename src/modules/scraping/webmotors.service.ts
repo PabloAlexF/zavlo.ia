@@ -16,7 +16,7 @@ export class WebmotorsService {
     this.apiToken = this.configService.get('APIFY_API_KEY');
   }
 
-  async search(query: string, limit = 20, classification?: any): Promise<any[]> {
+  async search(query: string, limit = 20, classification?: any): Promise<{ results: any[]; searchedNationally: boolean }> {
     try {
       const safeQuery = query.replace(/[\r\n]/g, ' ');
       this.logger.log(`🚙 [WEBMOTORS] Buscando: "${safeQuery}" (limit: ${limit})`);
@@ -27,41 +27,23 @@ export class WebmotorsService {
       const cached = this.cache.get(cacheKey);
       if (cached && cached.expiresAt > Date.now()) {
         this.logger.log(`⚡ [WEBMOTORS] Cache hit: ${cacheKey}`);
-        return cached.data.slice(0, limit);
+        return { results: cached.data.slice(0, limit), searchedNationally: false };
       }
 
-      const input = {
-        startUrls: [{ url: searchUrl }],
-        proxy: {
-          useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL'],
-          apifyProxyCountry: 'BR',
-        },
-        maxItems: limit,
-      };
+      let results = await this.runApify(searchUrl, limit);
+      let searchedNationally = false;
 
-      this.logger.log(`📤 [WEBMOTORS] URL: ${searchUrl}`);
-
-      const response = await fetch(
-        `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=90`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(input),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error(`❌ [WEBMOTORS] Apify API error ${response.status}: ${errorText}`);
-        throw new Error(`Webmotors Apify API error: ${response.status}`);
+      // Fallback nacional se busca com cidade retornou vazio
+      if (results.length === 0 && classification?.user_location?.city) {
+        this.logger.warn(`⚠️ [WEBMOTORS] 0 resultados em ${classification.user_location.city} — tentando busca nacional`);
+        const nationalUrl = this.buildSearchUrl(query, { ...classification, user_location: null });
+        results = await this.runApify(nationalUrl, limit);
+        if (results.length > 0) searchedNationally = true;
       }
 
-      const results = await response.json();
-
-      if (!Array.isArray(results) || results.length === 0) {
+      if (results.length === 0) {
         this.logger.warn(`⚠️ [WEBMOTORS] Nenhum resultado para: ${safeQuery}`);
-        return [];
+        return { results: [], searchedNationally };
       }
 
       this.logger.log(`✅ [WEBMOTORS] ${results.length} resultados encontrados`);
@@ -105,11 +87,43 @@ export class WebmotorsService {
 
       const ranked = this.rankResults(mapped, classification);
       this.cache.set(cacheKey, { data: ranked, expiresAt: Date.now() + this.CACHE_TTL_MS });
-      return ranked.slice(0, limit);
+      return { results: ranked.slice(0, limit), searchedNationally };
     } catch (error) {
       this.logger.error(`❌ [WEBMOTORS] Erro: ${error.message}`);
-      return [];
+      return { results: [], searchedNationally: false };
     }
+  }
+
+  private async runApify(searchUrl: string, limit: number): Promise<any[]> {
+    const input = {
+      startUrls: [{ url: searchUrl }],
+      proxy: {
+        useApifyProxy: true,
+        apifyProxyGroups: ['RESIDENTIAL'],
+        apifyProxyCountry: 'BR',
+      },
+      maxItems: limit,
+    };
+
+    this.logger.log(`📤 [WEBMOTORS] URL: ${searchUrl}`);
+
+    const response = await fetch(
+      `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=90`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error(`❌ [WEBMOTORS] Apify API error ${response.status}: ${errorText}`);
+      throw new Error(`Webmotors Apify API error: ${response.status}`);
+    }
+
+    const results = await response.json();
+    return Array.isArray(results) ? results : [];
   }
 
   private rankResults(results: any[], classification?: any): any[] {
