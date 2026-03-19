@@ -56,7 +56,7 @@ export class MobiautoService {
         images: item.images?.map((img: any) => this.getImageUrl(img)) || [],
         source: 'Mobiauto',
         url: `https://www.mobiauto.com.br/comprar/${item.id}`,
-        sourceUrl: item.from_url,
+        sourceUrl: item.from_url || `https://www.mobiauto.com.br/comprar/${item.id}`,
         condition: item.km === 0 ? 'new' : 'used',
         category: 'vehicle',
         scrapedAt: new Date().toISOString(),
@@ -69,6 +69,8 @@ export class MobiautoService {
         fuelType: item.trim?.fuel?.name,
         transmission: item.trim?.transmission?.name,
         bodyType: item.trim?.bodystyle?.name,
+        color: item.color || item.trim?.color?.name,
+        fipePrice: item.fipe_price || null,
         doors: item.trim?.doors,
         dealer: item.dealer?.name,
         dealerLocation: item.dealer?.location
@@ -174,7 +176,7 @@ export class MobiautoService {
 
     const params = new URLSearchParams();
     const c = classification || {};
-    if (c.detected_year)          { params.set('anoInicio', String(c.detected_year)); params.set('anoFim', String(c.detected_year)); }
+    if (c.detected_year)          { params.set('anoInicio', String(c.detected_year - 1)); params.set('anoFim', String(c.detected_year + 1)); }
     // Condição: só passar na URL se o ano não contradiz (carro antigo não pode ser novo)
     const currentYear = new Date().getFullYear();
     const yearIsOld = c.detected_year && c.detected_year < currentYear - 3;

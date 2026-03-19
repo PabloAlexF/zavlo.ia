@@ -751,17 +751,21 @@ export class SearchService {
     }
 
     // 📅 FILTRO DE ANO (com fallback gracioso)
+    // Aceita fabrication_year OU model_year com tolerância de ±1 (padrão BR: carro 2011/2012)
     if (classification?.detected_year && finalResults.length > 0) {
       const yr = classification.detected_year;
       const byYear = finalResults.filter(p => {
-        const itemYear = (p as any).year || (p as any).modelYear;
-        return !itemYear || itemYear === yr;
+        const fabYear  = (p as any).year;
+        const modYear  = (p as any).modelYear;
+        if (!fabYear && !modYear) return true; // sem dado de ano: manter
+        return (fabYear  && Math.abs(fabYear  - yr) <= 1)
+            || (modYear  && Math.abs(modYear  - yr) <= 1);
       });
       if (byYear.length > 0) {
-        this.logger.log(`📅 [YEAR FILTER] ${finalResults.length} → ${byYear.length} (ano: ${yr})`);
+        this.logger.log(`📅 [YEAR FILTER] ${finalResults.length} → ${byYear.length} (ano: ${yr} ±1)`);
         finalResults = byYear;
       } else {
-        this.logger.warn(`📅 [YEAR FILTER] Nenhum resultado para ano=${yr} — exibindo todos sem filtro de ano`);
+        this.logger.warn(`📅 [YEAR FILTER] Nenhum resultado para ano=${yr} ±1 — exibindo todos sem filtro de ano`);
         relaxedFilters.push('year');
       }
     }
