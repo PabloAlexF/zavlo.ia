@@ -13,7 +13,7 @@ interface ProductCardProps {
 }
 
 const IS_VEHICLE_SOURCE = (source: string) =>
-  source === 'Webmotors' || source === 'Mobiauto';
+  source === 'Webmotors';
 
 // Mapeamento de nomes amigáveis dos marketplaces
 function getSourceName(source: string): string {
@@ -23,6 +23,7 @@ function getSourceName(source: string): string {
     'olx.com.br': 'OLX',
     'enjoei.com.br': 'Enjoei',
     'mercadolivre.com.br': 'Mercado Livre',
+    'MercadoLivre': 'Mercado Livre',
     'magazineluiza.com.br': 'Magazine Luiza',
   };
   return sourceMap[source] || source;
@@ -36,6 +37,7 @@ function getSourceColor(source: string): string {
     'olx.com.br': 'from-purple-500 to-purple-600',
     'enjoei.com.br': 'from-pink-500 to-rose-500',
     'mercadolivre.com.br': 'from-yellow-400 to-yellow-500',
+    'MercadoLivre': 'from-yellow-400 to-yellow-500',
     'magazineluiza.com.br': 'from-blue-400 to-blue-500',
     'Webmotors': 'from-red-500 to-red-600',
     'Mobiauto': 'from-blue-500 to-blue-600',
