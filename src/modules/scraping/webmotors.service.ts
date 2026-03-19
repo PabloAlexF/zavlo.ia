@@ -43,7 +43,7 @@ export class WebmotorsService {
       this.logger.log(`📤 [WEBMOTORS] URL: ${searchUrl}`);
 
       const response = await fetch(
-        `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=60`,
+        `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=90`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -138,7 +138,6 @@ export class WebmotorsService {
     const c = classification || {};
     const brand = c.detected_brand || this.extractBrandFromQuery(query);
     const model = c.detected_model;
-    const condition = c.condition; // 'new' | 'used' | 'unknown'
     const city  = c.user_location?.city;
     const state = c.user_location?.state;
 
@@ -151,36 +150,33 @@ export class WebmotorsService {
     // com tipoveiculo=carros|carros-novos|carros-usados conforme condição.
     // O path base é sempre /carros (não /carros-novos) quando há filtro de marca.
     const vehicleWord = isMoto ? 'motos' : 'carros';
-    const locationSlug = this.buildLocationSlug(city, state);
-
-    let tipoVeiculo: string;
-    if (condition === 'new')       tipoVeiculo = isMoto ? 'motos-novas'  : 'carros-novos';
-    else if (condition === 'used') tipoVeiculo = isMoto ? 'motos-usadas' : 'carros-usados';
-    else                           tipoVeiculo = vehicleWord;
+    // Sem cidade = busca nacional, omitir slug de localização
+    const locationSlug = city ? this.buildLocationSlug(city, state) : '';
 
     const params = new URLSearchParams();
-    params.set('tipoveiculo', tipoVeiculo);
+    params.set('tipoveiculo', vehicleWord);
     params.set('lkid', '1000');
 
     let pathBase: string;
     if (brand && model) {
-      // Formato com marca+modelo: path sempre usa /carros/ (não /carros-novos/)
-      pathBase = `https://www.webmotors.com.br/${vehicleWord}/${locationSlug}/${brand.toLowerCase()}/${model.toLowerCase()}`;
+      const locPart = locationSlug ? `/${locationSlug}` : '';
+      pathBase = `https://www.webmotors.com.br/${vehicleWord}${locPart}/${brand.toLowerCase()}/${model.toLowerCase()}`;
       params.set('marca1',  brand.toUpperCase());
       params.set('modelo1', model.toUpperCase());
       if (c.detected_year) {
         params.set('anoInicio', String(c.detected_year));
         params.set('anoFim',    String(c.detected_year));
       }
+      if (c.price_range?.min_price) params.set('precoMinimo', String(c.price_range.min_price));
+      if (c.price_range?.max_price) params.set('precoMaximo', String(c.price_range.max_price));
     } else if (brand) {
-      pathBase = `https://www.webmotors.com.br/${vehicleWord}/${locationSlug}/${brand.toLowerCase()}`;
+      const locPart = locationSlug ? `/${locationSlug}` : '';
+      pathBase = `https://www.webmotors.com.br/${vehicleWord}${locPart}/${brand.toLowerCase()}`;
       params.set('marca1', brand.toUpperCase());
     } else {
-      // Sem marca: usar path com tipoveiculo no path
-      pathBase = `https://www.webmotors.com.br/${tipoVeiculo}/${locationSlug || 'sp'}`;
+      pathBase = `https://www.webmotors.com.br/${vehicleWord}/${locationSlug || 'sp'}`;
     }
 
-    // estadocidade: nome da cidade normalizado (sem acento, capitalizado)
     if (city) params.set('estadocidade', this.normalizeCityName(city));
 
     const url = `${pathBase}?${params.toString()}`;
