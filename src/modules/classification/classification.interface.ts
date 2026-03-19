@@ -59,6 +59,6 @@ export enum ProductCategory {
 export enum ScraperType {
   GOOGLE_SHOPPING = 'google_shopping',
   WEBMOTORS = 'webmotors',
-  MOBIAUTO = 'mobiauto',
+  MERCADOLIVRE = 'mercadolivre',
   OLX = 'olx',
 }

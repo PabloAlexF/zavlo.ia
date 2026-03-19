@@ -13,7 +13,7 @@ export const MARKETPLACES = {
   VEHICLES: [
     { name: 'Webmotors', url: 'https://www.webmotors.com.br' },
     { name: 'iCarros', url: 'https://www.icarros.com.br' },
-    { name: 'Mobiauto', url: 'https://www.mobiauto.com.br' },
+    { name: 'Mercado Livre', url: 'https://www.mercadolivre.com.br' },
     { name: 'UsadosBR', url: 'https://www.usadosbr.com' },
   ],
 

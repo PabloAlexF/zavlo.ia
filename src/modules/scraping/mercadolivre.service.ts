@@ -68,27 +68,30 @@ export class MercadoLivreService {
       const mapped = items.map((item: any, index: number) => {
         const price = this.parsePrice(item.novoPreco);
         const originalPrice = this.parsePrice(item.precoAnterior);
-        const discountStr = item.precoDiscount || '';
-        // percentOff: manter string original (ex: "9% OFF") para compatibilidade com frontend
-        const percentOff = discountStr || null;
+        const percentOff = item.precoDiscount || null;
+        const title = item.eTituloProduto || '';
+        // Limpar highlight: remover template literals do ML (ex: "{black_friday_icon}")
+        const highlight = item.highlight
+          ? item.highlight.replace(/\{[^}]+\}/g, '').trim() || null
+          : null;
 
         return {
           id: item.SKU || `ml-${index}`,
-          title: item.eTituloProduto || '',
+          title,
           price,
           originalPrice: originalPrice || null,
           percentOff,
           images: item.imagemLink ? [item.imagemLink] : [],
           source: 'MercadoLivre',
           sourceUrl: item.zProdutoLink || null,
-          condition: undefined as 'new' | 'used' | undefined,
+          condition: this.inferCondition(title),
           category: item.produtoDomainID || 'general',
           brand: item.produtoMarca || null,
           seller: item.Vendedor ? { name: item.Vendedor } : null,
           shipping: item.envio || null,
           isInternational: item.eCompraInternacional ?? false,
           shippedFrom: item.enviadoDe || null,
-          highlight: item.highlight || null,
+          highlight,
           installments: item.installments || null,
           sku: item.SKU || null,
           scrapedAt: item.Tempo || new Date().toISOString(),
@@ -103,10 +106,21 @@ export class MercadoLivreService {
     }
   }
 
+  /** Infere condição pelo título do produto */
+  private inferCondition(title: string): 'new' | 'used' | undefined {
+    const t = title.toLowerCase();
+    if (/recondicionado|usado|seminovo|semi novo|semi-novo|segunda.?m[aã]o|com detalhe|bateria\s*\d+%/.test(t)) return 'used';
+    if (/novo|lacrado|0\s*km|na caixa|caixa aberta|caixa fechada|lacrada/.test(t)) return 'new';
+    return undefined;
+  }
+
   private parsePrice(value: string | undefined): number {
     if (!value) return 0;
-    // Formato BR: "173,76" ou "1.234,56"
-    const cleaned = String(value).replace(/\./g, '').replace(',', '.');
-    return parseFloat(cleaned) || 0;
+    // Suporta: "6499", "173,76", "1.234,56"
+    const str = String(value).trim();
+    // Se não tem vírgula, é inteiro direto
+    if (!str.includes(',')) return parseFloat(str.replace(/[^0-9.]/g, '')) || 0;
+    // Formato BR: remover pontos de milhar, trocar vírgula decimal por ponto
+    return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
   }
 }
