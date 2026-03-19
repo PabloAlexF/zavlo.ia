@@ -151,9 +151,9 @@ export class ClassificationService {
   getApifyActorIds(scrapers: string[]): string[] {
     const actorMap: Record<string, string> = {
       google_shopping: 'burbn~google-shopping-scraper',
-      webmotors: 'webmotors-scraper', // TODO: Adicionar actor ID real
-      mobiauto: 'mobiauto-scraper',   // TODO: Adicionar actor ID real
-      olx: 'olx-scraper',             // TODO: Adicionar actor ID real
+      webmotors: 'webmotors-scraper',
+      mercadolivre: 'karamelo~mercadolivre-scraper-brasil-portugues',
+      olx: 'olx-scraper',
     };
 
     return scrapers
@@ -165,9 +165,9 @@ export class ClassificationService {
    * Determina prioridade de execução dos scrapers
    */
   getScraperPriority(category: string, condition: string): string[] {
-    // Carros e motos → Webmotors + Mobiauto
+    // Carros e motos → Webmotors + MercadoLivre
     if (category === 'car' || category === 'motorcycle') {
-      return ['webmotors', 'mobiauto'];
+      return ['webmotors', 'mercadolivre'];
     }
 
     // Produtos usados → OLX primeiro
