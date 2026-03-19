@@ -5,6 +5,7 @@ import { Search, Image as ImageIcon, TrendingUp, Sparkles, Tag } from 'lucide-re
 
 interface QuickSuggestionsProps {
   onSuggestionClick: (text: string) => void;
+  onImageSearchClick?: () => void;
   showMoreSuggestions: boolean;
   onToggleMore: () => void;
   isIntroduction: boolean;
@@ -12,15 +13,16 @@ interface QuickSuggestionsProps {
 
 export function QuickSuggestions({
   onSuggestionClick,
+  onImageSearchClick,
   showMoreSuggestions,
   onToggleMore,
   isIntroduction
 }: QuickSuggestionsProps) {
   const suggestions = [
-    { icon: <Search className="h-4 w-4" />, title: 'Encontrar o produto mais barato', query: 'iPhone 15 Pro' },
-    { icon: <TrendingUp className="h-4 w-4" />, title: 'Comparar preços', query: 'Notebook Gamer' },
-    { icon: <ImageIcon className="h-4 w-4" />, title: 'Buscar por imagem', query: 'buscar por imagem' },
-    { icon: <Tag className="h-4 w-4" />, title: 'Descobrir ofertas', query: 'Smart TV 50 polegadas' },
+    { icon: <Search className="h-4 w-4" />, title: 'Encontrar o produto mais barato', query: 'iPhone 15 Pro', isImage: false },
+    { icon: <TrendingUp className="h-4 w-4" />, title: 'Comparar preços', query: 'Notebook Gamer', isImage: false },
+    { icon: <ImageIcon className="h-4 w-4" />, title: 'Buscar por imagem', query: '', isImage: true },
+    { icon: <Tag className="h-4 w-4" />, title: 'Descobrir ofertas', query: 'Smart TV 50 polegadas', isImage: false },
   ];
 
   return (
@@ -77,7 +79,9 @@ export function QuickSuggestions({
                 transition={{ delay: 0.45 + index * 0.07 }}
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.99 }}
-                onClick={() => onSuggestionClick(suggestion.query)}
+                onClick={() => suggestion.isImage && onImageSearchClick
+                  ? onImageSearchClick()
+                  : onSuggestionClick(suggestion.query)}
                 className="group flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-4 py-3.5 text-left transition-all duration-200 hover:border-violet-500/30 hover:bg-violet-500/[0.07]"
               >
                 <span className="rounded-lg border border-white/[0.08] bg-white/[0.05] p-2 text-slate-400 transition-colors group-hover:border-violet-500/30 group-hover:bg-violet-500/10 group-hover:text-violet-300">
