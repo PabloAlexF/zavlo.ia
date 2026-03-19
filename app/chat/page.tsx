@@ -771,7 +771,7 @@ export default function ChatPage() {
         console.log('[CLASSIFY] Categoria:', category, 'Confiança:', confidence);
         
         // Se confiança muito baixa, não é um produto válido
-        if (confidence < 0.3 || category === 'general') {
+        if (confidence < 0.3) {
           setLoading(false);
           addMessage('ai', '🤔 Não consegui identificar um produto específico.\n\n💡 Tente ser mais específico:\n• "iPhone 15 Pro"\n• "Honda Civic 2020"\n• "Notebook Dell"');
           return;
@@ -938,10 +938,36 @@ export default function ChatPage() {
             return;
           }
 
-        // Aviso amigável quando o backend expandiu para busca nacional
-        if (data.searchedNationally && data.originalCity) {
-          const cityLabel = data.originalCity.charAt(0).toUpperCase() + data.originalCity.slice(1);
-          addMessage('ai', `📍 Não encontrei resultados específicos em **${cityLabel}**, então expandi a busca para **todo o Brasil**. Veja os resultados abaixo — você pode filtrar pelo vendedor mais próximo!`);
+        // Mensagem de contexto unificada (cidade + filtros relaxados)
+        const cl = classification;
+        const rawCityLabel = data.originalCity || cl?.user_location?.city || null;
+        const cityLabel = rawCityLabel
+          ? rawCityLabel.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
+              .replace(/\b\w/g, (c: string) => c.toUpperCase())
+          : null;
+
+        const contextParts: string[] = [];
+
+        if (data.searchedNationally && cityLabel) {
+          contextParts.push(`📍 Não encontrei anúncios específicos em **${cityLabel}**, então expandi para **todo o Brasil**`);
+        } else if (cityLabel && data.cityFilterApplied === false && !data.searchedNationally) {
+          contextParts.push(`📍 Os resultados abaixo são de todo o Brasil — os vendedores não informaram localização, então não foi possível filtrar por **${cityLabel}**`);
+        }
+
+        if (data.relaxedFilters?.length) {
+          const relaxMsgs: string[] = [];
+          if (data.relaxedFilters.includes('price')) {
+            const max = cl?.price_range?.max_price;
+            relaxMsgs.push(max ? `nenhum dentro do orçamento de R$ ${(max / 1000).toFixed(0)}mil` : 'nenhum no orçamento informado');
+          }
+          if (data.relaxedFilters.includes('year')) {
+            relaxMsgs.push(`nenhum do ano ${cl?.detected_year}`);
+          }
+          contextParts.push(`⚠️ ${relaxMsgs.join(' e ')} — mostrando os mais próximos disponíveis`);
+        }
+
+        if (contextParts.length > 0) {
+          addMessage('ai', contextParts.join('\n') + '.');
         }
 
         const productsMessage: Message = {
