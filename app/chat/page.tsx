@@ -911,8 +911,10 @@ export default function ChatPage() {
         await delay(1000);
         console.log('[SEARCH] Criando mensagem de produtos...');
 
+        // Mensagem de contexto unificada (cidade + filtros relaxados)
+        const cl = classification;
+
         if (products.length === 0) {
-            const cl = classification;
             const brand = cl?.detected_brand ? cl.detected_brand.charAt(0).toUpperCase() + cl.detected_brand.slice(1) : null;
             const model = cl?.detected_model ? cl.detected_model.charAt(0).toUpperCase() + cl.detected_model.slice(1) : null;
             const city  = cl?.user_location?.city || null;
@@ -937,9 +939,6 @@ export default function ChatPage() {
             console.log('[SEARCH] ========== BUSCA CONCLUÍDA (0 resultados) ==========');
             return;
           }
-
-        // Mensagem de contexto unificada (cidade + filtros relaxados)
-        const cl = classification;
         const rawCityLabel = data.originalCity || cl?.user_location?.city || null;
         const cityLabel = rawCityLabel
           ? rawCityLabel.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
