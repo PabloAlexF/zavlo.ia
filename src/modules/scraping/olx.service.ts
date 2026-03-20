@@ -43,14 +43,15 @@ export class OlxService {
         sortBy: olxSortBy,
         maxPages: Math.ceil(limit / 50),
         proxyConfiguration: {
-          useApifyProxy: false,
+          useApifyProxy: true,
+          apifyProxyGroups: ['RESIDENTIAL'],
+          apifyProxyCountry: 'BR',
         },
       };
 
-      this.logger.log(`📤 [OLX] Input Apify: ${JSON.stringify(input)}`);
-
-      const response = await fetch(
-        `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}`,
+      // Disparar run assíncrono (evita timeout de 30s do Render Free)
+      const runRes = await fetch(
+        `https://api.apify.com/v2/acts/${this.actorId}/runs?token=${this.apiToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -58,13 +59,44 @@ export class OlxService {
         }
       );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error(`❌ [OLX] Apify API error ${response.status}: ${errorText}`);
-        throw new Error(`OLX Apify API error: ${response.status}`);
+      if (!runRes.ok) {
+        const errorText = await runRes.text();
+        this.logger.error(`❌ [OLX] Apify run error ${runRes.status}: ${errorText}`);
+        throw new Error(`OLX Apify run error: ${runRes.status}`);
       }
 
-      const results = await response.json();
+      const runData = await runRes.json();
+      const runId = runData?.data?.id;
+      if (!runId) throw new Error('OLX Apify: runId não retornado');
+      this.logger.log(`🚀 [OLX] Run iniciado: ${runId}`);
+
+      // Polling até SUCCEEDED ou FAILED (max 110s, intervalo 5s)
+      const POLL_INTERVAL = 5000;
+      const MAX_WAIT = 110000;
+      const deadline = Date.now() + MAX_WAIT;
+      let status = 'RUNNING';
+
+      while (Date.now() < deadline && (status === 'RUNNING' || status === 'READY' || status === 'ABORTING')) {
+        await new Promise(r => setTimeout(r, POLL_INTERVAL));
+        const statusRes = await fetch(
+          `https://api.apify.com/v2/actor-runs/${runId}?token=${this.apiToken}`
+        );
+        const statusData = await statusRes.json();
+        status = statusData?.data?.status ?? 'FAILED';
+        this.logger.log(`⏳ [OLX] Run ${runId} status: ${status}`);
+      }
+
+      if (status !== 'SUCCEEDED') {
+        this.logger.error(`❌ [OLX] Run terminou com status: ${status}`);
+        throw new Error(`OLX Apify run ${status}`);
+      }
+
+      // Buscar dataset
+      const datasetRes = await fetch(
+        `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${this.apiToken}&limit=${limit}`
+      );
+      if (!datasetRes.ok) throw new Error(`OLX dataset fetch error: ${datasetRes.status}`);
+      const results = await datasetRes.json();
 
       if (!Array.isArray(results) || results.length === 0) {
         this.logger.warn(`⚠️ [OLX] Nenhum resultado encontrado para: ${query}`);
