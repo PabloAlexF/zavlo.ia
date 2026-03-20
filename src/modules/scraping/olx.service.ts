@@ -129,8 +129,7 @@ export class OlxService {
       if (classification.detected_size)   parts.push(classification.detected_size);
       if (classification.detected_shoe_type) parts.push(classification.detected_shoe_type);
     }
-      if (classification.detected_storage) parts.push(classification.detected_storage);
-    }
+    if (classification.detected_storage) parts.push(classification.detected_storage);
     if (classification.detected_brand && !query.toLowerCase().includes(classification.detected_brand)) {
       parts.push(classification.detected_brand);
     }
