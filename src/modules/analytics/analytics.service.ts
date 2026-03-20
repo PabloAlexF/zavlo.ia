@@ -40,7 +40,7 @@ export class AnalyticsService {
     }
   }
 
-  async getSearchMetrics(days: number = 7): Promise<any> {
+  async getSearchMetrics(days: number = 7, userId?: string): Promise<any> {
     const metrics = {
       totalSearches: 0,
       textSearches: 0,
@@ -59,6 +59,7 @@ export class AnalyticsService {
         .collection('search_logs')
         .where('timestamp', '>=', startDate)
         .where('timestamp', '<=', endDate)
+        .where('userId', '==', userId)
         .get();
 
       const logs = snapshot.docs.map(doc => doc.data() as SearchLog);
