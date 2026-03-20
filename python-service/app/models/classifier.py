@@ -747,7 +747,7 @@ class ProductClassifier:
         # Campos para categorias não-veículo
         detected_gender  = self._detect_gender(normalized)  if best_category == 'fashion' else None
         detected_size    = self._detect_size(normalized)    if best_category == 'fashion' else None
-        detected_storage = self._detect_storage(normalized) if best_category == 'smartphone' else None
+        detected_storage = self._detect_storage(normalized) if best_category in ('smartphone', 'electronics') else None
         
         # 🆕 DETECTAR CAMPOS FALTANTES (ORDEM DE PRIORIDADE)
         missing_fields = []
@@ -765,15 +765,18 @@ class ProductClassifier:
             
             # Prioridade dinâmica por categoria
             if best_category == 'car':
-                priority_order = ['price_range', 'year', 'condition', 'location']
+                priority_order = ['price_range', 'year', 'condition', 'location', 'transmission', 'fuel', 'body_type']
             else:  # motorcycle
-                priority_order = ['price_range', 'condition', 'year', 'location']
+                priority_order = ['price_range', 'condition', 'year', 'location', 'transmission', 'fuel']
 
             checks = {
-                'price_range': not has_price_range and not user_context.get('price_range') and not user_context.get('last_filters', {}).get('price_range'),
-                'condition':   condition == 'unknown' and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'),
-                'year':        not detected_year and not user_context.get('year') and not user_context.get('last_filters', {}).get('year'),
-                'location':    not has_location and not user_context.get('location') and not user_context.get('last_filters', {}).get('location'),
+                'price_range':  not has_price_range and not user_context.get('price_range') and not user_context.get('last_filters', {}).get('price_range'),
+                'condition':    condition == 'unknown' and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'),
+                'year':         not detected_year and not user_context.get('year') and not user_context.get('last_filters', {}).get('year'),
+                'location':     not has_location and not user_context.get('location') and not user_context.get('last_filters', {}).get('location'),
+                'transmission': not detected_transmission and not user_context.get('last_filters', {}).get('transmission'),
+                'fuel':         not detected_fuel and not user_context.get('last_filters', {}).get('fuel'),
+                'body_type':    best_category == 'car' and not detected_body_type and not user_context.get('last_filters', {}).get('body_type'),
             }
             # Herdar filtros da sessão anterior se disponíveis
             last_filters = user_context.get('last_filters', {})
@@ -781,7 +784,7 @@ class ProductClassifier:
                 price_range_data = last_filters['price_range']
                 checks['price_range'] = False
             for field in priority_order:
-                if checks[field]:
+                if checks.get(field):
                     missing_fields.append(field)
                     logger.info(f"📝 [FIELDS] Campo faltante adicionado: {field}")
 
@@ -800,11 +803,9 @@ class ProductClassifier:
                 elif first_missing == "year":
                     suggested_question = "De qual ano você está procurando? (Ex: 2020, 2018-2022)"
                 elif first_missing == "location":
-                    # 🆕 USAR LOCALIZAÇÃO DO USUÁRIO SE DISPONÍVEL
                     user_location = user_context.get('location', {})
                     user_city = user_location.get('city')
                     user_state = user_location.get('state')
-                    
                     if user_city and user_state:
                         suggested_question = f"Vi que você mora em {user_city}, {user_state}. Quer pesquisar nessa região ou em outro lugar?"
                     elif user_city:
@@ -812,10 +813,39 @@ class ProductClassifier:
                     else:
                         suggested_question = "Em qual cidade ou estado você está procurando?"
                 elif first_missing == "price_range":
-                    price_question = self.generate_smart_price_question(
+                    suggested_question = self.generate_smart_price_question(
                         detected_brand, detected_model, detected_year, condition, user_context
                     )
-                    suggested_question = price_question
+                elif first_missing == "transmission":
+                    suggested_question = {
+                        'question': 'Qual câmbio você prefere?',
+                        'suggestions': [
+                            {'label': '⚙️ Manual',     'value': 'manual'},
+                            {'label': '🤖 Automático', 'value': 'automatico'},
+                            {'label': '🔀 Tanto faz',  'value': 'qualquer'},
+                        ]
+                    }
+                elif first_missing == "fuel":
+                    suggested_question = {
+                        'question': 'Qual combustível você prefere?',
+                        'suggestions': [
+                            {'label': '⛽ Flex',      'value': 'flex'},
+                            {'label': '🛢️ Diesel',    'value': 'diesel'},
+                            {'label': '⚡ Elétrico',  'value': 'eletrico'},
+                            {'label': '🔀 Tanto faz', 'value': 'qualquer'},
+                        ]
+                    }
+                elif first_missing == "body_type":
+                    suggested_question = {
+                        'question': 'Qual estilo de carroceria?',
+                        'suggestions': [
+                            {'label': '🚗 Hatch',   'value': 'hatch'},
+                            {'label': '🚙 Sedan',   'value': 'sedan'},
+                            {'label': '🛻 SUV',     'value': 'suv'},
+                            {'label': '🚐 Pickup',  'value': 'pickup'},
+                            {'label': '🔀 Tanto faz','value': 'qualquer'},
+                        ]
+                    }
                 
                 logger.info(f"✅ [FIELDS] Pergunta gerada: {suggested_question}")
         elif best_category == 'smartphone':
@@ -839,7 +869,6 @@ class ProductClassifier:
                         ]
                     }
             # 3. Armazenamento/capacidade (ex: 128GB, 256GB)
-            detected_storage = self._detect_storage(normalized)
             if not detected_storage and not last_filters.get('storage'):
                 missing_fields.append('storage')
                 if not suggested_question:
@@ -858,11 +887,25 @@ class ProductClassifier:
 
         elif best_category == 'electronics':
             last_filters = user_context.get('last_filters', {})
-            # 1. Condição
+            # 1. Marca (se não detectada e não na query)
+            if not detected_brand and not last_filters.get('brand'):
+                missing_fields.append('brand')
+                suggested_question = {
+                    'question': 'Tem preferência de marca?',
+                    'suggestions': [
+                        {'label': 'Dell',    'value': 'dell'},
+                        {'label': 'Lenovo',  'value': 'lenovo'},
+                        {'label': 'Samsung', 'value': 'samsung'},
+                        {'label': 'Apple',   'value': 'apple'},
+                        {'label': '🔀 Sem preferência', 'value': 'qualquer'},
+                    ]
+                }
+            # 2. Condição
             if condition == 'unknown' and not user_context.get('condition') and not last_filters.get('condition'):
                 missing_fields.append('condition')
-                suggested_question = 'Você prefere novo ou usado?'
-            # 2. Faixa de preço
+                if not suggested_question:
+                    suggested_question = 'Você prefere novo ou usado?'
+            # 3. Faixa de preço
             price_range_data = extract_price_range(normalized)
             if not price_range_data and not last_filters.get('price_range'):
                 missing_fields.append('price_range')
@@ -881,8 +924,7 @@ class ProductClassifier:
 
         elif best_category == 'fashion':
             last_filters = user_context.get('last_filters', {})
-            # 1. Gênero
-            detected_gender = self._detect_gender(normalized)
+            # 1. Gênero (já detectado acima, reusar)
             if not detected_gender and not last_filters.get('gender'):
                 missing_fields.append('gender')
                 suggested_question = {
@@ -894,8 +936,7 @@ class ProductClassifier:
                         {'label': '🔀 Unissex',   'value': 'unissex'},
                     ]
                 }
-            # 2. Tamanho
-            detected_size = self._detect_size(normalized)
+            # 2. Tamanho (já detectado acima, reusar)
             if not detected_size and not last_filters.get('size'):
                 missing_fields.append('size')
                 if not suggested_question:
@@ -908,7 +949,24 @@ class ProductClassifier:
                             {'label': 'GG / 42-43', 'value': 'GG 42'},
                         ]
                     }
-            # 3. Faixa de preço
+            # 3. Tipo de calçado (se a query contém calçado genérico sem tipo)
+            shoe_keywords = ['tenis', 'sapato', 'calcado', 'calçado']
+            has_shoe = any(kw in normalized for kw in shoe_keywords)
+            shoe_type_keywords = ['tenis', 'bota', 'sandalia', 'mocassim', 'oxford', 'sapatilha', 'chinelo']
+            has_shoe_type = any(kw in normalized for kw in shoe_type_keywords)
+            if has_shoe and not has_shoe_type and not last_filters.get('shoe_type'):
+                missing_fields.append('shoe_type')
+                if not suggested_question:
+                    suggested_question = {
+                        'question': 'Que tipo de calçado?',
+                        'suggestions': [
+                            {'label': '👟 Tênis',    'value': 'tenis'},
+                            {'label': '👢 Bota',     'value': 'bota'},
+                            {'label': '👡 Sandália', 'value': 'sandalia'},
+                            {'label': '🥿 Sapatilha','value': 'sapatilha'},
+                        ]
+                    }
+            # 4. Faixa de preço
             price_range_data = extract_price_range(normalized)
             if not price_range_data and not last_filters.get('price_range'):
                 missing_fields.append('price_range')
@@ -927,9 +985,25 @@ class ProductClassifier:
 
         elif best_category == 'appliance':
             last_filters = user_context.get('last_filters', {})
+            # 1. Marca (se não detectada)
+            if not detected_brand and not last_filters.get('brand'):
+                missing_fields.append('brand')
+                suggested_question = {
+                    'question': 'Tem preferência de marca?',
+                    'suggestions': [
+                        {'label': 'Brastemp',  'value': 'brastemp'},
+                        {'label': 'Electrolux','value': 'electrolux'},
+                        {'label': 'Samsung',   'value': 'samsung'},
+                        {'label': 'LG',        'value': 'lg'},
+                        {'label': '🔀 Sem preferência', 'value': 'qualquer'},
+                    ]
+                }
+            # 2. Condição
             if condition == 'unknown' and not user_context.get('condition') and not last_filters.get('condition'):
                 missing_fields.append('condition')
-                suggested_question = 'Você prefere novo ou usado?'
+                if not suggested_question:
+                    suggested_question = 'Você prefere novo ou usado?'
+            # 3. Faixa de preço
             price_range_data = extract_price_range(normalized)
             if not price_range_data and not last_filters.get('price_range'):
                 missing_fields.append('price_range')
@@ -1018,13 +1092,16 @@ class ProductClassifier:
             "last_filters": {
                 "price_range": price_range_data,
                 "condition": condition if condition != 'unknown' else None,
-                "year": detected_year,
                 "location": user_location or None,
                 "gender": detected_gender,
                 "size": detected_size,
                 "storage": detected_storage,
+                "transmission": detected_transmission,
+                "fuel": detected_fuel,
+                "body_type": detected_body_type,
+                "brand": detected_brand,
+                "shoe_type": None,  # preenchido pelo frontend via answers
             },
-            "user_location": user_location if user_location else None,
             "price_range": price_range_data,
             "question_type": first_missing if missing_fields else None
         }

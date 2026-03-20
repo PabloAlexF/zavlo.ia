@@ -137,9 +137,14 @@ export class MercadoLivreService {
     if (cat === 'fashion') {
       if (classification.detected_gender) parts.push(classification.detected_gender);
       if (classification.detected_size)   parts.push(classification.detected_size);
+      if (classification.detected_shoe_type) parts.push(classification.detected_shoe_type);
     }
 
     if (cat === 'smartphone' && classification.detected_storage) {
+      parts.push(classification.detected_storage);
+    }
+
+    if (cat === 'electronics' && classification.detected_storage) {
       parts.push(classification.detected_storage);
     }
 

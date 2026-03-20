@@ -506,7 +506,7 @@ export class SearchService {
         let cached = false;
 
         // Verificar cache
-        const scraperCacheKey = `${normalizedQuery}:${resultLimit}:${classification?.condition || 'any'}:${classification?.detected_year || '0'}:${classification?.user_location?.city || 'all'}`;
+        const scraperCacheKey = `${scraper}:${normalizedQuery}:${resultLimit}:${classification?.condition || 'any'}:${classification?.detected_year || '0'}:${classification?.user_location?.city || 'all'}`;
         const cachedData = await this.getCachedScraperResult(scraper, scraperCacheKey);
         if (cachedData) {
           scraperResults = cachedData;
@@ -620,6 +620,36 @@ export class SearchService {
         this.logger.log(`✅ [CREDITS] Deducted 1 credit after successful search. Remaining: ${remainingCredits}`);
       } catch (creditError: any) {
         this.logger.error(`❌ [CREDITS] Failed to deduct credit: ${creditError.message}`);
+      }
+
+      // 🧠 SALVAR PREFERÊNCIAS DO USUÁRIO (memória entre sessões)
+      try {
+        const lastFilters = classification?.last_filters || {};
+        // Usar objeto aninhado real (não dot notation) para compatibilidade com Firestore
+        const prefsUpdate: Record<string, any> = { preferences: {} };
+        const lf: Record<string, any> = {};
+        if (lastFilters.condition)    lf.condition    = lastFilters.condition;
+        if (lastFilters.location)     lf.location     = lastFilters.location;
+        if (lastFilters.price_range)  lf.price_range  = lastFilters.price_range;
+        if (lastFilters.brand)        lf.brand        = lastFilters.brand;
+        if (lastFilters.gender)       lf.gender       = lastFilters.gender;
+        if (lastFilters.size)         lf.size         = lastFilters.size;
+        if (lastFilters.storage)      lf.storage      = lastFilters.storage;
+        if (lastFilters.transmission) lf.transmission = lastFilters.transmission;
+        if (lastFilters.fuel)         lf.fuel         = lastFilters.fuel;
+        if (lastFilters.body_type)    lf.body_type    = lastFilters.body_type;
+        if (lastFilters.shoe_type)    lf.shoe_type    = lastFilters.shoe_type;
+
+        if (Object.keys(lf).length > 0 || classification?.category) {
+          const firestore = this.firebaseService.getFirestore();
+          const updateData: Record<string, any> = {};
+          if (Object.keys(lf).length > 0) updateData['preferences.last_filters'] = lf;
+          if (classification?.category)   updateData['preferences.last_category'] = classification.category;
+          await firestore.collection('users').doc(userId).update(updateData);
+          this.logger.log(`🧠 [PREFS] Preferências salvas para user ${userId}`);
+        }
+      } catch (prefsError: any) {
+        this.logger.warn(`⚠️ [PREFS] Falha ao salvar preferências: ${prefsError.message}`);
       }
     }
 

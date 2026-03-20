@@ -176,6 +176,11 @@ export class WebmotorsService {
     params.set('lkid', '1000');
 
     let pathBase: string;
+    // Mapas de transmissão e combustível para parâmetros Webmotors
+    const transmissionMap: Record<string, string> = { automatic: 'Automático', auto: 'Automático', manual: 'Manual' };
+    const fuelMap: Record<string, string> = { flex: 'Flex', gasolina: 'Gasolina', alcool: 'Álcool', etanol: 'Álcool', diesel: 'Diesel', electric: 'Elétrico', eletrico: 'Elétrico' };
+    const bodyTypeMap: Record<string, string> = { hatch: 'Hatch', sedan: 'Sedan', suv: 'SUV', pickup: 'Pickup', van: 'Van', coupe: 'Cupê', convertible: 'Conversível' };
+
     if (brand && model) {
       const locPart = locationSlug ? `/${locationSlug}` : '';
       pathBase = `https://www.webmotors.com.br/${vehicleWord}${locPart}/${brand.toLowerCase()}/${model.toLowerCase()}`;
@@ -187,12 +192,20 @@ export class WebmotorsService {
       }
       if (c.price_range?.min_price) params.set('precoMinimo', String(c.price_range.min_price));
       if (c.price_range?.max_price) params.set('precoMaximo', String(c.price_range.max_price));
+      const transmission = c.detected_transmission && transmissionMap[c.detected_transmission];
+      if (transmission) params.set('cambio', transmission);
+      const fuel = c.detected_fuel && fuelMap[c.detected_fuel];
+      if (fuel) params.set('combustivel', fuel);
+      const bodyType = c.detected_body_type && bodyTypeMap[c.detected_body_type];
+      if (bodyType) params.set('carroceria', bodyType);
     } else if (brand) {
       const locPart = locationSlug ? `/${locationSlug}` : '';
       pathBase = `https://www.webmotors.com.br/${vehicleWord}${locPart}/${brand.toLowerCase()}`;
       params.set('marca1', brand.toUpperCase());
     } else {
-      pathBase = `https://www.webmotors.com.br/${vehicleWord}/${locationSlug || 'sp'}`;
+      pathBase = locationSlug
+        ? `https://www.webmotors.com.br/${vehicleWord}/${locationSlug}`
+        : `https://www.webmotors.com.br/${vehicleWord}`;
     }
 
     if (city) params.set('estadocidade', this.normalizeCityName(city));

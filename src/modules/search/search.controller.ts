@@ -69,6 +69,19 @@ export class SearchController {
         if (!isNaN(y)) enriched.detected_year = y;
       }
 
+      if (answersStr.gender) enriched.detected_gender = answersStr.gender;
+      if (answersStr.size)   enriched.detected_size   = answersStr.size;
+      if (answersStr.storage) enriched.detected_storage = answersStr.storage;
+      if (answersStr.transmission && answersStr.transmission !== 'qualquer') enriched.detected_transmission = answersStr.transmission;
+      if (answersStr.fuel && answersStr.fuel !== 'qualquer') enriched.detected_fuel = answersStr.fuel;
+      if (answersStr.body_type && answersStr.body_type !== 'qualquer') enriched.detected_body_type = answersStr.body_type;
+      if (answersStr.brand && answersStr.brand !== 'qualquer') enriched.detected_brand = answersStr.brand;
+      if (answersStr.shoe_type) {
+        enriched.detected_shoe_type = answersStr.shoe_type;
+        // Injetar no last_filters para persistência
+        enriched.last_filters = { ...(base.last_filters || {}), shoe_type: answersStr.shoe_type };
+      }
+
       enriched.missing_fields = (base.missing_fields || []).filter(
         (f: string) => !answersStr[f]
       );

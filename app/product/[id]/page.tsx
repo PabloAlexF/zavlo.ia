@@ -40,6 +40,12 @@ export default function ProductDetails() {
       if (!params.id) return;
       
       try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(String(params.id))) {
+          setProduct(mockProduct);
+          setLoading(false);
+          return;
+        }
+
         const API_URL = process.env.NEXT_PUBLIC_API_URL;
         console.log('[PRODUCT] Buscando produto ID:', params.id);
         const response = await fetch(`${API_URL}/products/${params.id}`);

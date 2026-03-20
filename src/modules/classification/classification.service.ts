@@ -26,8 +26,9 @@ export class ClassificationService {
     try {
       this.logger.log(`📥 Classificando query: "${query}"`);
 
-      // 🆕 BUSCAR LOCALIZAÇÃO DO USUÁRIO SE DISPONÍVEL
+      // 🆕 BUSCAR LOCALIZAÇÃO E PREFERÊNCIAS DO USUÁRIO SE DISPONÍVEL
       let userLocation: { city?: string; state?: string } | undefined;
+      let userPreferences: Record<string, any> = {};
       if (userId) {
         try {
           const firestore = this.firebaseService.getFirestore();
@@ -35,15 +36,16 @@ export class ClassificationService {
           if (userDoc.exists) {
             const userData = userDoc.data();
             if (userData?.location) {
-              userLocation = {
-                city: userData.location.city,
-                state: userData.location.state
-              };
+              userLocation = { city: userData.location.city, state: userData.location.state };
               this.logger.log(`📍 Localização do usuário: ${userLocation.city}, ${userLocation.state}`);
+            }
+            if (userData?.preferences) {
+              userPreferences = userData.preferences;
+              this.logger.log(`🧠 Preferências do usuário carregadas: ${JSON.stringify(userPreferences)}`);
             }
           }
         } catch (locationError) {
-          this.logger.warn(`⚠️ Erro ao buscar localização: ${locationError.message}`);
+          this.logger.warn(`⚠️ Erro ao buscar dados do usuário: ${locationError.message}`);
         }
       }
 
@@ -51,7 +53,9 @@ export class ClassificationService {
         query,
         context: {
           ...context,
-          location: userLocation  // 🆕 PASSAR LOCALIZAÇÃO PARA O PYTHON
+          location: userLocation,
+          last_filters: userPreferences.last_filters ?? {},
+          last_category: userPreferences.last_category ?? null,
         },
       };
 

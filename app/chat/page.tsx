@@ -13,6 +13,22 @@ import { contextManager } from '@/utils/chat/contextManager';
 import { chatHistoryService } from '@/lib/chatHistory';
 import { PLAN_PRICES, PLAN_CREDITS } from '@/lib/plans';
 
+const API_BASE = (() => {
+  const raw = process.env.NEXT_PUBLIC_API_URL ?? '';
+  try {
+    const url = new URL(raw);
+    if (!['https:', 'http:'].includes(url.protocol)) throw new Error();
+    // Strip any path/query so callers always append their own path
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    throw new Error(`NEXT_PUBLIC_API_URL inválida: "${raw}"`);
+  }
+})();
+
+function apiUrl(path: string): string {
+  return `${API_BASE}${path.startsWith('/') ? path : '/' + path}`;
+}
+
 interface Message {
   id: string;
   type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question' | 'question' | 'expansion';
@@ -60,7 +76,7 @@ function getNextQuestion(
   }
   // Campos não-veículo: a pergunta e sugestões vêm do Python via classification.suggested_question
   // Se disponível, usar; senão fallback genérico
-  if (['gender', 'size', 'storage'].includes(field)) {
+  if (['gender', 'size', 'storage', 'transmission', 'fuel', 'body_type', 'brand', 'shoe_type'].includes(field)) {
     const smartQ = classification?.suggested_question;
     if (smartQ && typeof smartQ === 'object') return smartQ;
     const fallbacks: Record<string, { question: string; suggestions: any[] }> = {
@@ -81,6 +97,33 @@ function getNextQuestion(
         { label: '128 GB', value: '128gb' },
         { label: '256 GB', value: '256gb' },
         { label: '512 GB', value: '512gb' },
+      ]},
+      transmission: { question: 'Qual câmbio você prefere?', suggestions: [
+        { label: '⚙️ Manual',     value: 'manual' },
+        { label: '🤖 Automático', value: 'automatico' },
+        { label: '🔀 Tanto faz',  value: 'qualquer' },
+      ]},
+      fuel: { question: 'Qual combustível você prefere?', suggestions: [
+        { label: '⛽ Flex',      value: 'flex' },
+        { label: '🛢️ Diesel',    value: 'diesel' },
+        { label: '⚡ Elétrico',  value: 'eletrico' },
+        { label: '🔀 Tanto faz', value: 'qualquer' },
+      ]},
+      body_type: { question: 'Qual estilo de carroceria?', suggestions: [
+        { label: '🚗 Hatch',    value: 'hatch' },
+        { label: '🚙 Sedan',    value: 'sedan' },
+        { label: '🛻 SUV',      value: 'suv' },
+        { label: '🚐 Pickup',   value: 'pickup' },
+        { label: '🔀 Tanto faz', value: 'qualquer' },
+      ]},
+      brand: { question: 'Tem preferência de marca?', suggestions: [
+        { label: '🔀 Sem preferência', value: 'qualquer' },
+      ]},
+      shoe_type: { question: 'Que tipo de calçado?', suggestions: [
+        { label: '👟 Tênis',    value: 'tenis' },
+        { label: '👢 Bota',     value: 'bota' },
+        { label: '👡 Sandália', value: 'sandalia' },
+        { label: '🥿 Sapatilha', value: 'sapatilha' },
       ]},
     };
     return fallbacks[field] ?? field;
@@ -184,8 +227,7 @@ export default function ChatPage() {
       const user = localStorage.getItem('zavlo_user');
       if (!user) return;
       const userData = JSON.parse(user);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      const response = await fetch(`${API_URL}/users/profile`, {
+      const response = await fetch(apiUrl('/users/profile'), {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
       if (response.ok) {
@@ -399,8 +441,7 @@ export default function ChatPage() {
       }
 
       const userData = JSON.parse(user);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      const response = await fetch(`${API_URL}/search/image`, {
+      const response = await fetch(apiUrl('/search/image'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
@@ -489,9 +530,8 @@ export default function ChatPage() {
       }
 
       const userData = JSON.parse(user);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-      const response = await fetch(`${API_URL}/search/prices`, {
+      const response = await fetch(apiUrl('/search/prices'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
@@ -570,12 +610,18 @@ export default function ChatPage() {
         ? { ...m, expansionSources: (m.expansionSources || []).filter(s => s !== source) }
         : m
     ).filter(m => m.type !== 'expansion' || (m.expansionSources || []).length > 0));
-    addMessage('ai', `Buscando no ${sourceLabel[source] || source}...`);
+    const searchingMsgId = crypto.randomUUID();
+    setMessages(prev => [...prev, {
+      id: searchingMsgId,
+      type: 'ai' as const,
+      content: `Buscando no ${sourceLabel[source] || source}...`,
+      timestamp: new Date(),
+    }]);
     const enrichedClassification = {
       ...classification,
       scrapers: [{ name: source, score: 1.0 }],
     };
-    await executeTextSearch(query, sortBy, enrichedClassification);
+    await executeTextSearch(query, sortBy, enrichedClassification, true, searchingMsgId);
   };
 
   const dismissQuestionBubble = () => {
@@ -592,6 +638,7 @@ export default function ChatPage() {
       if (currentField === 'condition' && answer === 'ambos') return '';
       if (currentField === 'year' && answer === 'qualquer ano') return '';
       if (currentField === 'location' && answer === 'todo o brasil') return '';
+      if (['transmission', 'fuel', 'body_type', 'brand'].includes(currentField) && answer === 'qualquer') return '';
       return answer;
     })();
     
@@ -620,6 +667,16 @@ export default function ChatPage() {
       updatedClassification.detected_size = normalizedAnswer;
     } else if (currentField === 'storage' && normalizedAnswer) {
       updatedClassification.detected_storage = normalizedAnswer;
+    } else if (currentField === 'transmission' && normalizedAnswer) {
+      updatedClassification.detected_transmission = normalizedAnswer;
+    } else if (currentField === 'fuel' && normalizedAnswer) {
+      updatedClassification.detected_fuel = normalizedAnswer;
+    } else if (currentField === 'body_type' && normalizedAnswer) {
+      updatedClassification.detected_body_type = normalizedAnswer;
+    } else if (currentField === 'brand' && normalizedAnswer) {
+      updatedClassification.detected_brand = normalizedAnswer;
+    } else if (currentField === 'shoe_type' && normalizedAnswer) {
+      updatedClassification.detected_shoe_type = normalizedAnswer;
     }
 
     // Enriquecer query textual para exibição
@@ -687,9 +744,8 @@ export default function ChatPage() {
       const user = localStorage.getItem('zavlo_user');
       if (!user) { router.push('/auth'); return; }
       const userData = JSON.parse(user);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-      const response = await fetch(`${API_URL}/search/classify`, {
+      const response = await fetch(apiUrl('/search/classify'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
@@ -895,10 +951,9 @@ export default function ChatPage() {
       }
 
       const userData = JSON.parse(user);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
       
       // ✅ USAR ENDPOINT CORRETO: /search/classify (NÃO consome créditos)
-      const response = await fetch(`${API_URL}/search/classify`, {
+      const response = await fetch(apiUrl('/search/classify'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
@@ -1016,7 +1071,8 @@ export default function ChatPage() {
         
         setSearchSession(s => ({ ...s, query, classification: data.classification, step: 'idle' }));
         setLoading(false);
-        await executeTextSearch(query, searchSession.sortBy, data.classification);
+        const currentSortBy = searchSession.sortBy;
+        await executeTextSearch(query, currentSortBy, data.classification);
         
       } else {
         addMessage('ai', 'Erro ao processar. Tente novamente.');
@@ -1028,10 +1084,13 @@ export default function ChatPage() {
     }
   };
 
-  const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any) => {
+  const sanitizeForLog = (value: string): string =>
+    String(value).replace(/[\r\n\t\x00-\x1F\x7F]/g, ' ').trim();
+
+  const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any, isExpansion = false, replaceMsgId?: string) => {
     const enrichedQuery = contextManager.applyContext(query);
     if (enrichedQuery !== query) query = enrichedQuery;
-    setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
+    setMessages(prev => prev.filter(m => m.content !== 'searching_animation' && m.id !== replaceMsgId));
     addMessage('ai', 'searching_animation');
 
     try {
@@ -1039,12 +1098,11 @@ export default function ChatPage() {
       if (!user) { router.push('/auth'); return; }
 
       const userData = JSON.parse(user);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
       const params = new URLSearchParams({ query, sortBy });
       if (classification) params.append('classification', JSON.stringify(classification));
 
-      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
+      const response = await fetch(apiUrl(`/search/text?${params.toString()}`), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
@@ -1091,16 +1149,16 @@ export default function ChatPage() {
         const cl = classification;
 
         if (products.length === 0) {
-            const brand = cl?.detected_brand ? cl.detected_brand.charAt(0).toUpperCase() + cl.detected_brand.slice(1) : null;
-            const model = cl?.detected_model ? cl.detected_model.charAt(0).toUpperCase() + cl.detected_model.slice(1) : null;
-            const city  = cl?.user_location?.city || null;
+            const brand = cl?.detected_brand ? sanitizeForLog(cl.detected_brand.charAt(0).toUpperCase() + cl.detected_brand.slice(1)) : null;
+            const model = cl?.detected_model ? sanitizeForLog(cl.detected_model.charAt(0).toUpperCase() + cl.detected_model.slice(1)) : null;
+            const city  = cl?.user_location?.city ? sanitizeForLog(cl.user_location.city) : null;
             const cond  = cl?.condition === 'new' ? 'novo' : cl?.condition === 'used' ? 'usado' : null;
             const year  = cl?.detected_year || null;
 
             const vehicle = [brand, model, year, cond].filter(Boolean).join(' ');
             const where   = city ? ` em ${city.charAt(0).toUpperCase() + city.slice(1)}` : '';
 
-            let msg = `😕 Não encontrei anúncios de **${vehicle || query}**${where} no momento.\n\n`;
+            let msg = `😕 Não encontrei anúncios de **${sanitizeForLog(vehicle || query)}**${where} no momento.\n\n`;
             msg += `Isso pode acontecer porque:\n`;
             msg += `• Não há estoque disponível com esses filtros\n`;
             msg += `• A combinação de cidade + condição + ano é muito específica\n\n`;
@@ -1116,8 +1174,8 @@ export default function ChatPage() {
           }
         const rawCityLabel = data.originalCity || cl?.user_location?.city || null;
         const cityLabel = rawCityLabel
-          ? rawCityLabel.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
-              .replace(/\b\w/g, (c: string) => c.toUpperCase())
+          ? sanitizeForLog(rawCityLabel.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
+              .replace(/\b\w/g, (c: string) => c.toUpperCase()))
           : null;
 
         const contextParts: string[] = [];
@@ -1155,8 +1213,8 @@ export default function ChatPage() {
           setMessages(prev => [...prev, productsMessage]);
           contextManager.update({ lastResults: products, lastProduct: query });
 
-          // Perguntar se os resultados satisfizeram
-          if (data.canExpandSearch && data.expansionSources?.length > 0) {
+          // Perguntar se os resultados satisfizeram (apenas na busca primária, não em expansões)
+          if (!isExpansion && data.canExpandSearch && data.expansionSources?.length > 0) {
             const sourceLabel: Record<string, string> = {
               olx: 'OLX',
               webmotors: 'Webmotors',

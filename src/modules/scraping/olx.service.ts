@@ -22,7 +22,7 @@ export class OlxService {
 
   async search(query: string, limit = 20, sortBy: string = 'RELEVANCE', classification?: any): Promise<any[]> {
     try {
-      const searchQuery = classification && classification.category !== 'car' && classification.category !== 'motorcycle'
+      const searchQuery = classification
         ? this.buildEnrichedQuery(query, classification)
         : query;
       this.logger.log(`🛒 [OLX] Buscando: "${this.sanitizeForLog(searchQuery)}" (limit: ${limit}, sortBy: ${sortBy})`);
@@ -104,11 +104,32 @@ export class OlxService {
 
   private buildEnrichedQuery(query: string, classification: any): string {
     const parts: string[] = [query];
+    const cat = classification.category;
+
+    if (cat === 'car' || cat === 'motorcycle') {
+      if (classification.detected_brand && !query.toLowerCase().includes(classification.detected_brand))
+        parts.push(classification.detected_brand);
+      if (classification.detected_model && !query.toLowerCase().includes(classification.detected_model))
+        parts.push(classification.detected_model);
+      if (classification.detected_year) parts.push(String(classification.detected_year));
+      if (classification.condition === 'new') parts.push('0km');
+      else if (classification.condition === 'used') parts.push('usado');
+      if (classification.detected_transmission === 'automatic') parts.push('automatico');
+      else if (classification.detected_transmission === 'manual') parts.push('manual');
+      if (classification.detected_fuel && classification.detected_fuel !== 'qualquer') parts.push(classification.detected_fuel);
+      if (classification.detected_body_type && classification.detected_body_type !== 'qualquer') parts.push(classification.detected_body_type);
+      return parts.filter(Boolean).join(' ');
+    }
+
     if (classification.condition === 'new') parts.push('novo');
     else if (classification.condition === 'used') parts.push('usado');
-    if (classification.category === 'fashion') {
+
+    if (cat === 'fashion') {
       if (classification.detected_gender) parts.push(classification.detected_gender);
       if (classification.detected_size)   parts.push(classification.detected_size);
+      if (classification.detected_shoe_type) parts.push(classification.detected_shoe_type);
+    }
+      if (classification.detected_storage) parts.push(classification.detected_storage);
     }
     if (classification.detected_brand && !query.toLowerCase().includes(classification.detected_brand)) {
       parts.push(classification.detected_brand);

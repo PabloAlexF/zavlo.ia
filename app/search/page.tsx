@@ -19,7 +19,7 @@ interface Product {
   condition: 'new' | 'used';
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'process.env.NEXT_PUBLIC_API_URL';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -36,9 +36,11 @@ function SearchContent() {
     sortBy: 'relevance',
   });
 
-  const query = searchParams.get('q') || '';
-  const type = searchParams.get('type') || 'text';
-  const imageUrl = searchParams.get('imageUrl') || '';
+  const rawQuery = searchParams.get('q') || '';
+  const query = rawQuery.slice(0, 500).replace(/[\x00-\x1F\x7F]/g, '');
+  const type = searchParams.get('type') === 'image' ? 'image' : 'text';
+  const rawImageUrl = searchParams.get('imageUrl') || '';
+  const imageUrl = /^https?:\/\//.test(rawImageUrl) ? rawImageUrl : '';
 
   useEffect(() => {
     if (query) setSearchQuery(query);

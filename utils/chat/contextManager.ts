@@ -101,6 +101,15 @@ class ContextManager {
     this.context.conversationHistory = history.slice(-this.MAX_HISTORY);
   }
 
+  private readonly MAX_QUERY_LENGTH = 200;
+
+  // Sanitizes raw user input before any processing (prevents ReDoS / code injection)
+  private sanitize(text: string): string {
+    return text
+      .slice(0, this.MAX_QUERY_LENGTH)   // bound length to prevent ReDoS
+      .replace(/[\x00-\x1F\x7F]/g, ''); // strip control characters
+  }
+
   // ✅ Normalização centralizada
   private normalize(text: string): string {
     return text
@@ -352,20 +361,21 @@ class ContextManager {
 
   // ✅ Pipeline principal (modular e testável)
   applyContext(query: string): string {
-    const normalized = this.normalize(query);
+    const safe = this.sanitize(query);
+    const normalized = this.normalize(safe);
     
     // ✅ Correção ANTES de adicionar ao histórico (usa histórico atual)
     const history = this.context.conversationHistory;
-    const correction = this.handleCorrection(query, history);
+    const correction = this.handleCorrection(safe, history);
     
     // Adiciona ao histórico DEPOIS da correção
-    this.addToHistory(query);
+    this.addToHistory(safe);
     
     if (correction) return correction;
 
     // 2. Detecta produto (usa texto normalizado)
     const product = this.handleProductDetection(normalized);
-    if (!product) return query;
+    if (!product) return safe;
 
     // 3. Pipeline de handlers (ordem de prioridade, extensível)
     const handlers = [
@@ -380,8 +390,8 @@ class ContextManager {
       () => this.handleRemoveFilter(normalized),
       () => this.handleAnyPrice(normalized),
       () => this.handleChangeProduct(normalized),
-      () => this.handleConditionChange(normalized, query),
-      () => this.handleLocation(normalized, query)
+      () => this.handleConditionChange(normalized, safe),
+      () => this.handleLocation(normalized, safe)
     ];
 
     for (const handler of handlers) {
@@ -389,7 +399,7 @@ class ContextManager {
       if (result) return result;
     }
 
-    return query;
+    return safe;
   }
 }
 

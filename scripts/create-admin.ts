@@ -21,8 +21,12 @@ const db = getFirestore();
 
 async function createAdminUser() {
   try {
-    const adminEmail = 'admin@zavlo.ia';
-    const adminPassword = 'admin123';
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminEmail || !adminPassword) {
+      throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set in environment variables');
+    }
     
     // Hash da senha
     const hashedPassword = await bcrypt.hash(adminPassword, 10);

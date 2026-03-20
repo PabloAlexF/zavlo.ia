@@ -162,10 +162,10 @@ npm run start:prod
 
 ```json
 {
-  "email": "usuario@email.com",
-  "password": "hash_bcrypt",
-  "name": "Nome do Usuário",
-  "phone": "+5531999999999",
+  "email": "<user_email>",
+  "password": "<bcrypt_hash>",
+  "name": "<user_name>",
+  "phone": "<user_phone>",
   "createdAt": "timestamp",
   "updatedAt": "timestamp"
 }
@@ -188,8 +188,8 @@ npm run start:prod
     "cep": "30130-000"
   },
   "seller": {
-    "name": "João Silva",
-    "phone": "+5531999999999"
+    "name": "<seller_name>",
+    "phone": "<seller_phone>"
   },
   "condition": "used",
   "createdAt": "timestamp",

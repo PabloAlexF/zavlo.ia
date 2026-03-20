@@ -24,9 +24,9 @@ export default function Auth() {
     const formatted = cleanCep.replace(/(\d{5})(\d)/, '$1-$2');
     setCep(formatted);
 
-    if (cleanCep.length === 8) {
+    if (cleanCep.length === 8 && /^\d{8}$/.test(cleanCep)) {
       try {
-        const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const response = await fetch(`https://viacep.com.br/ws/${encodeURIComponent(cleanCep)}/json/`);
         const data = await response.json();
         
         if (!data.erro) {

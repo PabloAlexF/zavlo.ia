@@ -9,10 +9,14 @@ async function testCredits() {
     
     // 1. Fazer login (substitua com suas credenciais)
     console.log('1. Fazendo login...');
-    const loginResponse = await axios.post(`${BASE_URL}/auth/login`, {
-      email: 'test@example.com', // Substitua pelo seu email
-      password: 'password123'    // Substitua pela sua senha
-    });
+    const email = process.env.TEST_EMAIL;
+    const password = process.env.TEST_PASSWORD;
+
+    if (!email || !password) {
+      throw new Error('TEST_EMAIL and TEST_PASSWORD must be set in environment variables');
+    }
+
+    const loginResponse = await axios.post(`${BASE_URL}/auth/login`, { email, password });
     
     const token = loginResponse.data.access_token;
     console.log('✅ Login realizado com sucesso\n');

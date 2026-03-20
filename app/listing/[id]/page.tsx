@@ -68,6 +68,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   const loadListing = async () => {
     try {
+      if (!/^[a-zA-Z0-9_-]+$/.test(resolvedParams.id)) {
+        setError('ID de anúncio inválido');
+        setLoading(false);
+        return;
+      }
+
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
       const response = await fetch(`${API_URL}/listings/${resolvedParams.id}`);
       
@@ -76,7 +82,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         setListing(data);
         
         // Increment views
-        fetch(`${API_URL}/listings/${resolvedParams.id}/view`, {
+        fetch(`${API_URL}/listings/${encodeURIComponent(resolvedParams.id)}/view`, {
           method: 'POST',
         }).catch(() => {});
         
