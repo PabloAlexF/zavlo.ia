@@ -8,9 +8,10 @@ interface ChatHeaderProps {
   onToggleSidebar: () => void;
   userCredits: number;
   onClearChat: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function ChatHeader({ sidebarOpen, onToggleSidebar, userCredits, onClearChat }: ChatHeaderProps) {
+export function ChatHeader({ sidebarOpen, onToggleSidebar, userCredits, onClearChat, onOpenSettings }: ChatHeaderProps) {
   return (
     <header className="h-14 flex-shrink-0 border-b border-white/[0.06] bg-[#0D0D14]/90 px-3 backdrop-blur-md sm:h-16 sm:px-5 md:px-8">
       <div className="flex h-full w-full items-center justify-between gap-2">
@@ -54,6 +55,7 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar, userCredits, onClearC
           </motion.button>
 
           <motion.button
+            onClick={onOpenSettings}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             className="hidden rounded-lg border border-white/[0.08] bg-white/[0.04] p-2 text-slate-400 transition-all hover:border-white/20 hover:text-slate-200 sm:flex"

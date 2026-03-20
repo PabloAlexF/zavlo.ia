@@ -8,7 +8,7 @@ import Link from 'next/link';
 
 interface Message {
   id: string;
-  type: 'user' | 'ai' | 'products' | 'confirmation' | 'category_question' | 'image_confirmation' | 'sort_question';
+  type: 'user' | 'ai' | 'products' | 'category_question' | 'image_confirmation' | 'sort_question';
   content: string;
   products?: any[];
   timestamp: Date;
@@ -36,14 +36,6 @@ interface ChatMessagesProps {
   onImageSearchReject: () => void;
   onImagePriceSearch: () => void;
   onExecuteImageSearch: (sortBy: string) => void;
-  onConfirmSearch: () => void;
-  onCancelSearch: () => void;
-  isEditingQuery: boolean;
-  editedQuery: string;
-  onEditQueryChange: (value: string) => void;
-  onStartEditQuery: () => void;
-  onCancelEditQuery: () => void;
-  onConfirmEditQuery: () => void;
   onUpdateDetectedProduct: (messageId: string, newName: string) => void;
   messagesEndRef: React.RefObject<HTMLDivElement>;
 }
@@ -116,14 +108,6 @@ export function ChatMessages({
   onImageSearchReject,
   onImagePriceSearch,
   onExecuteImageSearch,
-  onConfirmSearch,
-  onCancelSearch,
-  isEditingQuery,
-  editedQuery,
-  onEditQueryChange,
-  onStartEditQuery,
-  onCancelEditQuery,
-  onConfirmEditQuery,
   onUpdateDetectedProduct,
   messagesEndRef,
 }: ChatMessagesProps) {
@@ -285,42 +269,6 @@ export function ChatMessages({
                           </motion.button>
                         ))}
                       </div>
-                    </AIBubble>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Confirmação de busca ── */}
-              {message.type === 'confirmation' && (
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <AIAvatar />
-                  <div className="max-w-[90%] sm:max-w-[78%]">
-                    <AIBubble>
-                      <p className="mb-3 text-slate-400 text-xs uppercase tracking-wider">Confirmar busca</p>
-                      <div className="relative mb-4">
-                        <input
-                          type="text"
-                          value={isEditingQuery ? editedQuery : message.content}
-                          disabled={!isEditingQuery}
-                          onChange={(e) => isEditingQuery && onEditQueryChange(e.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-violet-500/50 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-slate-300"
-                        />
-                      </div>
-                      {!isEditingQuery ? (
-                        <div className="flex flex-wrap gap-2">
-                          <OptionButton onClick={onCancelSearch}>Cancelar</OptionButton>
-                          <OptionButton onClick={onStartEditQuery}>Editar</OptionButton>
-                          <OptionButton onClick={onConfirmSearch} variant="primary">Confirmar busca</OptionButton>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <OptionButton onClick={onCancelEditQuery}>Cancelar</OptionButton>
-                          <OptionButton onClick={() => {
-                            onConfirmEditQuery();
-                            setTimeout(() => onConfirmSearch(), 100);
-                          }} variant="primary">Salvar e Buscar</OptionButton>
-                        </div>
-                      )}
                     </AIBubble>
                   </div>
                 </div>

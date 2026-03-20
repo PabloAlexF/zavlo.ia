@@ -129,6 +129,11 @@ export default function ChatPage() {
   }, [messages.length]);
 
   useEffect(() => {
+    const user = localStorage.getItem('zavlo_user');
+    if (!user) {
+      router.push('/auth');
+      return;
+    }
     loadUserCredits();
     loadChatHistory();
 
@@ -179,6 +184,7 @@ export default function ChatPage() {
         if (firestoreHistory.length > 0) {
           setChatHistory(firestoreHistory);
           localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(firestoreHistory));
+          setCurrentChatId(id => id || Date.now().toString());
           return;
         }
       } catch (firestoreError) {
@@ -194,10 +200,8 @@ export default function ChatPage() {
       console.error('Erro ao carregar histórico:', error);
       setChatHistory([]);
     }
-    
-    if (!currentChatId) {
-      setCurrentChatId(Date.now().toString());
-    }
+
+    setCurrentChatId(id => id || Date.now().toString());
   };
 
   const saveChatToHistory = async () => {
@@ -268,6 +272,15 @@ export default function ChatPage() {
     setDetectedProductName('');
     setAwaitingImageConfirmation(false);
     setAwaitingImageSort(false);
+    setSearchSession({
+      query: '',
+      classification: null,
+      missingFields: [],
+      answers: {},
+      step: 'idle',
+      expansionSources: [],
+      primarySource: '',
+    });
     contextManager.clear();
     
     setTimeout(() => {
@@ -545,11 +558,11 @@ export default function ChatPage() {
     } else {
       try {
         const parsed = JSON.parse(answer);
-        if (parsed?.value) {
-          const { min, max } = parsed.value;
-          if (min && max) displayAnswer = `entre ${min/1000}mil e ${max/1000}mil`;
-          else if (max)   displayAnswer = `até ${max/1000}mil`;
-          else if (min)   displayAnswer = `acima de ${min/1000}mil`;
+        if (parsed?.value && typeof parsed.value === 'object') {
+          const { min, max } = parsed.value as { min?: number; max?: number };
+          if (typeof min === 'number' && typeof max === 'number') displayAnswer = `entre ${min/1000}mil e ${max/1000}mil`;
+          else if (typeof max === 'number') displayAnswer = `até ${max/1000}mil`;
+          else if (typeof min === 'number') displayAnswer = `acima de ${min/1000}mil`;
         }
       } catch {}
     }
@@ -645,15 +658,8 @@ export default function ChatPage() {
       }
     }
 
-    // Handle image sort
-    if (awaitingImageSort) {
-      const sortInput = currentInput.toLowerCase();
-      let sortBy = 'RELEVANCE';
-      if (sortInput.includes('menor') || sortInput.includes('barato')) sortBy = 'LOWEST_PRICE';
-      else if (sortInput.includes('maior') || sortInput.includes('caro')) sortBy = 'HIGHEST_PRICE';
-      executeImageSearch(sortBy);
-      return;
-    }
+    // Handle image sort — modal já está visível, ignorar input de texto
+    if (awaitingImageSort) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -769,20 +775,8 @@ export default function ChatPage() {
         return;
       }
 
-      if (intent.type === 'credits_question') {
-        addMessage('ai', `💰 Seus Créditos: ${userCredits}\n\n📊 Custos:\n• Busca por texto: 1 crédito\n• Busca por imagem: 2 créditos`);
-        setLoading(false);
-        return;
-      }
-
-      if (intent.type === 'plans_question') {
-        addMessage('ai',
-          `📊 Nossos Planos:\n\n` +
-          `🌱 Básico - R$ ${PLAN_PRICES.basic.monthly.toFixed(2).replace('.', ',')} /mês • ${PLAN_CREDITS.basic.monthly} créditos\n` +
-          `🚀 Pro - R$ ${PLAN_PRICES.pro.monthly.toFixed(2).replace('.', ',')} /mês • ${PLAN_CREDITS.pro.monthly} créditos\n` +
-          `👑 Business - R$ ${PLAN_PRICES.business.monthly.toFixed(2).replace('.', ',')} /mês • ${PLAN_CREDITS.business.monthly} créditos`
-        );
-        setLoading(false);
+      if (intent.type === 'credits_question' || intent.type === 'plans_question') {
+        await classifyQuery(currentInput);
         return;
       }
 
@@ -940,6 +934,8 @@ export default function ChatPage() {
   };
 
   const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any) => {
+    const enrichedQuery = contextManager.applyContext(query);
+    if (enrichedQuery !== query) query = enrichedQuery;
     addMessage('ai', 'searching_animation');
 
     try {
@@ -1125,6 +1121,18 @@ export default function ChatPage() {
         onNewChat={createNewChat}
         onLoadChat={loadChat}
         onDeleteChat={deleteChat}
+        onRenameChat={(chatId, newTitle) => {
+          const updatedHistory = chatHistory.map(c =>
+            c.id === chatId ? { ...c, title: newTitle } : c
+          );
+          setChatHistory(updatedHistory);
+          const user = localStorage.getItem('zavlo_user');
+          if (user) {
+            const { userId } = JSON.parse(user);
+            localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(updatedHistory));
+            chatHistoryService.save(userId, chatId, newTitle, updatedHistory.find(c => c.id === chatId)?.messages || []).catch(() => {});
+          }
+        }}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1139,7 +1147,7 @@ export default function ChatPage() {
           <QuickSuggestions
             onSuggestionClick={(text) => {
               setInput(text);
-              inputRef.current?.focus();
+              setTimeout(() => handleSend(text), 0);
             }}
             onImageSearchClick={() => fileInputRef.current?.click()}
             showMoreSuggestions={false}
@@ -1155,14 +1163,6 @@ export default function ChatPage() {
             onImageSearchReject={handleImageSearchReject}
             onImagePriceSearch={handleImagePriceSearch}
             onExecuteImageSearch={executeImageSearch}
-            onConfirmSearch={() => {}}
-            onCancelSearch={() => {}}
-            isEditingQuery={false}
-            editedQuery=""
-            onEditQueryChange={() => {}}
-            onStartEditQuery={() => {}}
-            onCancelEditQuery={() => {}}
-            onConfirmEditQuery={() => {}}
             onUpdateDetectedProduct={(messageId, newName) => {
               setDetectedProductName(newName);
               setMessages(prev => {

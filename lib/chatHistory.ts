@@ -46,6 +46,8 @@ export const chatHistoryService = {
           if (m.products) msg.products = m.products.slice(0, 6);
           if (m.searchType) msg.searchType = m.searchType;
           if (m.creditCost !== undefined) msg.creditCost = m.creditCost;
+          if (m.imageData) msg.imageData = m.imageData;
+          if (m.detectedProduct) msg.detectedProduct = m.detectedProduct;
           return msg;
         }),
         updatedAt: new Date().toISOString()

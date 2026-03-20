@@ -28,6 +28,7 @@ interface ChatSidebarProps {
   onNewChat: () => void;
   onLoadChat: (chatId: string) => void;
   onDeleteChat: (chatId: string, e: React.MouseEvent) => void;
+  onRenameChat: (chatId: string, newTitle: string) => void;
 }
 
 const NAV_ITEMS = [
@@ -83,6 +84,7 @@ export function ChatSidebar({
   onNewChat,
   onLoadChat,
   onDeleteChat,
+  onRenameChat,
 }: ChatSidebarProps) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -159,12 +161,13 @@ export function ChatSidebar({
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === 'Escape') setEditingId(null);
+                if (e.key === 'Enter') { onRenameChat(chat.id, editTitle); setEditingId(null); }
+                if (e.key === 'Escape') setEditingId(null);
               }}
               className="h-7 flex-1 rounded-md border border-white/10 bg-white/[0.06] px-2 text-xs text-white outline-none focus:border-violet-500/50"
               autoFocus
             />
-            <button onClick={() => setEditingId(null)} className="rounded p-1 text-white/40 hover:text-white">
+            <button onClick={() => { onRenameChat(chat.id, editTitle); setEditingId(null); }} className="rounded p-1 text-white/40 hover:text-white">
               <Check className="h-3 w-3" />
             </button>
             <button onClick={() => setEditingId(null)} className="rounded p-1 text-white/40 hover:text-white">
@@ -306,10 +309,9 @@ export function ChatSidebar({
               ) : (
                 // Grouped by date
                 <>
-                  <ChatGroup label="Pinned" chats={grouped.pinned} />
-                  <ChatGroup label="Today" chats={grouped.today} />
-                  <ChatGroup label="Yesterday" chats={grouped.yesterday} />
-                  <ChatGroup label="Last 7 Days" chats={grouped.lastWeek} />
+                  <ChatGroup label="Hoje" chats={grouped.today} />
+                  <ChatGroup label="Ontem" chats={grouped.yesterday} />
+                  <ChatGroup label="Últimos 7 dias" chats={grouped.lastWeek} />
                 </>
               )}
             </div>
