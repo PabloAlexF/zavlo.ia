@@ -103,7 +103,7 @@ function PixPaymentContent() {
   useEffect(() => {
     const interval = setInterval(() => {
       checkPaymentStatus();
-    }, 5000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [paymentId]);

@@ -464,7 +464,9 @@ export default function Profile() {
                 <div className="flex items-center justify-between py-3 border-b border-white/10">
                   <span className="text-sm text-gray-400">Próxima cobrança</span>
                   <span className="text-sm font-semibold text-white">
-                    {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}
+                    {user.planExpiresAt && !isNaN(new Date(user.planExpiresAt).getTime())
+                      ? new Date(user.planExpiresAt).toLocaleDateString('pt-BR')
+                      : '—'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-3">

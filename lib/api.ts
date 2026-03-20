@@ -36,7 +36,8 @@ export const api = {
 };
 
 export async function fetcher(url: string, options?: RequestInit) {
-  const token = localStorage.getItem('token');
+  const raw = localStorage.getItem('zavlo_user');
+  const token = raw ? (() => { try { return JSON.parse(raw).token; } catch { return null; } })() : null;
 
   const response = await fetch(url, {
     ...options,
