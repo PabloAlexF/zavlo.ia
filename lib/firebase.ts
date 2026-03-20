@@ -1,5 +1,4 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -13,7 +12,6 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp | null = null;
-let authInstance: Auth | null = null;
 let dbInstance: Firestore | null = null;
 
 function getApp() {
@@ -27,15 +25,6 @@ function getApp() {
   return app;
 }
 
-export function getAuthInstance() {
-  const firebaseApp = getApp();
-  if (!firebaseApp) return null;
-  if (!authInstance) {
-    authInstance = getAuth(firebaseApp);
-  }
-  return authInstance;
-}
-
 export function getDbInstance() {
   const firebaseApp = getApp();
   if (!firebaseApp) return null;
@@ -45,7 +34,5 @@ export function getDbInstance() {
   return dbInstance;
 }
 
-// Exports legados para compatibilidade
-export const auth = getAuthInstance();
 export const db = getDbInstance();
 export default getApp();
