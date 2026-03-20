@@ -122,7 +122,7 @@ export class PaymentsService {
 
       // Se aprovado, atualizar usuário imediatamente
       if (response.data.status === 'approved') {
-        const billingCycle = data.amount >= 200 ? 'yearly' : 'monthly';
+        const billingCycle = (data.plan === 'basic' && data.amount >= 300) || (data.plan === 'pro' && data.amount >= 700) || (data.plan === 'business' && data.amount >= 2000) ? 'yearly' : 'monthly';
         let creditsToAdd = 15;
         
         if (data.plan === 'basic') {
