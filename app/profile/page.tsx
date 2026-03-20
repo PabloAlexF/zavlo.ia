@@ -59,8 +59,8 @@ export default function Profile() {
               planStartedAt: profile.planStartedAt,
               planExpiresAt: profile.planExpiresAt,
               createdAt: profile.createdAt,
-              searchesUsedToday: usage.textToday,
-              imageSearchesUsedToday: usage.imageToday,
+              searchesUsedToday: usage.textMonth,
+              imageSearchesUsedToday: usage.imageMonth,
             });
           }
         } catch (error) {

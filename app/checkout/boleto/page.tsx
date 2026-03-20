@@ -69,7 +69,7 @@ function BoletoPaymentContent() {
     setCancelling(true);
     try {
       toast.success('Pagamento cancelado');
-      router.push('/checkout/confirm');
+      router.push(`/checkout/confirm?plan=${plan || 'basic'}&cycle=monthly`);
     } catch (error) {
       toast.error('Erro ao cancelar pagamento');
     } finally {

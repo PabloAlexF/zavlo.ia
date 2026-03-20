@@ -97,24 +97,27 @@ function SearchContent() {
       const user = localStorage.getItem('zavlo_user');
       const userData = user ? JSON.parse(user) : null;
 
-      const endpoint = type === 'image' 
-        ? `${API_URL}/api/v1/scraping/search-by-image`
-        : `${API_URL}/api/v1/scraping/google-shopping`;
+      const endpoint = type === 'image'
+        ? `${API_URL}/search/image`
+        : `${API_URL}/search/text`;
 
       const body = type === 'image' && imageUrl
-        ? { imageUrl, productName: query }
+        ? { imageData: imageUrl }
         : type === 'image'
-        ? { imageUrl: query }
-        : { query, limit: 50 };
+        ? { imageData: query }
+        : undefined;
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(userData?.token && { 'Authorization': `Bearer ${userData.token}` }),
-        },
-        body: JSON.stringify(body),
-      });
+      const response = await fetch(
+        type === 'image' ? endpoint : `${endpoint}?query=${encodeURIComponent(query)}&sortBy=RELEVANCE`,
+        {
+          method: type === 'image' ? 'POST' : 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(userData?.token && { 'Authorization': `Bearer ${userData.token}` }),
+          },
+          ...(type === 'image' && body ? { body: JSON.stringify(body) } : {}),
+        }
+      );
 
       if (!response.ok) {
         const error = await response.json();
@@ -182,7 +185,7 @@ function SearchContent() {
 
     try {
       const userData = JSON.parse(user);
-      const response = await fetch(`${API_URL}/api/v1/favorites`, {
+      const response = await fetch(`${API_URL}/favorites`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
