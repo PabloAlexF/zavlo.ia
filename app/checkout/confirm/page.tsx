@@ -32,7 +32,7 @@ function ConfirmPlanContent() {
       name: 'Básico',
       price: 39.90,
       yearlyPrice: 399.00,
-      features: ['20 comparações/mês', 'Todos os marketplaces', 'Sem anúncios', 'Histórico 60 dias', 'Alertas de preço'],
+      features: ['15 comparações/mês', 'Todos os marketplaces', 'Sem anúncios', 'Histórico 60 dias', 'Alertas de preço'],
       benefits: [
         'Economize até R$ 800/mês em compras',
         'Acesso a todos os marketplaces',
@@ -46,7 +46,7 @@ function ConfirmPlanContent() {
       name: 'Pro',
       price: 89.90,
       yearlyPrice: 899.00,
-      features: ['60 comparações/mês', 'IA avançada de produtos', 'Busca por imagem ilimitada', 'Prioridade máxima', 'Suporte WhatsApp prioritário', 'Histórico ilimitado'],
+      features: ['48 comparações/mês', 'IA avançada de produtos', 'Busca por imagem ilimitada', 'Prioridade máxima', 'Suporte WhatsApp prioritário', 'Histórico ilimitado'],
       benefits: [
         'Economize até R$ 2.400/mês em compras',
         'Acesso a todos os marketplaces',
@@ -62,7 +62,7 @@ function ConfirmPlanContent() {
       name: 'Business',
       price: 299.00,
       yearlyPrice: 2990.00,
-      features: ['150 comparações/mês', 'API REST completa', 'Webhooks personalizados', 'Até 10 usuários', 'Relatórios e analytics', 'Gerente de conta dedicado'],
+      features: ['200 comparações/mês', 'API REST completa', 'Webhooks personalizados', 'Até 10 usuários', 'Relatórios e analytics', 'Gerente de conta dedicado'],
       benefits: [
         'Economize até R$ 6.000/mês em compras',
         'Acesso a todos os marketplaces',

@@ -128,18 +128,18 @@ export const PLAN_PRICING: Record<PlanType, PlanPricing> = {
     currency: 'BRL',
   },
   [PlanType.BASIC]: {
-    monthly: 27.00,
-    yearly: 270.00,
+    monthly: 39.90,
+    yearly: 399.00,
     currency: 'BRL',
   },
   [PlanType.PRO]: {
-    monthly: 77.00,
-    yearly: 770.00,
+    monthly: 89.90,
+    yearly: 899.00,
     currency: 'BRL',
   },
   [PlanType.BUSINESS]: {
-    monthly: 197.00,
-    yearly: 1970.00,
+    monthly: 299.00,
+    yearly: 2990.00,
     currency: 'BRL',
   },
 };

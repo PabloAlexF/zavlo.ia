@@ -177,7 +177,7 @@ export class PaymentsService {
             pending: 'https://zavlo.ia/checkout/pending',
           },
           auto_return: 'approved',
-          external_reference: `${data.userId}-${data.plan}`,
+          external_reference: `${data.userId}|${data.plan}`,
           statement_descriptor: 'ZAVLO.IA',
         },
         {

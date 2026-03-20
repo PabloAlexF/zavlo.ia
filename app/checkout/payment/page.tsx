@@ -49,49 +49,33 @@ function CheckoutContent() {
   }, [mpLoaded, mp]);
 
   const handleConfirmPayment = async () => {
-    console.log('🔵 Iniciando processo de pagamento...');
-    console.log('📋 Dados do formulário:', formData);
-    console.log('💳 Método de pagamento:', paymentMethod);
-    console.log('📦 Plano:', planName, '| Ciclo:', cycle, '| Preço base:', price);
-
-    // Calcular valor total com taxa
     const totalWithFee = calculateTotalWithFee(price, paymentMethod);
-    console.log('💰 Valor com taxa:', totalWithFee);
 
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
-      console.log('❌ Campos de contato incompletos');
       toast.error('Preencha todos os campos de contato');
       return;
     }
 
-    // Validar CPF para qualquer método de pagamento
     if (!formData.cpf) {
-      console.log('❌ CPF não preenchido');
       toast.error('Preencha o CPF');
       return;
     }
     
     const cpfClean = formData.cpf.replace(/\D/g, '');
-    console.log('🆔 CPF limpo:', cpfClean);
     if (cpfClean.length !== 11) {
-      console.log('❌ CPF inválido - tamanho:', cpfClean.length);
       toast.error('CPF inválido');
       return;
     }
 
     if (paymentMethod === 'card') {
-      console.log('💳 Validando dados do cartão...');
       if (!formData.cardNumber || !formData.cardName || !formData.expiryDate || !formData.cvv) {
-        console.log('❌ Dados do cartão incompletos');
         toast.error('Preencha todos os dados do cartão');
         return;
       }
     }
 
     if (paymentMethod === 'boleto') {
-      console.log('💰 Validando dados para boleto...');
       if (!formData.address || !formData.number || !formData.neighborhood || !formData.city || !formData.state || !formData.zipCode) {
-        console.log('❌ Endereço incompleto');
         toast.error('Preencha o endereço completo para boleto');
         return;
       }
@@ -166,8 +150,6 @@ function CheckoutContent() {
           body: JSON.stringify(paymentPayload),
         });
 
-        console.log('📥 Resposta do backend - Status:', response.status);
-
         const data = await response.json();
 
         if (!response.ok || data.error) {
@@ -226,8 +208,6 @@ function CheckoutContent() {
           body: JSON.stringify(pixPayload),
         });
 
-        console.log('📥 Resposta PIX - Status:', response.status);
-
         const data = await response.json();
 
         if (!response.ok) {
@@ -240,7 +220,6 @@ function CheckoutContent() {
           router.push(`/checkout/pix?paymentId=${data.id}&amount=${totalWithFee.toFixed(2)}&plan=${planName}`);
           return;
         } else {
-          console.log('❌ QR Code não retornado:', data);
           throw new Error('QR Code não foi gerado. Tente novamente.');
         }
       }
@@ -278,8 +257,6 @@ function CheckoutContent() {
           },
           body: JSON.stringify(boletoPayload),
         });
-
-        console.log('📥 Resposta Boleto - Status:', response.status);
 
         const data = await response.json();
 

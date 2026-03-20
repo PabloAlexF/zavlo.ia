@@ -16,6 +16,8 @@ export const api = {
     search: {
       text: `${API_URL}/search/text`,
       image: `${API_URL}/search/image`,
+      prices: `${API_URL}/search/prices`,
+      classify: `${API_URL}/search/classify`,
       suggestions: `${API_URL}/search/suggestions`,
     },
     locations: {

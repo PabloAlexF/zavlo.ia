@@ -61,13 +61,18 @@ function CreditsCheckoutContent() {
           return;
         }
 
-        setPixData({
-          qr_code: data.qr_code,
-          qr_code_base64: data.qr_code_base64,
-          payment_id: data.payment_id,
-        });
-        setProcessing(false);
-        return;
+        if (data.qr_code) {
+          setPixData({
+            qr_code: data.qr_code,
+            qr_code_base64: data.qr_code_base64,
+            payment_id: data.payment_id,
+          });
+          if (data.payment_id) {
+            sessionStorage.setItem(`pix_qr_${data.payment_id}`, data.qr_code);
+          }
+          setProcessing(false);
+          return;
+        }
       }
 
       const response = await fetch(`${API_URL}/payments/create`, {

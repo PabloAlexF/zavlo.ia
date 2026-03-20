@@ -41,7 +41,7 @@ export default function Plans() {
       name: 'Básico',
       price: 39.90,
       yearlyPrice: 399.00,
-      features: ['20 comparações/mês', 'Todos os marketplaces', 'Sem anúncios', 'Histórico 60 dias', 'Alertas de preço'],
+      features: ['15 comparações/mês', 'Todos os marketplaces', 'Sem anúncios', 'Histórico 60 dias', 'Alertas de preço'],
       cta: 'Assinar Agora',
       subtitle: 'Economize até R$ 800/mês',
     },
@@ -50,7 +50,7 @@ export default function Plans() {
       price: 89.90,
       yearlyPrice: 899.00,
       popular: true,
-      features: ['60 comparações/mês', 'IA avançada de produtos', 'Busca por imagem ilimitada', 'Prioridade máxima', 'Suporte WhatsApp prioritário', 'Histórico ilimitado'],
+      features: ['48 comparações/mês', 'IA avançada de produtos', 'Busca por imagem ilimitada', 'Prioridade máxima', 'Suporte WhatsApp prioritário', 'Histórico ilimitado'],
       cta: 'Assinar Pro',
       subtitle: 'Economize até R$ 2.400/mês',
     },
@@ -58,16 +58,16 @@ export default function Plans() {
       name: 'Business',
       price: 299.00,
       yearlyPrice: 2990.00,
-      features: ['150 comparações/mês', 'API REST completa', 'Webhooks personalizados', 'Até 10 usuários', 'Relatórios e analytics', 'Gerente de conta dedicado'],
+      features: ['200 comparações/mês', 'API REST completa', 'Webhooks personalizados', 'Até 10 usuários', 'Relatórios e analytics', 'Gerente de conta dedicado'],
       cta: 'Falar com Vendas',
       subtitle: 'Para empresas e revendedores',
     },
   ];
 
   const creditPackages: CreditPackage[] = [
-    { credits: 10, price: 24.90 },
-    { credits: 30, price: 59.90 },
-    { credits: 75, price: 129.90 },
+    { credits: 10, price: 15.90 },
+    { credits: 25, price: 32.90 },
+    { credits: 60, price: 69.90 },
   ];
 
   const handleSelectPlan = async (planName: string): Promise<void> => {
@@ -78,30 +78,11 @@ export default function Plans() {
     }
 
     if (planName === 'Gratuito') {
-      try {
-        const userData = JSON.parse(user);
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
-        const response = await fetch(`${API_URL}/users/plan`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userData.token}`,
-          },
-          body: JSON.stringify({ plan: 'free', billingCycle: 'monthly' }),
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          userData.plan = result.user.plan;
-          localStorage.setItem('zavlo_user', JSON.stringify(userData));
-          window.dispatchEvent(new Event('storage'));
-          setToast({ message: `Plano alterado para ${result.user.plan} com sucesso!`, type: 'success' });
-        } else {
-          setToast({ message: 'Erro ao atualizar plano', type: 'error' });
-        }
-      } catch (error) {
-        setToast({ message: 'Erro de conexão', type: 'error' });
-      }
+      const userData = JSON.parse(user);
+      userData.plan = 'free';
+      localStorage.setItem('zavlo_user', JSON.stringify(userData));
+      window.dispatchEvent(new Event('userChanged'));
+      setToast({ message: 'Plano gratuito ativado!', type: 'success' });
       router.push('/');
       return;
     }
