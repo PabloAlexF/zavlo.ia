@@ -333,11 +333,8 @@ export class SearchService {
         });
       }
       
-      // ✅ PROBLEMA 2 CORRIGIDO: NÃO deduzir créditos ainda
-      // Vamos deduzir apenas se a busca retornar resultados
+      // incrementUsage é chamado após useCredit (mais abaixo), apenas se a busca tiver sucesso
       this.logger.log(`✅ [SEARCH DEBUG] Usage limit OK, will deduct credits after successful search`);
-      
-      await this.usersService.incrementUsage(userId, 'text');
     } else {
       this.logger.log(`🔍 [SEARCH DEBUG] No user ID provided, proceeding without credit deduction`);
     }
@@ -545,11 +542,7 @@ export class SearchService {
         }
       }
 
-      // Guardar fontes de expansão no resultado para o frontend oferecer ao usuário
-      if (availableExpansionSources.length > 0) {
-        (this as any)._lastExpansionSources = availableExpansionSources;
-        (this as any)._lastPrimarySource = primarySource;
-      }
+      // Fontes de expansão ficam em variáveis locais (evita race condition no singleton)
 
       this.logger.log(`📊 [TOTAL] ${products.length} produtos consolidados de ${scrapers.length} fonte(s)`);
       this.logger.log(`💾 [SOURCES] Fontes usadas: ${usedSources.join(', ')}`);
@@ -595,6 +588,7 @@ export class SearchService {
     if (userId && products.length > 0) {
       try {
         await this.usersService.useCredit(userId, 1);
+        await this.usersService.incrementUsage(userId, 'text');
         creditsUsed = 1;
         
         const user = await this.usersService.findById(userId);
@@ -710,13 +704,10 @@ export class SearchService {
       originalCity: originalCity || undefined,
       cityFilterApplied: cityFilterApplied ? true : (originalCity ? false : undefined),
       relaxedFilters: relaxedFilters.length > 0 ? relaxedFilters : undefined,
-      canExpandSearch: (this as any)._lastExpansionSources?.length > 0 ? true : undefined,
-      expansionSources: (this as any)._lastExpansionSources?.length > 0 ? (this as any)._lastExpansionSources : undefined,
-      primarySource: (this as any)._lastPrimarySource || undefined,
+      canExpandSearch: availableExpansionSources.length > 0 ? true : undefined,
+      expansionSources: availableExpansionSources.length > 0 ? availableExpansionSources : undefined,
+      primarySource: primarySource || undefined,
     };
-    // Limpar estado temporário
-    delete (this as any)._lastExpansionSources;
-    delete (this as any)._lastPrimarySource;
 
     // Cache results for 1 hour (com filtros já aplicados)
     await this.redisService.set(
