@@ -489,12 +489,14 @@ export class SearchService {
       // Para veículos: buscar SOMENTE Mercado Livre primeiro.
       // Webmotors e OLX ficam disponíveis como expansão (usuário decide).
       // Garantir expansão independente do que o Python retornar nos scrapers.
-      const vehiclePrimaryScrapers = isVehicle ? ['mercadolivre'] : scrapers;
-      const vehicleExpansionPool = isVehicle
+      // Se classification já vem com scraper único (expansão do frontend), respeitar.
+      const isExpansionRequest = scrapers.length === 1;
+      const vehiclePrimaryScrapers = (isVehicle && !isExpansionRequest) ? ['mercadolivre'] : scrapers;
+      const vehicleExpansionPool = (isVehicle && !isExpansionRequest)
         ? ['webmotors', 'olx'].filter(s => this.isScraperAvailable(s))
         : [];
 
-      const activeScrapers = isVehicle ? vehiclePrimaryScrapers : scrapers;
+      const activeScrapers = (isVehicle && !isExpansionRequest) ? vehiclePrimaryScrapers : scrapers;
 
       for (const scraper of activeScrapers) {
         if (!this.isScraperAvailable(scraper)) {
@@ -530,7 +532,7 @@ export class SearchService {
             } else if (scraper === 'olx') {
               scraperResults = await this.withTimeout(
                 this.olxService.search(normalizedQuery, resultLimit, sortBy, classification),
-                30000, 'OLX'
+                120000, 'OLX'
               );
             } else if (scraper === 'google_shopping') {
               scraperResults = await this.withTimeout(
@@ -553,7 +555,7 @@ export class SearchService {
         if (primarySource === '') primarySource = scraper;
 
         // Para veículos: sempre parar após Mercado Livre e oferecer expansão
-        if (isVehicle) {
+        if (isVehicle && !isExpansionRequest) {
           availableExpansionSources = vehicleExpansionPool;
           this.logger.log(`🚗 [VEHICLE STRATEGY] Mercado Livre concluído (${products.length} resultados). Expansão disponível: ${availableExpansionSources.join(', ') || 'nenhuma'}`);
           break;
