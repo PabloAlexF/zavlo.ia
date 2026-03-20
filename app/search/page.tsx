@@ -107,17 +107,18 @@ function SearchContent() {
         ? { imageData: query }
         : undefined;
 
-      const response = await fetch(
-        type === 'image' ? endpoint : `${endpoint}?query=${encodeURIComponent(query)}&sortBy=RELEVANCE`,
-        {
-          method: type === 'image' ? 'POST' : 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(userData?.token && { 'Authorization': `Bearer ${userData.token}` }),
-          },
-          ...(type === 'image' && body ? { body: JSON.stringify(body) } : {}),
-        }
-      );
+      const fetchUrl = type === 'image'
+        ? endpoint
+        : `${endpoint}?query=${encodeURIComponent(query)}&sortBy=RELEVANCE`;
+
+      const response = await fetch(fetchUrl, {
+        method: type === 'image' ? 'POST' : 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(userData?.token && { 'Authorization': `Bearer ${userData.token}` }),
+        },
+        ...(type === 'image' && body ? { body: JSON.stringify(body) } : {}),
+      });
 
       if (!response.ok) {
         const error = await response.json();
