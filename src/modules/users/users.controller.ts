@@ -36,7 +36,11 @@ export class UsersController {
   async addCredits(
     @Param('userId') userId: string,
     @Body('credits') credits: number,
+    @Req() req: any,
   ) {
+    if (req.user.userId !== userId) {
+      throw new Error('Forbidden');
+    }
     return this.usersService.addCredits(userId, credits);
   }
 
@@ -45,7 +49,11 @@ export class UsersController {
   async setCredits(
     @Param('userId') userId: string,
     @Body('credits') credits: number,
+    @Req() req: any,
   ) {
+    if (req.user.userId !== userId) {
+      throw new Error('Forbidden');
+    }
     return this.usersService.setCredits(userId, credits);
   }
 

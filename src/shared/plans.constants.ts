@@ -51,7 +51,7 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
     textSearchesPerDay: 0,
     imageSearchesPerDay: 0,
     textSearchesPerMonth: 3,
-    imageSearchesPerMonth: 1,
+    imageSearchesPerMonth: 0,
     maxMarketplaces: 3,
     historyDays: 0,
     alerts: false,

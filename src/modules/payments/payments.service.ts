@@ -452,7 +452,9 @@ export class PaymentsService {
             
             // Extract userId and planName from external_reference (format: userId-planName)
             const externalRef = paymentDetails.external_reference || '';
-            const [userId, planName] = externalRef.split('-');
+            const dashIdx = externalRef.indexOf('-');
+            const userId = dashIdx >= 0 ? externalRef.slice(0, dashIdx) : externalRef;
+            const planName = dashIdx >= 0 ? externalRef.slice(dashIdx + 1) : 'basic';
             const amount = paymentDetails.transaction_amount;
             
             if (userId && planName) {
@@ -472,9 +474,9 @@ export class PaymentsService {
                 };
               }
               
-              // 1. Determine credits based on plan and cycle
-              let creditsToAdd = 15; // default basic monthly
-              const billingCycle = amount >= 100 ? 'yearly' : 'monthly';
+              // 1. Determine credits based on plan and billing cycle
+              let creditsToAdd = 15;
+              const billingCycle = (planName === 'basic' && amount >= 300) || (planName === 'pro' && amount >= 700) || (planName === 'business' && amount >= 2000) ? 'yearly' : 'monthly';
               
               if (planName === 'basic') {
                 creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês
@@ -676,7 +678,8 @@ export class PaymentsService {
       if (paymentDetails.status === 'approved') {
         // Extract plan from external_reference (format: userId-planName)
         const externalRef = paymentDetails.external_reference || '';
-        const planName = externalRef.split('-')[1] || 'basic';
+        const dashIdx = externalRef.indexOf('-');
+        const planName = dashIdx >= 0 ? externalRef.slice(dashIdx + 1) : 'basic';
         const amount = paymentDetails.transaction_amount;
         
         this.logger.log(`[PIX CONFIRM] Processing approved payment for plan: ${planName}`);
@@ -700,9 +703,9 @@ export class PaymentsService {
           };
         }
         
-        // 1. Determine credits based on plan and cycle
-        let creditsToAdd = 15; // default basic monthly
-        const billingCycle = amount >= 200 ? 'yearly' : 'monthly';
+        // 1. Determine credits based on plan and billing cycle
+        let creditsToAdd = 15;
+        const billingCycle = (planName === 'basic' && amount >= 300) || (planName === 'pro' && amount >= 700) || (planName === 'business' && amount >= 2000) ? 'yearly' : 'monthly';
         
         if (planName === 'basic') {
           creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês
