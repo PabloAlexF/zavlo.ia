@@ -14,12 +14,10 @@ import { chatHistoryService } from '@/lib/chatHistory';
 import { PLAN_PRICES, PLAN_CREDITS } from '@/lib/plans';
 
 const API_BASE = (() => {
-  const raw = process.env.NEXT_PUBLIC_API_URL ?? '';
+  const raw = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
   try {
-    const url = new URL(raw);
-    if (!['https:', 'http:'].includes(url.protocol)) throw new Error();
-    // Strip any path/query so callers always append their own path
-    return `${url.protocol}//${url.host}`;
+    new URL(raw);
+    return raw;
   } catch {
     throw new Error(`NEXT_PUBLIC_API_URL inválida: "${raw}"`);
   }
