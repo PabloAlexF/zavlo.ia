@@ -328,9 +328,10 @@ export class PriceAlertsService {
     // Remove tudo exceto números, vírgula e ponto
     const cleaned = text.replace(/[^0-9,.]/g, '');
     
-    // Converte para número
-    const price = parseFloat(cleaned.replace(',', '.'));
+    // Formato BR: 1.234,56 → remover pontos de milhar, trocar vírgula por ponto
+    const normalized = cleaned.replace(/\.(\d{3})/g, '$1').replace(',', '.');
     
+    const price = parseFloat(normalized);
     return isNaN(price) ? null : price;
   }
 
