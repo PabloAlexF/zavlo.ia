@@ -90,7 +90,7 @@ function PixPaymentContent() {
       });
 
       toast.success('Pagamento cancelado');
-      router.push('/checkout/confirm');
+      router.push(`/checkout/confirm?plan=${plan || 'basic'}&cycle=monthly`);
     } catch (error) {
       console.error('Erro ao cancelar:', error);
       toast.error('Erro ao cancelar pagamento');
@@ -221,7 +221,7 @@ function PixPaymentContent() {
                     Aguardando pagamento
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Verificando a cada 5 segundos
+                    Verificando a cada 30 segundos
                   </p>
                 </div>
               </div>

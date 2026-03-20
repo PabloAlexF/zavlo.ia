@@ -83,7 +83,7 @@ export default function Plans() {
       localStorage.setItem('zavlo_user', JSON.stringify(userData));
       window.dispatchEvent(new Event('userChanged'));
       setToast({ message: 'Plano gratuito ativado!', type: 'success' });
-      router.push('/');
+      router.push('/chat');
       return;
     }
 

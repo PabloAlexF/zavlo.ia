@@ -34,7 +34,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Verificar se estamos no cliente antes de acessar localStorage
     if (typeof window !== 'undefined') {
-      const storedUser = localStorage.getItem('zavlo_user') || localStorage.getItem('user');
+      const storedUser = localStorage.getItem('zavlo_user');
       if (storedUser) {
         try {
           const userData = JSON.parse(storedUser);

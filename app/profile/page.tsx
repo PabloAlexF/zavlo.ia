@@ -330,7 +330,7 @@ export default function Profile() {
             >
               <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2">
                 <BarChart3 className="w-6 h-6" />
-                Uso Hoje
+                Uso Este Mês
               </h3>
               <div className="space-y-6">
                 <div>
