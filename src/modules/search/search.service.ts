@@ -484,7 +484,16 @@ export class SearchService {
       // Veículos (webmotors) sempre executam sem threshold.
       const isVehicle = category === 'car' || category === 'motorcycle';
 
-      for (const scraper of scrapers) {
+      // Para veículos: buscar SOMENTE Mercado Livre primeiro.
+      // Webmotors e OLX ficam disponíveis como expansão (usuário decide).
+      const vehiclePrimaryScrapers = isVehicle ? ['mercadolivre'] : scrapers;
+      const vehicleExpansionPool = isVehicle
+        ? scrapers.filter(s => s !== 'mercadolivre').filter(s => this.isScraperAvailable(s))
+        : [];
+
+      const activeScrapers = isVehicle ? vehiclePrimaryScrapers : scrapers;
+
+      for (const scraper of activeScrapers) {
         if (!this.isScraperAvailable(scraper)) {
           this.logger.warn(`[${scraper.toUpperCase()}] Pulado - circuit breaker ativo`);
           continue;
@@ -504,7 +513,7 @@ export class SearchService {
           try {
             if (scraper === 'mercadolivre') {
               const { results } = await this.withTimeout(
-                this.mercadoLivreService.search(normalizedQuery, resultLimit),
+                this.mercadoLivreService.search(normalizedQuery, resultLimit, classification),
                 60000, 'MercadoLivre'
               );
               scraperResults = results;
@@ -540,8 +549,15 @@ export class SearchService {
 
         if (primarySource === '') primarySource = scraper;
 
-        // Se não é veículo e já temos resultados suficientes, parar e oferecer expansão
-        if (!isVehicle && products.length >= SATISFACTORY_THRESHOLD) {
+        // Para veículos: sempre parar após Mercado Livre e oferecer expansão
+        if (isVehicle) {
+          availableExpansionSources = vehicleExpansionPool;
+          this.logger.log(`🚗 [VEHICLE STRATEGY] Mercado Livre concluído (${products.length} resultados). Expansão disponível: ${availableExpansionSources.join(', ') || 'nenhuma'}`);
+          break;
+        }
+
+        // Para não-veículos: parar se já temos resultados suficientes
+        if (products.length >= SATISFACTORY_THRESHOLD) {
           availableExpansionSources = scrapers
             .filter(s => !usedSources.some(u => u.startsWith(s)))
             .filter(s => this.isScraperAvailable(s));

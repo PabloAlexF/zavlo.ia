@@ -18,12 +18,28 @@ export class MercadoLivreService {
     return String(value).replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
   }
 
-  async search(query: string, limit = 20): Promise<{ results: any[]; searchedNationally: boolean }> {
+  async search(query: string, limit = 20, classification?: any): Promise<{ results: any[]; searchedNationally: boolean }> {
     try {
-      const safeQuery = this.sanitizeForLog(query);
+      const isVehicle = classification?.category === 'car' || classification?.category === 'motorcycle';
+
+      // Para veículos: construir query específica para evitar retornar peças
+      let searchQuery = query;
+      if (isVehicle && classification) {
+        const brand = classification.detected_brand || '';
+        const model = classification.detected_model || '';
+        const year  = classification.detected_year  || '';
+        const cond  = classification.condition === 'used' ? 'usado' : classification.condition === 'new' ? '0km' : '';
+        const parts = [brand, model, year, cond].filter(Boolean);
+        if (parts.length >= 2) {
+          searchQuery = parts.join(' ');
+          this.logger.log(`🚗 [MERCADOLIVRE] Query de veículo construída: "${searchQuery}"`);
+        }
+      }
+
+      const safeQuery = this.sanitizeForLog(searchQuery);
       this.logger.log(`🛒 [MERCADOLIVRE] Buscando: "${safeQuery}" (limit: ${limit})`);
 
-      const cacheKey = crypto.createHash('md5').update(`ml:${query}:${limit}`).digest('hex');
+      const cacheKey = crypto.createHash('md5').update(`ml:${searchQuery}:${limit}`).digest('hex');
       const cached = this.cache.get(cacheKey);
       if (cached && cached.expiresAt > Date.now()) {
         this.logger.log(`⚡ [MERCADOLIVRE] Cache hit: ${cacheKey}`);
@@ -31,7 +47,7 @@ export class MercadoLivreService {
       }
 
       const input = {
-        keyword: query,
+        keyword: searchQuery,
         maxPages: 1, // 1 página = ~48 itens, limitamos no slice
         maxPagesOfertas: 1,
         promoted: false,
