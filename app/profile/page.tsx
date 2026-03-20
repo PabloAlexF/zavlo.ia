@@ -23,63 +23,70 @@ export default function Profile() {
   const [loadingLocation, setLoadingLocation] = useState(false);
 
   useEffect(() => {
-    if (user?.userId) {
-      transactionService.getHistory(user.userId, 10).then(setTransactions);
-      
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
-      
-      const loadProfile = async () => {
-        try {
-          const [profileRes, usageRes] = await Promise.all([
-            fetch(`${API_URL}/users/profile`, {
-              headers: { 'Authorization': `Bearer ${user.token}` },
-            }),
-            fetch(`${API_URL}/users/usage`, {
-              headers: { 'Authorization': `Bearer ${user.token}` },
-            })
-          ]);
-          
-          if (profileRes.ok) {
-            const profile = await profileRes.json();
-            const usage = usageRes.ok ? await usageRes.json() : { textToday: 0, imageToday: 0 };
-            
-            // Atualizar location data se existir
-            if (profile.location) {
-              setLocationData({
-                cep: profile.location.cep || '',
-                city: profile.location.city || '',
-                state: profile.location.state || ''
-              });
-            }
-            
-            updateUser({ 
-              credits: profile.credits,
-              plan: profile.plan || 'free',
-              billingCycle: profile.billingCycle,
-              planStartedAt: profile.planStartedAt,
-              planExpiresAt: profile.planExpiresAt,
-              createdAt: profile.createdAt,
-              searchesUsedToday: usage.textMonth,
-              imageSearchesUsedToday: usage.imageMonth,
+    if (!user?.userId) return;
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    const token = user.token;
+
+    transactionService.getHistory(user.userId, 10).then(setTransactions);
+
+    let stopped = false;
+
+    const loadProfile = async () => {
+      try {
+        const [profileRes, usageRes] = await Promise.all([
+          fetch(`${API_URL}/users/profile`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/users/usage`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          })
+        ]);
+
+        if (profileRes.status === 401 || profileRes.status === 404) {
+          stopped = true;
+          return;
+        }
+
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          const usage = usageRes.ok ? await usageRes.json() : { textMonth: 0, imageMonth: 0 };
+
+          if (profile.location) {
+            setLocationData({
+              cep: profile.location.cep || '',
+              city: profile.location.city || '',
+              state: profile.location.state || ''
             });
           }
-        } catch (error) {
-          console.error('Erro ao carregar perfil:', error);
+
+          updateUser({
+            credits: profile.credits,
+            plan: profile.plan || 'free',
+            billingCycle: profile.billingCycle,
+            planStartedAt: profile.planStartedAt,
+            planExpiresAt: profile.planExpiresAt,
+            createdAt: profile.createdAt,
+            searchesUsedToday: usage.textMonth,
+            imageSearchesUsedToday: usage.imageMonth,
+          });
         }
-      };
-      
-      loadProfile();
-      const interval = setInterval(loadProfile, 30000);
-      return () => clearInterval(interval);
-    }
+      } catch (error) {
+        console.error('Erro ao carregar perfil:', error);
+      }
+    };
+
+    loadProfile();
+    const interval = setInterval(() => { if (!stopped) loadProfile(); }, 30000);
+    return () => clearInterval(interval);
   }, [user?.userId]);
 
   const handleUpdateLocation = async () => {
     if (!user?.token) return;
     
     setLoadingLocation(true);
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
-    
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
     try {
       const response = await fetch(`${API_URL}/users/profile`, {
         method: 'POST',
