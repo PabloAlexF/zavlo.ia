@@ -41,10 +41,9 @@ export class OlxService {
       const input = {
         searchQuery: searchQuery,
         sortBy: olxSortBy,
-        maxPages: Math.ceil(limit / 50), // OLX Brazil: ~50 ads/page
+        maxPages: Math.ceil(limit / 50),
         proxyConfiguration: {
-          useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL'],
+          useApifyProxy: false,
         },
       };
 

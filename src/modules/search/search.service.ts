@@ -367,10 +367,20 @@ export class SearchService {
       }
     }
 
-    const cacheKey = this.generateCacheKey(normalizedQuery, filters, userLocation?.city);
+    // 🔍 [EXPANSION DEBUG] Detectar se é uma busca de expansão
+    const isExpansionCall = !!(
+      filters?.providedClassification?.scrapers?.length === 1
+    );
+    this.logger.log(`🔍 [EXPANSION DEBUG] isExpansionCall: ${isExpansionCall}`);
+    if (isExpansionCall) {
+      this.logger.log(`🔍 [EXPANSION DEBUG] Scraper solicitado: ${filters.providedClassification.scrapers[0]?.name}`);
+    }
 
-    // CACHE
-    const cached = await this.redisService.get(cacheKey);
+    const cacheKey = this.generateCacheKey(normalizedQuery, filters, userLocation?.city);
+    this.logger.log(`🔑 [CACHE KEY] ${cacheKey} (expansion: ${isExpansionCall})`);
+
+    // CACHE — pular cache em buscas de expansão para forçar scraper específico
+    const cached = isExpansionCall ? null : await this.redisService.get(cacheKey);
     if (cached) {
       this.logger.log(`[CACHE] Hit`);
       const cachedResult = this.safeParse<any>(cached, null);
@@ -438,7 +448,9 @@ export class SearchService {
     const originalCity = rawCity
       ? rawCity.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
       : undefined;
-    this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
+    this.logger.log(`🎯 [SCRAPERS] Lista final de scrapers: [${scrapers.join(', ')}]`);
+    this.logger.log(`🎯 [SCRAPERS] category=${category} | isExpansionCall=${isExpansionCall}`);
+    this.logger.log(`🎯 [SCRAPERS] classification.scrapers raw: ${JSON.stringify(classification?.scrapers)}`);
 
     // Se freeMode (plano free/usuário não logado), busca limitada
     if (filters?.freeMode) {
@@ -497,8 +509,13 @@ export class SearchService {
         : [];
 
       const activeScrapers = (isVehicle && !isExpansionRequest) ? vehiclePrimaryScrapers : scrapers;
+      this.logger.log(`🚗 [VEHICLE] isVehicle=${isVehicle} | isExpansionRequest=${isExpansionRequest}`);
+      this.logger.log(`🚗 [VEHICLE] activeScrapers=[${activeScrapers.join(', ')}] | expansionPool=[${vehicleExpansionPool.join(', ')}]`);
+      this.logger.log(`🔴 [CIRCUIT BREAKER] olx available: ${this.isScraperAvailable('olx')} | webmotors: ${this.isScraperAvailable('webmotors')}`);
+      this.logger.log(`🔴 [CIRCUIT BREAKER] failures map: ${JSON.stringify(Object.fromEntries(this.scraperFailures))}`);
 
       for (const scraper of activeScrapers) {
+        this.logger.log(`🔄 [SCRAPER LOOP] Iniciando scraper: ${scraper}`);
         if (!this.isScraperAvailable(scraper)) {
           this.logger.warn(`[${scraper.toUpperCase()}] Pulado - circuit breaker ativo`);
           continue;
