@@ -12,6 +12,7 @@ import { SortSelectionModal } from '@/components/chat/SortSelectionModal';
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
 import { chatHistoryService } from '@/lib/chatHistory';
+import { PLAN_PRICES, PLAN_CREDITS } from '@/lib/plans';
 
 interface Message {
   id: string;
@@ -436,18 +437,14 @@ export default function ChatPage() {
 
       const userData = JSON.parse(user);
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      
-      const params = new URLSearchParams({
-        query: detectedProductName,
-        sortBy: sortBy,
-        classification: JSON.stringify({ category: 'general', scrapers: [{ name: 'google_shopping', score: 1.0 }] }),
-      });
-      
-      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
-        method: 'GET',
+
+      const response = await fetch(`${API_URL}/search/prices`, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ productName: detectedProductName }),
       });
 
       if (response.status === 401) {
@@ -776,7 +773,12 @@ export default function ChatPage() {
       }
 
       if (intent.type === 'plans_question') {
-        addMessage('ai', '📊 Nossos Planos:\n\n🌱 Básico - R$ 27/mês\n🚀 Pro - R$ 77/mês\n👑 Business - R$ 197/mês');
+        addMessage('ai',
+          `📊 Nossos Planos:\n\n` +
+          `🌱 Básico - R$ ${PLAN_PRICES.basic.monthly.toFixed(2).replace('.', ',')} /mês • ${PLAN_CREDITS.basic.monthly} créditos\n` +
+          `🚀 Pro - R$ ${PLAN_PRICES.pro.monthly.toFixed(2).replace('.', ',')} /mês • ${PLAN_CREDITS.pro.monthly} créditos\n` +
+          `👑 Business - R$ ${PLAN_PRICES.business.monthly.toFixed(2).replace('.', ',')} /mês • ${PLAN_CREDITS.business.monthly} créditos`
+        );
         setLoading(false);
         return;
       }
@@ -801,8 +803,6 @@ export default function ChatPage() {
   };
 
   const classifyQuery = async (query: string) => {
-    console.log('[CLASSIFY] Classificando query:', query);
-    
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) {
@@ -832,8 +832,6 @@ export default function ChatPage() {
       if (response.ok) {
         const data = await response.json();
         
-        console.log('[CLASSIFY] Classificação recebida:', data.classification);
-        
         // Check if it's a question about the system
         if (data.classification?.is_question) {
           setLoading(false);
@@ -856,7 +854,12 @@ export default function ChatPage() {
           
           // 📊 PERGUNTAS SOBRE PLANOS
           if (questionType === 'plans') {
-            const plansMessage = `📊 **Nossos Planos:**\n\n🌱 **Básico - R$ 27/mês**\n• 100 créditos/mês\n• Busca por texto e imagem\n• Suporte por email\n\n🚀 **Pro - R$ 77/mês**\n• 300 créditos/mês\n• Todos os recursos do Básico\n• Alertas de preço\n• Suporte prioritário\n\n👑 **Business - R$ 197/mês**\n• 1000 créditos/mês\n• Todos os recursos do Pro\n• API de integração\n• Suporte dedicado\n\n👉 **Para assinar:** Acesse **Perfil → Planos**`;
+            const plansMessage =
+              `📊 **Nossos Planos:**\n\n` +
+              `🌱 **Básico - R$ ${PLAN_PRICES.basic.monthly.toFixed(2).replace('.', ',')}/mês**\n• ${PLAN_CREDITS.basic.monthly} créditos/mês\n• Busca por texto e imagem\n• Suporte por email\n\n` +
+              `🚀 **Pro - R$ ${PLAN_PRICES.pro.monthly.toFixed(2).replace('.', ',')}/mês**\n• ${PLAN_CREDITS.pro.monthly} créditos/mês\n• Todos os recursos do Básico\n• Alertas de preço\n• Suporte prioritário\n\n` +
+              `👑 **Business - R$ ${PLAN_PRICES.business.monthly.toFixed(2).replace('.', ',')}/mês**\n• ${PLAN_CREDITS.business.monthly} créditos/mês\n• Todos os recursos do Pro\n• API de integração\n• Suporte dedicado\n\n` +
+              `👉 **Para assinar:** Acesse **Perfil → Planos**`;
             addMessage('ai', plansMessage);
             return;
           }
@@ -886,9 +889,7 @@ export default function ChatPage() {
         // ✅ VALIDAR: Verificar se é um produto válido
         const category = data.classification?.category;
         const confidence = data.classification?.confidence || 0;
-        
-        console.log('[CLASSIFY] Categoria:', category, 'Confiança:', confidence);
-        
+
         // ✅ Bug Medium #3: só bloquear se for 'general' com confiança muito baixa
         // Categorias específicas com qualquer confiança devem prosseguir normalmente
         if (category === 'general' && confidence < 0.4) {
@@ -929,62 +930,33 @@ export default function ChatPage() {
         addMessage('ai', 'Erro ao processar. Tente novamente.');
         setLoading(false);
       }
-    } catch (error) {
-      console.error('Classify error:', error);
+    } catch {
       addMessage('ai', 'Erro ao processar. Tente novamente.');
       setLoading(false);
     }
   };
 
   const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any) => {
-    console.log('[SEARCH] ========== INICIANDO BUSCA ==========');
-    console.log('[SEARCH] Query:', query);
-    console.log('[SEARCH] SortBy:', sortBy);
-    console.log('[SEARCH] Classification:', classification);
-    console.log('[SEARCH] User Credits:', userCredits);
-    
     addMessage('ai', 'searching_animation');
 
     try {
       const user = localStorage.getItem('zavlo_user');
-      if (!user) {
-        console.error('[SEARCH] Usuário não encontrado no localStorage');
-        router.push('/auth');
-        return;
-      }
+      if (!user) { router.push('/auth'); return; }
 
       const userData = JSON.parse(user);
-      console.log('[SEARCH] User ID:', userData.userId);
-      
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      console.log('[SEARCH] API URL:', API_URL);
-      
-      const params = new URLSearchParams({
-        query: query,
-        sortBy: sortBy
-      });
-      
-      if (classification) {
-        params.append('classification', JSON.stringify(classification));
-        console.log('[SEARCH] Classificação adicionada aos params');
-      }
-      
-      const fullUrl = `${API_URL}/search/text?${params.toString()}`;
-      console.log('[SEARCH] URL completa:', fullUrl);
-      
-      console.log('[SEARCH] Fazendo requisição...');
-      const response = await fetch(fullUrl, {
+
+      const params = new URLSearchParams({ query, sortBy });
+      if (classification) params.append('classification', JSON.stringify(classification));
+
+      const response = await fetch(`${API_URL}/search/text?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${userData.token}`,
         },
       });
 
-      console.log('[SEARCH] Status da resposta:', response.status);
-      console.log('[SEARCH] Response OK?', response.ok);
-
       if (response.status === 401) {
-        console.error('[SEARCH] Não autorizado - redirecionando para login');
         localStorage.removeItem('zavlo_user');
         router.push('/auth');
         return;
@@ -1002,34 +974,23 @@ export default function ChatPage() {
 
       if (response.ok) {
         const data = await response.json();
-        
-        console.log('[SEARCH] ========== RESPOSTA DO BACKEND ==========');
-        console.log('[SEARCH] Data completa:', data);
-        console.log('[SEARCH] Results:', data.results);
-        console.log('[SEARCH] Total:', data.total);
-        console.log('[SEARCH] Credits Used:', data.creditsUsed);
-        console.log('[SEARCH] Remaining Credits:', data.remainingCredits);
-        console.log('[SEARCH] Needs Question?', data.needsQuestion);
-        console.log('[SEARCH] Question:', data.question);
-        console.log('[SEARCH] Price Range Applied:', data.priceRangeApplied);
-        
         const products = data.results || [];
-        
-        console.log('[SEARCH] Produtos encontrados:', products.length);
-        
+
+        if (data.error === 'INSUFFICIENT_CREDITS') {
+          setUserCredits(0);
+          addMessage('ai', '💳 Créditos insuficientes! Adquira mais créditos para continuar buscando.');
+          setLoading(false);
+          return;
+        }
+
         if (typeof data.remainingCredits === 'number') {
-          console.log('[SEARCH] Atualizando créditos de', userCredits, 'para', data.remainingCredits);
           updateCredits(data.remainingCredits, userData);
-        } else {
-          console.warn('[SEARCH] remainingCredits não retornado pelo backend');
         }
         
         const creditsUsed = data.creditsUsed || 1;
         const remainingCredits = data.remainingCredits ?? userCredits - 1;
-        
-        console.log('[SEARCH] Aguardando 1s antes de mostrar produtos...');
+
         await delay(1000);
-        console.log('[SEARCH] Criando mensagem de produtos...');
 
         // Mensagem de contexto unificada (cidade + filtros relaxados)
         const cl = classification;
@@ -1056,7 +1017,6 @@ export default function ChatPage() {
 
             addMessage('ai', msg);
             setLoading(false);
-            console.log('[SEARCH] ========== BUSCA CONCLUÍDA (0 resultados) ==========');
             return;
           }
         const rawCityLabel = data.originalCity || cl?.user_location?.city || null;
@@ -1123,14 +1083,10 @@ export default function ChatPage() {
 
           setLoading(false);
       } else {
-        const errorText = await response.text();
-        console.error('[SEARCH] Erro na resposta:', errorText);
         addMessage('ai', 'Erro na busca. Tente novamente.');
         setLoading(false);
       }
-    } catch (error) {
-      console.error('[SEARCH] ========== ERRO NA BUSCA ==========');
-      console.error('[SEARCH] Error:', error);
+    } catch {
       addMessage('ai', 'Erro ao processar busca. Tente novamente.');
       setLoading(false);
     }
@@ -1147,12 +1103,6 @@ export default function ChatPage() {
   };
 
   const updateCredits = (newCredits: number, userData: any) => {
-    console.log('💳 [CREDITS] Atualizando créditos:', {
-      anterior: userCredits,
-      novo: newCredits,
-      diferença: userCredits - newCredits
-    });
-    
     setUserCredits(newCredits);
     const updatedUser = { ...userData, credits: newCredits };
     localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));

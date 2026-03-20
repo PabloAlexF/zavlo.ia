@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { FirebaseService } from '@config/firebase.service';
+import { PLAN_CREDITS } from '../../../lib/plans';
 import axios from 'axios';
 
 @Injectable()
@@ -21,12 +22,7 @@ export class PaymentsService {
 
   private resolveCreditsForPlan(plan: string, amount: number): { credits: number; billingCycle: 'monthly' | 'yearly' } {
     const billingCycle = amount >= 200 ? 'yearly' : 'monthly';
-    const map: Record<string, { monthly: number; yearly: number }> = {
-      basic:    { monthly: 15,  yearly: 180  },
-      pro:      { monthly: 48,  yearly: 576  },
-      business: { monthly: 200, yearly: 2400 },
-    };
-    const credits = map[plan]?.[billingCycle] ?? 15;
+    const credits = PLAN_CREDITS[plan]?.[billingCycle] ?? PLAN_CREDITS['basic'].monthly;
     return { credits, billingCycle };
   }
 

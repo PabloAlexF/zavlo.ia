@@ -333,11 +333,8 @@ export class SearchService {
         });
       }
       
-      // ✅ PROBLEMA 2 CORRIGIDO: NÃO deduzir créditos ainda
-      // Vamos deduzir apenas se a busca retornar resultados
       this.logger.log(`✅ [SEARCH DEBUG] Usage limit OK, will deduct credits after successful search`);
-      
-      await this.usersService.incrementUsage(userId, 'text');
+      // incrementUsage movido para após useCredit bem-sucedido
     } else {
       this.logger.log(`🔍 [SEARCH DEBUG] No user ID provided, proceeding without credit deduction`);
     }
@@ -380,9 +377,18 @@ export class SearchService {
         try {
           await this.usersService.useCredit(userId, 1);
           creditsUsed = 1;
+          await this.usersService.incrementUsage(userId, 'text');
           const user = await this.usersService.findById(userId);
           remainingCredits = user?.credits || 0;
         } catch (creditError: any) {
+          if (creditError.response?.error === 'INSUFFICIENT_CREDITS') {
+            throw new BadRequestException({
+              error: 'INSUFFICIENT_CREDITS',
+              message: 'Créditos insuficientes',
+              currentCredits: creditError.response.currentCredits || 0,
+              action: 'buy_credits',
+            });
+          }
           this.logger.warn(`[CACHE] Falha ao deduzir crédito no cache hit: ${creditError.message}`);
         }
       }
@@ -488,8 +494,8 @@ export class SearchService {
         let cached = false;
 
         // Verificar cache
-        const cacheKey = `${normalizedQuery}:${resultLimit}`;
-        const cachedData = await this.getCachedScraperResult(scraper, cacheKey);
+        const scraperCacheKey = `${normalizedQuery}:${resultLimit}:${classification?.condition || 'any'}:${classification?.detected_year || '0'}:${classification?.user_location?.city || 'all'}`;
+        const cachedData = await this.getCachedScraperResult(scraper, scraperCacheKey);
         if (cachedData) {
           scraperResults = cachedData;
           cached = true;
@@ -520,7 +526,7 @@ export class SearchService {
                 8000, 'GoogleShopping'
               );
             }
-            await this.setCachedScraperResult(scraper, cacheKey, scraperResults);
+            await this.setCachedScraperResult(scraper, scraperCacheKey, scraperResults);
             this.resetScraperFailures(scraper);
           } catch (error) {
             this.logger.warn(`[${scraper.toUpperCase()}] Erro: ${error.message}`);
@@ -589,14 +595,12 @@ export class SearchService {
       try {
         await this.usersService.useCredit(userId, 1);
         creditsUsed = 1;
-        
+        await this.usersService.incrementUsage(userId, 'text');
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
-        
         this.logger.log(`✅ [CREDITS] Deducted 1 credit after successful search. Remaining: ${remainingCredits}`);
       } catch (creditError: any) {
         this.logger.error(`❌ [CREDITS] Failed to deduct credit: ${creditError.message}`);
-        // Não bloquear resultado se falhar deduzir crédito
       }
     }
 
