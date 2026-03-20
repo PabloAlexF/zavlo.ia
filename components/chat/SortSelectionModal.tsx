@@ -14,7 +14,7 @@ export function SortSelectionModal({ onSelect, onCancel }: SortSelectionModalPro
 
   const sortOptions = [
     {
-      value: 'RELEVANCE',
+      value: 'BEST_MATCH',
       label: 'Melhor resultado',
       desc: 'Produtos mais relevantes para sua busca',
       icon: Target,
@@ -36,7 +36,15 @@ export function SortSelectionModal({ onSelect, onCancel }: SortSelectionModalPro
       icon: TrendingUp,
       color: 'blue',
       gradient: 'from-blue-500 to-cyan-500'
-    }
+    },
+    {
+      value: 'TOP_RATED',
+      label: 'Mais avaliados',
+      desc: 'Melhor avaliação pelos compradores',
+      icon: ArrowUpDown,
+      color: 'yellow',
+      gradient: 'from-yellow-500 to-orange-500'
+    },
   ];
 
   const handleSelect = (value: string) => {

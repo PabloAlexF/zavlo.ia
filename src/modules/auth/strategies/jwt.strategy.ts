@@ -22,6 +22,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException();
     }
-    return { userId: user.id, ...user };
+    // Garantir que userId não seja sobrescrito pelo spread de user.id
+    const { id, ...rest } = user;
+    return { userId: id, id, ...rest };
   }
 }

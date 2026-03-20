@@ -195,20 +195,14 @@ class ProductClassifier:
         return keyword in (text if isinstance(text, list) else text.split())
     
     def detect_brand(self, normalized: str) -> str | None:
-        """Detecta marca do produto (otimizado com set intersection)"""
-        # 🚀 OTIMIZAÇÃO: Usa set intersection ao invés de loops
-        words = set(normalized.split())
-        
-        # Verificar marcas de carros
-        car_match = words & self.car_brands
-        if car_match:
-            return car_match.pop()
-        
-        # Verificar marcas de motos
-        moto_match = words & self.moto_brands
-        if moto_match:
-            return moto_match.pop()
-        
+        """Detecta marca do produto — prioriza primeira ocorrência na query"""
+        words = normalized.split()
+        # Iterar na ordem das palavras para retornar a primeira marca encontrada
+        for word in words:
+            if word in self.car_brands:
+                return word
+            if word in self.moto_brands:
+                return word
         return None
     
     def detect_model(self, normalized: str, brand: str = None, category: str = None) -> tuple:
@@ -704,7 +698,7 @@ class ProductClassifier:
             return {
                 "category": "general",
                 "confidence": 0.5,
-                "recommended_scrapers": ["google_shopping"],
+                "scrapers": [{"name": "google_shopping", "score": 0.6}],
                 "condition": condition,
                 "all_scores": {"general": 0.5},
                 "missing_fields": [],
@@ -914,30 +908,6 @@ class ProductClassifier:
         
         logger.info("Configurações recarregadas com sucesso!")
 
-    
-    def detect_price_range(self, normalized: str) -> bool:
-        """✅ Detecta se a query contém faixa de preço"""
-        # Padrões de preço
-        price_patterns = [
-            r'\baté\s+\d+',  # "até 50mil"
-            r'\bentre\s+\d+.*\d+',  # "entre 30mil e 60mil"
-            r'\d+\s*mil',  # "50mil", "50 mil"
-            r'\d+k',  # "50k"
-            r'r\$\s*\d+',  # "R$ 50000"
-            r'\d+\s*reais',  # "50000 reais"
-            r'abaixo\s+de\s+\d+',  # "abaixo de 50mil"
-            r'acima\s+de\s+\d+',  # "acima de 30mil"
-            r'menos\s+de\s+\d+',  # "menos de 50mil"
-            r'mais\s+de\s+\d+',  # "mais de 30mil"
-        ]
-        
-        for pattern in price_patterns:
-            if re.search(pattern, normalized):
-                return True
-        
-        return False
-
-    
     def generate_smart_price_question(self, brand: str, model: str, year: int, condition: str, user_context: dict = None) -> dict:
         """Gera pergunta de preço inteligente com sugestões estruturadas"""
         from datetime import datetime

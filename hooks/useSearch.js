@@ -25,10 +25,13 @@ export function useSearch() {
         setLoading(true);
         setError(null);
         try {
+            const raw = localStorage.getItem('zavlo_user');
+            const token = raw ? (() => { try { return JSON.parse(raw).token; } catch { return null; } })() : null;
             const formData = new FormData();
             formData.append('image', file);
             const response = await fetch(api.endpoints.search.image, {
                 method: 'POST',
+                headers: Object.assign({}, (token && { Authorization: `Bearer ${token}` })),
                 body: formData,
             });
             const data = await response.json();

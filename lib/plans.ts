@@ -1,13 +1,13 @@
 export const PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
-  basic:    { monthly: 39.90, yearly: 399.00 },
-  pro:      { monthly: 89.90, yearly: 899.00 },
-  business: { monthly: 299.00, yearly: 2990.00 },
+  basic:    { monthly: 29.90, yearly: 299.00 },
+  pro:      { monthly: 59.90, yearly: 599.00 },
+  business: { monthly: 149.00, yearly: 1490.00 },
 };
 
 export const PLAN_CREDITS: Record<string, { monthly: number; yearly: number }> = {
-  basic:    { monthly: 15,  yearly: 180  },
-  pro:      { monthly: 48,  yearly: 576  },
-  business: { monthly: 200, yearly: 2400 },
+  basic:    { monthly: 10,  yearly: 120  },
+  pro:      { monthly: 20,  yearly: 240  },
+  business: { monthly: 50,  yearly: 600  },
 };
 
 export function getPlanPrice(plan: string, cycle: 'monthly' | 'yearly'): number {
@@ -15,14 +15,14 @@ export function getPlanPrice(plan: string, cycle: 'monthly' | 'yearly'): number 
 }
 
 export function getPlanCredits(plan: string, cycle: 'monthly' | 'yearly'): number {
-  return PLAN_CREDITS[plan]?.[cycle] ?? 15;
+  return PLAN_CREDITS[plan]?.[cycle] ?? 10;
 }
 
 const PLAN_LIMITS: Record<string, { textSearchesPerMonth: number; imageSearchesPerMonth: number }> = {
-  free:     { textSearchesPerMonth: 3,        imageSearchesPerMonth: 0        },
-  basic:    { textSearchesPerMonth: 100,       imageSearchesPerMonth: 20       },
-  pro:      { textSearchesPerMonth: 500,       imageSearchesPerMonth: 100      },
-  business: { textSearchesPerMonth: Infinity,  imageSearchesPerMonth: Infinity },
+  free:     { textSearchesPerMonth: 1,  imageSearchesPerMonth: 1  },
+  basic:    { textSearchesPerMonth: 10, imageSearchesPerMonth: 3  },
+  pro:      { textSearchesPerMonth: 20, imageSearchesPerMonth: 6  },
+  business: { textSearchesPerMonth: 50, imageSearchesPerMonth: 15 },
 };
 
 export function getPlanLimits(plan: string) {

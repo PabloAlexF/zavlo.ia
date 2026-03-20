@@ -209,6 +209,7 @@ class ContextManager {
     if (!condition) return null;
 
     this.setContext({ lastCondition: condition });
+    if (!this.context.lastProduct) return null;
     return `${this.context.lastProduct} ${normalized}`;
   }
 

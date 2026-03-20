@@ -125,6 +125,10 @@ export class AuthService {
         userId: userDoc.id,
         email: userData.email,
         name: userData.name,
+        plan: userData.plan || 'free',
+        credits: userData.credits ?? 0,
+        billingCycle: userData.billingCycle || null,
+        planExpiresAt: userData.planExpiresAt || null,
         ...tokens 
       };
     } catch (error) {

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { FirebaseService } from '@config/firebase.service';
-import { PLAN_CREDITS } from '../../../lib/plans';
+import { PLAN_CREDITS, PLAN_PRICES } from '../../../lib/plans';
 import axios from 'axios';
 
 @Injectable()
@@ -21,7 +21,8 @@ export class PaymentsService {
   }
 
   private resolveCreditsForPlan(plan: string, amount: number): { credits: number; billingCycle: 'monthly' | 'yearly' } {
-    const billingCycle = amount >= 200 ? 'yearly' : 'monthly';
+    const monthlyPrice = PLAN_CREDITS[plan] ? PLAN_PRICES[plan]?.monthly ?? 0 : 0;
+    const billingCycle = amount > monthlyPrice ? 'yearly' : 'monthly';
     const credits = PLAN_CREDITS[plan]?.[billingCycle] ?? PLAN_CREDITS['basic'].monthly;
     return { credits, billingCycle };
   }
@@ -172,9 +173,9 @@ export class PaymentsService {
           ],
           payer: payerData,
           back_urls: {
-            success: 'https://zavlo.ia/checkout/success',
-            failure: 'https://zavlo.ia/checkout/failure',
-            pending: 'https://zavlo.ia/checkout/pending',
+            success: `${this.configService.get('FRONTEND_URL') || 'https://zavloia.com.br'}/checkout/success`,
+            failure: `${this.configService.get('FRONTEND_URL') || 'https://zavloia.com.br'}/checkout/failure`,
+            pending: `${this.configService.get('FRONTEND_URL') || 'https://zavloia.com.br'}/checkout/pending`,
           },
           auto_return: 'approved',
           external_reference: `${data.userId}|${data.plan}`,

@@ -141,7 +141,7 @@ export class SearchService {
   private generateCacheKey(query: string, filters: any, location?: string): string {
     // ✅ String concatenada é mais eficiente que JSON.stringify
     const filterStr = [
-      filters?.sortBy || 'RELEVANCE',
+      filters?.sortBy || 'BEST_MATCH',
       filters?.minPrice || '0',
       filters?.maxPrice || '999999',
       filters?.condition || 'all',
@@ -252,7 +252,7 @@ export class SearchService {
     let remainingCredits: number | undefined;
     
     // Extrair sortBy dos filtros (padrão: RELEVANCE)
-    const sortBy = filters?.sortBy || 'RELEVANCE';
+    const sortBy = filters?.sortBy || 'BEST_MATCH';
     
     this.logger.log(`🔍 [SEARCH DEBUG] Starting searchByText:`);
     this.logger.log(`   - query: ${query}`);
@@ -339,7 +339,9 @@ export class SearchService {
       this.logger.log(`🔍 [SEARCH DEBUG] No user ID provided, proceeding without credit deduction`);
     }
     
-    const normalizedQuery = this.normalizeQuery(query);
+    const normalizedQuery = (filters?.providedClassification?.normalized_query)
+      ? filters.providedClassification.normalized_query
+      : this.normalizeQuery(query);
 
     this.logger.log(`🔍 [SEARCH DEBUG] Query original: ${query}`);
     this.logger.log(`🔍 [SEARCH DEBUG] Query normalizada: ${normalizedQuery}`);
@@ -524,12 +526,12 @@ export class SearchService {
             } else if (scraper === 'olx') {
               scraperResults = await this.withTimeout(
                 this.olxService.search(normalizedQuery, resultLimit, sortBy),
-                8000, 'OLX'
+                30000, 'OLX'
               );
             } else if (scraper === 'google_shopping') {
               scraperResults = await this.withTimeout(
                 this.googleShoppingService.search(normalizedQuery, resultLimit, sortBy),
-                8000, 'GoogleShopping'
+                45000, 'GoogleShopping'
               );
             }
             await this.setCachedScraperResult(scraper, scraperCacheKey, scraperResults);

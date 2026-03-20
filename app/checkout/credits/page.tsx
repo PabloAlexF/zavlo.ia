@@ -20,8 +20,8 @@ function CreditsCheckoutContent() {
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [modal, setModal] = useState<{ type: 'success' | 'error' | 'info' | 'warning'; title: string; message: string } | null>(null);
 
-  const credits = parseInt(searchParams.get('credits') || '10');
-  const price = parseFloat(searchParams.get('price') || '15.90');
+  const credits = parseInt(searchParams.get('credits') || '5');
+  const price = parseFloat(searchParams.get('price') || '14.90');
 
   useEffect(() => {
     setMounted(true);

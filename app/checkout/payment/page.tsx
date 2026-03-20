@@ -158,9 +158,18 @@ function CheckoutContent() {
 
         if (data.status === 'approved') {
           toast.success('Pagamento aprovado!');
-          const updatedUser = { ...userData, plan: planName };
-          localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
-          window.dispatchEvent(new Event('userChanged'));
+          // Buscar perfil atualizado do backend para refletir créditos e plano corretos
+          try {
+            const profileRes = await fetch(`${API_URL}/users/profile`, {
+              headers: { 'Authorization': `Bearer ${userData.token}` },
+            });
+            if (profileRes.ok) {
+              const profile = await profileRes.json();
+              const updatedUser = { ...userData, plan: profile.plan, credits: profile.credits, planExpiresAt: profile.planExpiresAt };
+              localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
+              window.dispatchEvent(new Event('userChanged'));
+            }
+          } catch {}
           setTimeout(() => router.push('/checkout/success'), 1500);
           return;
         } else if (data.status === 'pending') {

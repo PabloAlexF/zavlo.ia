@@ -1,24 +1,19 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, MapPin, User, Edit2, CreditCard } from 'lucide-react';
+import { Sparkles, User, Edit2, CreditCard } from 'lucide-react';
 import { ProductCard } from '@/components/features/ProductCard';
 import { SearchingAnimation } from '@/components/chat/SearchingAnimation';
 import Link from 'next/link';
 
 interface Message {
   id: string;
-  type: 'user' | 'ai' | 'products' | 'category_question' | 'image_confirmation' | 'sort_question';
+  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question';
   content: string;
   products?: any[];
   timestamp: Date;
   searchType?: 'text' | 'image';
   creditCost?: number;
-  categoryQuestion?: {
-    id: string;
-    options: string[];
-    category: string;
-  };
   imageData?: string;
   detectedProduct?: string;
   priceRangeApplied?: {
@@ -152,24 +147,6 @@ export function ChatMessages({
                     <AIBubble>
                       {message.content === 'searching_animation' ? (
                         <SearchingAnimation />
-                      ) : message.content === 'location_question' ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 text-slate-300">
-                            <MapPin className="h-4 w-4 text-teal-300/70" />
-                            <span>Quer buscar em alguma região específica?</span>
-                          </div>
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            <OptionButton onClick={() => onSendMessage('minha cidade')} variant="primary">
-                              Minha cidade
-                            </OptionButton>
-                            <OptionButton onClick={() => onSendMessage('meu estado')}>
-                              Meu estado
-                            </OptionButton>
-                            <OptionButton onClick={() => onSendMessage('não')}>
-                              Todo o Brasil
-                            </OptionButton>
-                          </div>
-                        </div>
                       ) : typeof message.content === 'string' && message.content.includes('Créditos insuficientes') ? (
                         <div className="space-y-4">
                           <p className="whitespace-pre-wrap text-slate-200">{message.content}</p>
@@ -187,25 +164,6 @@ export function ChatMessages({
                       ) : (
                         <p className="whitespace-pre-wrap text-slate-200">{message.content}</p>
                       )}
-                    </AIBubble>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Pergunta de categoria ── */}
-              {message.type === 'category_question' && (
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <AIAvatar />
-                  <div className="max-w-[90%] sm:max-w-[78%]">
-                    <AIBubble>
-                      <p className="mb-3 text-slate-300">{message.content}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {message.categoryQuestion?.options?.map((option, i) => (
-                          <OptionButton key={i} onClick={() => onSendMessage(option)}>
-                            {option}
-                          </OptionButton>
-                        ))}
-                      </div>
                     </AIBubble>
                   </div>
                 </div>
@@ -253,9 +211,10 @@ export function ChatMessages({
                       <p className="mb-3 text-slate-300">{message.content}</p>
                       <div className="space-y-2">
                         {[
-                          { label: 'Maior relevância', value: 'BEST_MATCH', desc: 'Produtos mais relacionados' },
+                          { label: 'Melhor resultado', value: 'BEST_MATCH', desc: 'Produtos mais relevantes' },
                           { label: 'Menor preço', value: 'LOWEST_PRICE', desc: 'Do mais barato ao mais caro' },
                           { label: 'Maior preço', value: 'HIGHEST_PRICE', desc: 'Do mais caro ao mais barato' },
+                          { label: 'Mais avaliados', value: 'TOP_RATED', desc: 'Melhor avaliação pelos compradores' },
                         ].map((option, i) => (
                           <motion.button
                             key={option.value}

@@ -16,7 +16,7 @@ export class UsersService {
     if (!userDoc.exists) return null;
 
     const userData = userDoc.data();
-    delete userData.password;
+    if (userData) delete userData.password;
 
     return { id: userDoc.id, ...userData } as User;
   }
@@ -100,27 +100,21 @@ export class UsersService {
 
       const userData = userDoc.data();
       const plan = userData?.plan || PlanType.FREE;
-      const limits = PLAN_LIMITS[plan];
+      const credits = userData?.credits || 0;
 
-      const today = new Date().toISOString().split('T')[0];
+      // Usuário pago = tem plano ativo OU tem créditos avulsos
+      // Nesse caso, o limite mensal não se aplica — useCredit() controla o acesso
+      const isPaidUser = plan !== PlanType.FREE || credits > 0;
+      if (isPaidUser) { allowed = true; return; }
+
+      // Usuário free sem créditos: aplicar limite mensal
+      const limits = PLAN_LIMITS[PlanType.FREE];
       const monthKey = new Date().toISOString().slice(0, 7);
-      const usageKey = type === 'text' ? 'textSearchesToday' : 'imageSearchesToday';
       const monthlyUsageKey = type === 'text' ? 'textSearchesThisMonth' : 'imageSearchesThisMonth';
+      const monthlyUsage = userData?.lastMonthKey === monthKey ? (userData?.[monthlyUsageKey] || 0) : 0;
+      const monthlyLimit = type === 'text' ? limits.textSearchesPerMonth : limits.imageSearchesPerMonth;
 
-      let currentUsage = userData?.lastUsageDate === today ? (userData?.[usageKey] || 0) : 0;
-      let monthlyUsage = userData?.lastMonthKey === monthKey ? (userData?.[monthlyUsageKey] || 0) : 0;
-
-      const dailyLimit = type === 'text' ? limits.textSearchesPerDay : limits.imageSearchesPerDay;
-
-      if (dailyLimit === -1) { allowed = true; return; }
-
-      if (dailyLimit === 0) {
-        const monthlyLimit = type === 'text' ? limits.textSearchesPerMonth : limits.imageSearchesPerMonth;
-        allowed = monthlyUsage < (monthlyLimit || 0);
-        return;
-      }
-
-      allowed = currentUsage < dailyLimit;
+      allowed = monthlyUsage < (monthlyLimit || 0);
     });
 
     return allowed;

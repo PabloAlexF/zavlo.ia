@@ -83,7 +83,7 @@ def extract_price_range(normalized: str) -> dict | None:
             "target_price": value
         }
     
-    # 5️⃣ VALOR SOLTO (50mil, 50k)
+    # 5️⃣ VALOR SOLTO (50mil, 50k, 50.000)
     match = re.search(r'\b(\d+)\s*(mil|k)\b', normalized)
     if match:
         if not re.search(r'(ate|entre|acima|abaixo|mais|menos)', normalized):
@@ -94,4 +94,14 @@ def extract_price_range(normalized: str) -> dict | None:
                 "target_price": value
             }
     
+    # 6️⃣ VALOR COM PONTO DE MILHAR (50.000, 120.000)
+    match = re.search(r'\b(\d{2,3})\.(\d{3})\b', normalized)
+    if match:
+        value = int(match.group(1)) * 1000 + int(match.group(2))
+        return {
+            "min_price": None,
+            "max_price": None,
+            "target_price": value
+        }
+
     return None

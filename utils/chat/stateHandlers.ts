@@ -11,6 +11,7 @@ import {
   getErrorMessage 
 } from './chatHelpers';
 import { getCreditWarning, normalizeResultsTier, VALID_RESULTS_TIERS } from './creditCalculator';
+import { handleCreditConfirmationState } from './creditConfirmationHandler';
 
 // ✅ Tipagem forte para estados
 export enum ChatState {
@@ -25,7 +26,7 @@ export enum ChatState {
 // ✅ Tipagem forte para PendingSearch
 export interface PendingSearch {
   query?: string;
-  sortBy?: 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE';
+  sortBy?: 'RELEVANCE' | 'BEST_MATCH' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | 'TOP_RATED';
   limit?: number;
   confirmedLimit?: number; // Confirmed after credit check
   creditWarning?: string;
@@ -281,11 +282,11 @@ export const CHAT_MACHINE: Record<ChatState, {
     previous: ChatState.AwaitingLimit
   },
   [ChatState.AwaitingCondition]: { 
-    next: [ChatState.AwaitingConfirmation, ChatState.AwaitingPriceRange], // Pode voltar
+    next: [ChatState.AwaitingFinalConfirmation, ChatState.AwaitingPriceRange], // Pode voltar
     previous: ChatState.AwaitingPriceRange
   },
-  [ChatState.AwaitingConfirmation]: { 
-    next: ChatState.AwaitingConfirmation,
+  [ChatState.AwaitingFinalConfirmation]: { 
+    next: ChatState.AwaitingFinalConfirmation,
     isFinal: true
   }
 };

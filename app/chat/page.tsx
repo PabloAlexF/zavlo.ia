@@ -8,7 +8,6 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
 import { QuestionModal } from '@/components/chat/QuestionModal';
-import { SortSelectionModal } from '@/components/chat/SortSelectionModal';
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
 import { chatHistoryService } from '@/lib/chatHistory';
@@ -86,9 +85,10 @@ export default function ChatPage() {
     classification: any;
     missingFields: string[];
     answers: Record<string, string>;
-    step: 'idle' | 'asking' | 'searching';
+    step: 'idle' | 'asking';
     expansionSources: string[];
     primarySource: string;
+    sortBy: string;
   }>({
     query: '',
     classification: null,
@@ -97,15 +97,13 @@ export default function ChatPage() {
     step: 'idle',
     expansionSources: [],
     primarySource: '',
+    sortBy: 'BEST_MATCH',
   });
 
-  // Derivados do searchSession (sem estado extra)
+  // Derivado do searchSession
   const hybridQuestion = searchSession.step === 'asking'
     ? getNextQuestion(searchSession.missingFields[0], searchSession.classification)
     : null;
-  const showSortQuestion = searchSession.step === 'searching' &&
-    searchSession.classification?.category !== 'car' &&
-    searchSession.classification?.category !== 'motorcycle';
 
   const [userCredits, setUserCredits] = useState(0);
   const userCreditsRef = useRef(0);
@@ -292,6 +290,7 @@ export default function ChatPage() {
       step: 'idle',
       expansionSources: [],
       primarySource: '',
+      sortBy: 'BEST_MATCH',
     });
     contextManager.clear();
     
@@ -472,7 +471,7 @@ export default function ChatPage() {
           'Authorization': `Bearer ${userData.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ productName: detectedProductName }),
+        body: JSON.stringify({ productName: detectedProductName, sortBy }),
       });
 
       if (response.status === 401) {
@@ -532,7 +531,7 @@ export default function ChatPage() {
   const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
   const handleExpandSearch = async (source: string) => {
-    const { query, classification } = searchSession;
+    const { query, classification, sortBy } = searchSession;
     const sourceLabel: Record<string, string> = {
       olx: 'OLX',
       webmotors: 'Webmotors',
@@ -544,7 +543,7 @@ export default function ChatPage() {
       ...classification,
       scrapers: [{ name: source, score: 1.0 }],
     };
-    await executeTextSearch(query, 'RELEVANCE', enrichedClassification);
+    await executeTextSearch(query, sortBy, enrichedClassification);
   };
 
   const handleHybridAnswer = async (answer: string) => {
@@ -596,24 +595,14 @@ export default function ChatPage() {
       addMessage('ai', typeof nextQ === 'object' ? nextQ.question : nextQ);
     } else {
       // Todas perguntas respondidas — enviar answers ao backend para enriquecer
-      setSearchSession(s => ({ ...s, query: enrichedQuery, answers: updatedAnswers, step: 'searching' }));
+      setSearchSession(s => ({ ...s, query: enrichedQuery, answers: updatedAnswers, step: 'idle' }));
       await classifyWithAnswers(enrichedQuery, updatedAnswers, classification);
     }
   };
 
   const handleHybridSkip = async () => {
-    const { query, classification } = searchSession;
+    const { query, classification, sortBy } = searchSession;
     setSearchSession(s => ({ ...s, step: 'idle', missingFields: [] }));
-    if (classification?.category === 'car' || classification?.category === 'motorcycle') {
-      await executeTextSearch(query, 'RELEVANCE', classification);
-    } else {
-      setSearchSession(s => ({ ...s, step: 'searching' }));
-    }
-  };
-
-  const handleSortSelection = async (sortBy: string) => {
-    const { query, classification } = searchSession;
-    setSearchSession(s => ({ ...s, step: 'idle' }));
     await executeTextSearch(query, sortBy, classification);
   };
 
@@ -640,21 +629,16 @@ export default function ChatPage() {
 
       setSearchSession(s => ({ ...s, classification: enrichedClassification, step: 'idle' }));
 
-      if (enrichedClassification?.category === 'car' || enrichedClassification?.category === 'motorcycle') {
-        await executeTextSearch(query, 'RELEVANCE', enrichedClassification);
-      } else {
-        setSearchSession(s => ({ ...s, step: 'searching' }));
-      }
+      await executeTextSearch(query, searchSession.sortBy, enrichedClassification);
     } catch {
-      // Fallback: usar classification anterior sem enriquecimento
-      await executeTextSearch(query, 'RELEVANCE', prevClassification);
+      await executeTextSearch(query, searchSession.sortBy, prevClassification);
     }
   };
 
   const handleSend = async (messageText?: string) => {
-    const currentInput = messageText || input;
-    if (!currentInput || !String(currentInput).trim() || loading) return;
-    if (messageText) setInput('');
+    const currentInput = (messageText ?? input).trim();
+    if (!currentInput || loading) return;
+    setInput('');
 
     // Handle image confirmation
     if (awaitingImageConfirmation) {
@@ -789,7 +773,7 @@ export default function ChatPage() {
       }
 
       if (intent.type === 'credits_question') {
-        const creditsMessage = `💰 **Seus Créditos: ${userCredits}**\n\n📊 **Custos por busca:**\n• Busca por texto: **1 crédito**\n• Busca por imagem: **2 créditos** (1 para identificar + 1 para buscar preços)\n\n🔄 **Precisa de mais créditos?**\nVocê pode comprar créditos avulsos ou assinar um plano mensal!`;
+        const creditsMessage = `💰 **Seus Créditos: ${userCredits}**\n\n📊 **Custos por busca:**\n• Busca por texto: **1 crédito**\n• Identificação por imagem: **1 crédito**\n• Busca de preços após imagem: **+1 crédito** (opcional)\n\n🔄 **Precisa de mais créditos?**\nVocê pode comprar créditos avulsos ou assinar um plano mensal!`;
         addMessage('ai', creditsMessage);
         setLoading(false);
         return;
@@ -864,7 +848,7 @@ export default function ChatPage() {
           
           // 💳 PERGUNTAS SOBRE CRÉDITOS
           if (questionType === 'credits') {
-            const creditsMessage = `💰 **Seus Créditos: ${userCredits}**\n\n📊 **Custos por busca:**\n• Busca por texto: **1 crédito**\n• Busca por imagem: **2 créditos** (1 para identificar + 1 para buscar preços)\n\n🔄 **Precisa de mais créditos?**\nVocê pode comprar créditos avulsos ou assinar um plano mensal!`;
+            const creditsMessage = `💰 **Seus Créditos: ${userCredits}**\n\n📊 **Custos por busca:**\n• Busca por texto: **1 crédito**\n• Identificação por imagem: **1 crédito**\n• Busca de preços após imagem: **+1 crédito** (opcional)\n\n🔄 **Precisa de mais créditos?**\nVocê pode comprar créditos avulsos ou assinar um plano mensal!`;
             addMessage('ai', creditsMessage);
             return;
           }
@@ -943,12 +927,7 @@ export default function ChatPage() {
         
         setSearchSession(s => ({ ...s, query, classification: data.classification, step: 'idle' }));
         setLoading(false);
-        
-        if (data.classification?.category === 'car' || data.classification?.category === 'motorcycle') {
-          await executeTextSearch(query, 'RELEVANCE', data.classification);
-        } else {
-          setSearchSession(s => ({ ...s, step: 'searching' }));
-        }
+        await executeTextSearch(query, searchSession.sortBy, data.classification);
         
       } else {
         addMessage('ai', 'Erro ao processar. Tente novamente.');
@@ -1095,17 +1074,27 @@ export default function ChatPage() {
               google_shopping: 'Google Shopping',
               mercadolivre: 'Mercado Livre',
             };
-            const primaryLabel = sourceLabel[data.primarySource] || data.primarySource || 'Mercado Livre';
+            const isVehicle = classification?.category === 'car' || classification?.category === 'motorcycle';
+            const primaryLabel = sourceLabel[data.primarySource] || data.primarySource || 'Google Shopping';
+            const expansionLabels = data.expansionSources.map((s: string) => sourceLabel[s] || s);
             setSearchSession(s => ({
               ...s,
               expansionSources: data.expansionSources,
               primarySource: data.primarySource || '',
+              sortBy,
               step: 'idle',
             }));
-            addMessage('ai',
-              `🔍 Encontrei **${products.length} resultados** no **${primaryLabel}**!\n\n` +
-              `Esses resultados te satisfizeram? Se quiser, posso buscar também em outras plataformas. é só me dizer! 😊`
-            );
+            if (isVehicle) {
+              addMessage('ai',
+                `🔍 Encontrei **${products.length} resultados** no **${primaryLabel}**!\n\n` +
+                `Esses resultados te satisfizeram? Se quiser, posso buscar também em: ${expansionLabels.map((l: string) => `**${l}**`).join(' ou ')} (+1 crédito cada). É só me dizer! 😊`
+              );
+            } else {
+              addMessage('ai',
+                `🔍 Encontrei **${products.length} resultados** no **${primaryLabel}**!\n\n` +
+                `Deseja buscar em outras plataformas? Temos **OLX** e **Mercado Livre** disponíveis (+1 crédito cada). É só escolher! 😊`
+              );
+            }
           }
 
           setLoading(false);
@@ -1234,13 +1223,6 @@ export default function ChatPage() {
         />
       )}
 
-      {/* Sort Selection Modal */}
-      {showSortQuestion && (
-        <SortSelectionModal
-          onSelect={handleSortSelection}
-          onCancel={() => setSearchSession(s => ({ ...s, step: 'idle' }))}
-        />
-      )}
     </div>
   );
 }

@@ -49,6 +49,7 @@ export const chatHistoryService = {
           if (m.creditCost !== undefined) msg.creditCost = m.creditCost;
           if (m.imageData) msg.imageData = m.imageData;
           if (m.detectedProduct) msg.detectedProduct = m.detectedProduct;
+          if (m.priceRangeApplied) msg.priceRangeApplied = m.priceRangeApplied;
           return msg;
         }),
         updatedAt: new Date().toISOString()

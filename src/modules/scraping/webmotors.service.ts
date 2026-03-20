@@ -61,7 +61,7 @@ export class WebmotorsService {
         source: 'Webmotors',
         url: item.url || item.link,
         sourceUrl: item.url || item.link,
-        condition: item.vehicle_type === 'new' ? 'new' : item.vehicle_type === 'used' ? 'used' : (item.km === 0 && item.km != null ? 'new' : 'used'),
+        condition: item.km === 0 ? 'new' : (item.km != null ? 'used' : undefined),
         category: 'vehicle',
         scrapedAt: new Date().toISOString(),
         make: item.make || item.brand,
@@ -80,7 +80,7 @@ export class WebmotorsService {
         fipePrice: item.fipe_price,
         dealer: item.seller?.name || item.dealer,
         dealerLocation: item.seller?.city
-          ? `${item.seller.city}, ${item.seller.state}`
+          ? `${item.seller.city}${item.seller.state ? ', ' + (item.seller.state.match(/\(([A-Z]{2})\)/)?.[1] ?? item.seller.state) : ''}`
           : (item.location || null),
         dealerCNPJ: item.seller?.cnpj,
         dealerPhones: item.seller?.phones || [],

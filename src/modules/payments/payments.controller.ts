@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Logger, Headers, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Param, Logger, Headers, UnauthorizedException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PaymentsService } from './payments.service';
 import { PixSimpleService } from './pix-simple.service';
@@ -57,10 +57,12 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   async confirmPixPayment(
     @CurrentUser() user: any,
-    @Body() body: { paymentId: string },
+    @Body() body: { paymentId?: string },
+    @Param('paymentId') paymentIdParam: string,
   ) {
     const userId = user?.userId || user?.id;
-    return this.paymentsService.confirmPixPayment(body.paymentId, userId);
+    const paymentId = paymentIdParam || body.paymentId;
+    return this.paymentsService.confirmPixPayment(paymentId, userId);
   }
 
   @Post('pix/:paymentId/cancel')

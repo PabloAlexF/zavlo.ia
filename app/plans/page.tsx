@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/ui/Toast';
+import { PLAN_PRICES, PLAN_CREDITS } from '@/lib/plans';
 
 import { DollarSign, Sparkles, Check, Zap, Search, Camera } from 'lucide-react';
 
@@ -33,41 +34,41 @@ export default function Plans() {
       name: 'Gratuito',
       price: 0,
       yearlyPrice: 0,
-      features: ['3 comparações grátis', 'Marketplaces principais', '20 resultados por busca', 'Com anúncios'],
+      features: ['1 comparação grátis', 'Marketplaces principais', '20 resultados por busca', 'Com anúncios'],
       cta: 'Começar Grátis',
       subtitle: 'Teste sem compromisso',
     },
     {
       name: 'Básico',
-      price: 39.90,
-      yearlyPrice: 399.00,
-      features: ['15 créditos/mês', 'Todos os marketplaces', 'Sem anúncios', 'Histórico 30 dias', 'Alertas de preço'],
+      price: PLAN_PRICES.basic.monthly,
+      yearlyPrice: PLAN_PRICES.basic.yearly,
+      features: [`${PLAN_CREDITS.basic.monthly} créditos/mês`, 'Todos os marketplaces', 'Sem anúncios', 'Histórico 30 dias', 'Alertas de preço'],
       cta: 'Assinar Agora',
       subtitle: 'Economize até R$ 800/mês',
     },
     {
       name: 'Pro',
-      price: 89.90,
-      yearlyPrice: 899.00,
+      price: PLAN_PRICES.pro.monthly,
+      yearlyPrice: PLAN_PRICES.pro.yearly,
       popular: true,
-      features: ['48 créditos/mês', 'IA avançada de produtos', 'Busca por imagem', 'Prioridade máxima', 'Suporte WhatsApp prioritário', 'Histórico 90 dias'],
+      features: [`${PLAN_CREDITS.pro.monthly} créditos/mês`, 'IA avançada de produtos', 'Busca por imagem', 'Prioridade máxima', 'Suporte WhatsApp prioritário', 'Histórico 90 dias'],
       cta: 'Assinar Pro',
       subtitle: 'Economize até R$ 2.400/mês',
     },
     {
       name: 'Business',
-      price: 299.00,
-      yearlyPrice: 2990.00,
-      features: ['200 créditos/mês', 'API REST completa', 'Webhooks personalizados', 'Até 5 usuários', 'Relatórios e analytics', 'Gerente de conta dedicado'],
+      price: PLAN_PRICES.business.monthly,
+      yearlyPrice: PLAN_PRICES.business.yearly,
+      features: [`${PLAN_CREDITS.business.monthly} créditos/mês`, 'API REST completa', 'Webhooks personalizados', 'Até 5 usuários', 'Relatórios e analytics', 'Gerente de conta dedicado'],
       cta: 'Falar com Vendas',
       subtitle: 'Para empresas e revendedores',
     },
   ];
 
   const creditPackages: CreditPackage[] = [
-    { credits: 10, price: 15.90 },
-    { credits: 25, price: 32.90 },
-    { credits: 60, price: 69.90 },
+    { credits: 5,  price: 14.90 },
+    { credits: 15, price: 39.90 },
+    { credits: 35, price: 84.90 },
   ];
 
   const handleSelectPlan = async (planName: string): Promise<void> => {
@@ -152,7 +153,7 @@ export default function Plans() {
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Anual <span className="text-green-400 ml-1 font-semibold">-16%</span>
+              Anual <span className="text-green-400 ml-1 font-semibold">-17%</span>
             </button>
           </div>
         </div>

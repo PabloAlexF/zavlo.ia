@@ -136,7 +136,7 @@ export class SearchController {
   @UseGuards(OptionalJwtAuthGuard)
   async searchByText(
     @Query() searchDto: SearchTextDto,
-    @Query('sortBy') sortBy: 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | undefined,
+    @Query('sortBy') sortBy: 'RELEVANCE' | 'BEST_MATCH' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | 'TOP_RATED' | undefined,
     @Query('minPrice') minPrice: number | undefined,
     @Query('maxPrice') maxPrice: number | undefined,
     @Query('classification') classificationStr: string | undefined, // ✅ Receber classificação do frontend
@@ -190,7 +190,9 @@ export class SearchController {
       });
     }
 
-    if (user.plan === 'free') {
+    // Usuário free SEM créditos avulsos → freeMode (resultados limitados)
+    // Usuário free COM créditos avulsos → tratado como pago (crédito deduzido normalmente)
+    if (user.plan === 'free' && (!user.credits || user.credits <= 0)) {
       return this.searchService.searchByText(
         query,
         { ...searchFilters, useRealScraping: true, freeMode: true, limit: limit || 10 },

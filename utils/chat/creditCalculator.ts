@@ -1,27 +1,18 @@
-// utils/chat/creditCalculator.ts - Frontend credit warnings for chat bot
-// Standalone - copy logic from backend plans.constants.ts
-const RESULTS_CREDIT_COSTS = {
-  10: 1,
-  20: 2,
-  50: 3,
-  100: 5
-} as const;
+// utils/chat/creditCalculator.ts
+// 1 crédito = 1 busca (texto ou imagem), alinhado com o backend (search.service.ts useCredit(userId, 1))
+export const CREDIT_COST_PER_SEARCH = 1;
 
-export function getCreditCostForResults(numResults: number): number {
-  if (numResults <= 10) return 1;
-  if (numResults <= 20) return 2;
-  if (numResults <= 50) return 3;
-  return 5; // 100+
+export function getCreditCostForResults(_numResults: number): number {
+  return CREDIT_COST_PER_SEARCH;
 }
 
-export function getCreditWarning(numResults: number): string {
-  const credits = getCreditCostForResults(numResults);
-  return `${numResults} resultados = ${credits} crédito${credits > 1 ? 's' : ''} (melhor custo-benefício para essa quantidade). Deseja continuar? (sim/não)`;
+export function getCreditWarning(_numResults: number): string {
+  return `Esta busca custará ${CREDIT_COST_PER_SEARCH} crédito. Deseja continuar? (sim/não)`;
 }
 
-export const VALID_RESULTS_TIERS = [10, 20] as const;
+export const VALID_RESULTS_TIERS = [10, 20, 50] as const;
 export type ResultsTier = typeof VALID_RESULTS_TIERS[number];
 
 export function normalizeResultsTier(requested: number): ResultsTier {
-  return VALID_RESULTS_TIERS.find(tier => tier >= requested) || 20;
+  return VALID_RESULTS_TIERS.find(tier => tier >= requested) || 50;
 }

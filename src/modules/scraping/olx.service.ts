@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 export class OlxService {
   private readonly logger = new Logger(OlxService.name);
   private readonly apiToken: string;
-  private readonly actorId = 'daddyapi~olx-search-scraper';
+  private readonly actorId = 'daddyapi~olx-brazil-scraper';
 
   constructor(private configService: ConfigService) {
     this.apiToken = this.configService.get('APIFY_API_KEY');
@@ -33,10 +33,8 @@ export class OlxService {
 
       const input = {
         searchQuery: query,
-        olxDomain: 'olx.com.br',
         sortBy: olxSortBy,
-        maxPages: Math.ceil(limit / 40),
-        maxRequestsPerCrawl: limit,
+        maxPages: Math.ceil(limit / 50), // OLX Brazil: ~50 ads/page
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL'],
@@ -73,18 +71,17 @@ export class OlxService {
       const mapped = results.slice(0, limit).map((item: any, index: number) => ({
         id: item.id || `olx-${index}`,
         title: item.title,
-        price: this.parsePrice(item.price?.display || item.price?.amount),
+        price: item.price?.amount ?? this.parsePrice(item.price?.display),
         image: item.photos?.[0] || '',
         images: item.photos || [],
         source: 'OLX',
         url: item.url,
         sourceUrl: item.url,
         location: item.location ? `${item.location.city}, ${item.location.region}` : null,
-        condition: 'used', // OLX é principalmente produtos usados
+        dealerLocation: item.location?.city || null,
+        condition: 'used',
         category: 'marketplace',
         scrapedAt: new Date().toISOString(),
-        
-        // Campos específicos OLX
         postedAt: item.postedAt,
         isPromoted: item.isPromoted || false,
         isBusiness: item.isBusiness || false,

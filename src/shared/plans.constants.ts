@@ -67,9 +67,9 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
   },
   [PlanType.BASIC]: {
     textSearchesPerDay: 0,
-    textSearchesPerMonth: 15,
+    textSearchesPerMonth: 10,
     imageSearchesPerDay: 0,
-    imageSearchesPerMonth: 5,
+    imageSearchesPerMonth: 3,
     maxMarketplaces: 6,
     historyDays: 30,
     alerts: true,
@@ -85,9 +85,9 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
   },
   [PlanType.PRO]: {
     textSearchesPerDay: 0,
-    textSearchesPerMonth: 48,
+    textSearchesPerMonth: 20,
     imageSearchesPerDay: 0,
-    imageSearchesPerMonth: 15,
+    imageSearchesPerMonth: 6,
     maxMarketplaces: 9,
     historyDays: 90,
     alerts: true,
@@ -103,9 +103,9 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
   },
   [PlanType.BUSINESS]: {
     textSearchesPerDay: 0,
-    textSearchesPerMonth: 200,
+    textSearchesPerMonth: 50,
     imageSearchesPerDay: 0,
-    imageSearchesPerMonth: 50,
+    imageSearchesPerMonth: 15,
     maxMarketplaces: -1,
     historyDays: -1,
     alerts: true,
@@ -128,18 +128,18 @@ export const PLAN_PRICING: Record<PlanType, PlanPricing> = {
     currency: 'BRL',
   },
   [PlanType.BASIC]: {
-    monthly: 39.90,
-    yearly: 399.00,
+    monthly: 29.90,
+    yearly: 299.00,
     currency: 'BRL',
   },
   [PlanType.PRO]: {
-    monthly: 89.90,
-    yearly: 899.00,
+    monthly: 59.90,
+    yearly: 599.00,
     currency: 'BRL',
   },
   [PlanType.BUSINESS]: {
-    monthly: 299.00,
-    yearly: 2990.00,
+    monthly: 149.00,
+    yearly: 1490.00,
     currency: 'BRL',
   },
 };
@@ -185,22 +185,22 @@ export interface CreditPackage {
 
 export const CREDIT_PACKAGES: CreditPackage[] = [
   {
-    credits: 10,
+    credits: 5,
     bonus: 0,
-    price: 15.90,
+    price: 14.90,
     description: 'Ideal para testes',
   },
   {
-    credits: 25,
+    credits: 15,
     bonus: 0,
-    price: 32.90,
+    price: 39.90,
     description: 'Uso moderado',
     popular: true,
   },
   {
-    credits: 60,
+    credits: 35,
     bonus: 0,
-    price: 69.90,
+    price: 84.90,
     description: 'Melhor custo-benefício',
   },
 ];
@@ -276,9 +276,9 @@ export const APIFY_PLANS = {
 export const BREAKEVEN = {
   APIFY_SCALE_USD: 199,
   APIFY_SCALE_BRL: 995,
-  USERS_BASIC_NEEDED: 10,
-  USERS_PRO_NEEDED: 4,
-  USERS_BUSINESS_NEEDED: 2,
+  USERS_BASIC_NEEDED: 34,
+  USERS_PRO_NEEDED: 17,
+  USERS_BUSINESS_NEEDED: 7,
 };
 
 export function getPlanLimits(plan: PlanType): PlanLimits {

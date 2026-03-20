@@ -1,6 +1,11 @@
 // New handler for credit confirmation state
-import { HandlerContext, HandlerResult, ChatState, createAIMessage, PendingSearch } from './stateHandlers';
+import { HandlerContext, HandlerResult, ChatState } from './stateHandlers';
 import { getCreditWarning, normalizeResultsTier } from './creditCalculator';
+import { parseLimitInput } from './chatHelpers';
+
+function createAIMessage(content: string) {
+  return { id: crypto.randomUUID(), type: 'ai' as const, content, timestamp: new Date() };
+}
 
 export function handleCreditConfirmationState(ctx: HandlerContext): HandlerResult | null {
   const { currentInput, pendingSearch } = ctx;

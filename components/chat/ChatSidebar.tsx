@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare, Plus, Trash2, Edit2, Check, X, Zap,
-  Search, Home, CreditCard, History, Star, Sparkles, Circle,
+  Search, Home, CreditCard, Star, Sparkles, Circle,
   Settings, User
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
@@ -34,7 +34,6 @@ interface ChatSidebarProps {
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', href: '/' },
   { icon: CreditCard, label: 'Planos', href: '/plans' },
-  { icon: History, label: 'Histórico', href: '/history' },
 ];
 
 const CHAT_ICONS = [Star, Sparkles, Circle, MessageSquare];

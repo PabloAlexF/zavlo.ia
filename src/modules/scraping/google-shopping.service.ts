@@ -11,7 +11,7 @@ export class GoogleShoppingService {
     this.apiToken = this.configService.get('APIFY_API_KEY');
   }
 
-  async search(query: string, limit = 50, sortBy: 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' = 'RELEVANCE'): Promise<any[]> {
+  async search(query: string, limit = 50, sortBy: 'BEST_MATCH' | 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | 'TOP_RATED' = 'BEST_MATCH'): Promise<any[]> {
     try {
       this.logger.log(`Buscando no Google Shopping: ${query} (sortBy: ${sortBy})`);
 

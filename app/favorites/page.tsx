@@ -30,40 +30,27 @@ export default function FavoritesPage() {
   }, []);
 
   const loadFavorites = async () => {
-    console.log('[FAVORITES] Iniciando carregamento de favoritos');
-    
-    // First try localStorage (for users not logged in or for local favorites)
     const localFavorites = JSON.parse(localStorage.getItem('zavlo_favorites') || '[]');
-    console.log('[FAVORITES] Favoritos locais encontrados:', localFavorites);
-    
-    // Check if user is logged in
     const user = localStorage.getItem('zavlo_user');
-    console.log('[FAVORITES] Usuário logado:', !!user);
     
     if (!user) {
-      console.log('[FAVORITES] Usuário não logado, usando favoritos locais');
       await loadLocalFavorites(localFavorites);
       return;
     }
 
     try {
       const userData = JSON.parse(user);
-      console.log('[FAVORITES] Buscando favoritos da API para usuário:', userData.email);
       
       const response = await fetch(`${API_URL}/favorites`, {
         headers: {
           'Authorization': `Bearer ${userData.token}`,
         },
       });
-
-      console.log('[FAVORITES] Resposta da API:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('[FAVORITES] Favoritos da API carregados:', data.length);
         setFavorites(data);
       } else {
-        console.log('[FAVORITES] Erro na API, usando favoritos locais como fallback');
         await loadLocalFavorites(localFavorites);
       }
     } catch (error) {
@@ -75,32 +62,22 @@ export default function FavoritesPage() {
   };
 
   const loadLocalFavorites = async (favoriteIds: string[]) => {
-    console.log('[FAVORITES] Carregando favoritos locais, IDs:', favoriteIds);
-    
     if (favoriteIds.length === 0) {
-      console.log('[FAVORITES] Nenhum favorito local encontrado');
       setFavorites([]);
       setLoading(false);
       return;
     }
 
-    // Fetch product details for each favorite
     const favoritesData: Favorite[] = [];
     
     for (const id of favoriteIds) {
-      console.log('[FAVORITES] Buscando produto ID:', id);
-      
       try {
-        // Try products endpoint first
         let response = await fetch(`${API_URL}/products/${id}`);
-        console.log('[FAVORITES] Resposta products API:', response.status);
         
         if (response.ok) {
           const product = await response.json();
-          console.log('[FAVORITES] Produto encontrado:', product.title);
-          
           favoritesData.push({
-            id: id,
+            id,
             productId: product.id,
             productTitle: product.title,
             productPrice: product.price,
@@ -110,18 +87,11 @@ export default function FavoritesPage() {
             createdAt: product.createdAt || new Date().toISOString(),
           });
         } else {
-          console.log('[FAVORITES] Produto não encontrado, tentando listings');
-          
-          // Try listings endpoint as fallback
           response = await fetch(`${API_URL}/listings/${id}`);
-          console.log('[FAVORITES] Resposta listings API:', response.status);
-          
           if (response.ok) {
             const listing = await response.json();
-            console.log('[FAVORITES] Listing encontrado:', listing.title);
-            
             favoritesData.push({
-              id: id,
+              id,
               productId: listing.id,
               productTitle: listing.title,
               productPrice: listing.price,
@@ -130,8 +100,6 @@ export default function FavoritesPage() {
               source: listing.source || 'Zavlo.ia',
               createdAt: listing.createdAt || new Date().toISOString(),
             });
-          } else {
-            console.log('[FAVORITES] Listing não encontrado para ID:', id);
           }
         }
       } catch (e) {
@@ -139,55 +107,35 @@ export default function FavoritesPage() {
       }
     }
     
-    console.log('[FAVORITES] Total de favoritos carregados:', favoritesData.length);
     setFavorites(favoritesData);
     setLoading(false);
   };
 
   const removeFavorite = async (favoriteId: string) => {
-    console.log('[FAVORITES] Removendo favorito ID:', favoriteId);
-    
     const user = localStorage.getItem('zavlo_user');
     
     if (!user) {
-      console.log('[FAVORITES] Usuário não logado, removendo do localStorage');
-      
-      // Remove from localStorage for non-logged users
-      const favorites = JSON.parse(localStorage.getItem('zavlo_favorites') || '[]');
-      console.log('[FAVORITES] Favoritos antes da remoção:', favorites);
-      
-      const updatedFavorites = favorites.filter((id: string) => id !== favoriteId);
-      console.log('[FAVORITES] Favoritos após remoção:', updatedFavorites);
-      
-      localStorage.setItem('zavlo_favorites', JSON.stringify(updatedFavorites));
+      const stored = JSON.parse(localStorage.getItem('zavlo_favorites') || '[]');
+      localStorage.setItem('zavlo_favorites', JSON.stringify(stored.filter((id: string) => id !== favoriteId)));
       setFavorites(prev => prev.filter(fav => fav.id !== favoriteId));
       setToast({ message: 'Favorito removido!', type: 'success' });
       return;
     }
 
     try {
-      console.log('[FAVORITES] Usuário logado, removendo via API');
-      
       const userData = JSON.parse(user);
       const response = await fetch(`${API_URL}/favorites/${favoriteId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${userData.token}`,
-        },
+        headers: { 'Authorization': `Bearer ${userData.token}` },
       });
-
-      console.log('[FAVORITES] Resposta da API para remoção:', response.status);
       
       if (response.ok) {
-        console.log('[FAVORITES] Favorito removido com sucesso');
         setFavorites(prev => prev.filter(fav => fav.id !== favoriteId));
         setToast({ message: 'Favorito removido!', type: 'success' });
       } else {
-        console.error('[FAVORITES] Erro ao remover favorito da API');
         setToast({ message: 'Erro ao remover favorito', type: 'error' });
       }
     } catch (error) {
-      console.error('[FAVORITES] Erro na requisição de remoção:', error);
       setToast({ message: 'Erro ao remover favorito', type: 'error' });
     }
   };
