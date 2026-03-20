@@ -11,6 +11,11 @@ build/
 .next/
 out/
 
+# Arquivos JS compilados dentro de src/ (gerados pelo tsc)
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+
 # Ambiente
 .env
 .env.local
