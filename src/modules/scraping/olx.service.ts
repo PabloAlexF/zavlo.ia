@@ -16,9 +16,16 @@ export class OlxService {
    * @param query - Termo de busca (ex: "iPhone 13 usado")
    * @param limit - Número máximo de resultados
    */
-  async search(query: string, limit = 20, sortBy: string = 'RELEVANCE'): Promise<any[]> {
+  private sanitizeForLog(v: string): string {
+    return String(v).replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+  }
+
+  async search(query: string, limit = 20, sortBy: string = 'RELEVANCE', classification?: any): Promise<any[]> {
     try {
-      this.logger.log(`🛒 [OLX] Buscando: "${query}" (limit: ${limit}, sortBy: ${sortBy})`);
+      const searchQuery = classification && classification.category !== 'car' && classification.category !== 'motorcycle'
+        ? this.buildEnrichedQuery(query, classification)
+        : query;
+      this.logger.log(`🛒 [OLX] Buscando: "${this.sanitizeForLog(searchQuery)}" (limit: ${limit}, sortBy: ${sortBy})`);
 
       // Mapear sortBy do Google Shopping para OLX
       const sortByMap: Record<string, string> = {
@@ -32,7 +39,7 @@ export class OlxService {
       const olxSortBy = sortByMap[sortBy] || 'newest';
 
       const input = {
-        searchQuery: query,
+        searchQuery: searchQuery,
         sortBy: olxSortBy,
         maxPages: Math.ceil(limit / 50), // OLX Brazil: ~50 ads/page
         proxyConfiguration: {
@@ -93,6 +100,20 @@ export class OlxService {
       this.logger.error(`❌ [OLX] Erro: ${error.message}`);
       return [];
     }
+  }
+
+  private buildEnrichedQuery(query: string, classification: any): string {
+    const parts: string[] = [query];
+    if (classification.condition === 'new') parts.push('novo');
+    else if (classification.condition === 'used') parts.push('usado');
+    if (classification.category === 'fashion') {
+      if (classification.detected_gender) parts.push(classification.detected_gender);
+      if (classification.detected_size)   parts.push(classification.detected_size);
+    }
+    if (classification.detected_brand && !query.toLowerCase().includes(classification.detected_brand)) {
+      parts.push(classification.detected_brand);
+    }
+    return parts.filter(Boolean).join(' ');
   }
 
   private parsePrice(priceStr: any): number {

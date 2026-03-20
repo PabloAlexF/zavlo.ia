@@ -85,6 +85,10 @@ export class SearchService {
     return true;
   }
 
+  private sanitizeForLog(value: string): string {
+    return String(value).replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+  }
+
   private safeParse<T>(raw: string, fallback: T): T {
     try {
       const parsed = JSON.parse(raw);
@@ -255,7 +259,7 @@ export class SearchService {
     const sortBy = filters?.sortBy || 'BEST_MATCH';
     
     this.logger.log(`🔍 [SEARCH DEBUG] Starting searchByText:`);
-    this.logger.log(`   - query: ${query}`);
+    this.logger.log(`   - query: ${this.sanitizeForLog(query)}`);
     this.logger.log(`   - userId: ${userId}`);
     this.logger.log(`   - sortBy: ${sortBy}`);
     this.logger.log(`   - filters: ${JSON.stringify(filters)}`);
@@ -444,7 +448,7 @@ export class SearchService {
         this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - ${fixedLimit} resultados (freeMode=${filters.freeMode})`);
         
         try {
-          const results = await this.googleShoppingService.search(normalizedQuery, fixedLimit, sortBy);
+          const results = await this.googleShoppingService.search(normalizedQuery, fixedLimit, sortBy, classification);
           const result = { 
             results: results, 
             total: results.length,
@@ -525,12 +529,12 @@ export class SearchService {
               scraperResults = results;
             } else if (scraper === 'olx') {
               scraperResults = await this.withTimeout(
-                this.olxService.search(normalizedQuery, resultLimit, sortBy),
+                this.olxService.search(normalizedQuery, resultLimit, sortBy, classification),
                 30000, 'OLX'
               );
             } else if (scraper === 'google_shopping') {
               scraperResults = await this.withTimeout(
-                this.googleShoppingService.search(normalizedQuery, resultLimit, sortBy),
+                this.googleShoppingService.search(normalizedQuery, resultLimit, sortBy, classification),
                 45000, 'GoogleShopping'
               );
             }

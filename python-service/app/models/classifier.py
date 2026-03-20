@@ -744,6 +744,10 @@ class ProductClassifier:
         detected_fuel = self.detect_fuel(normalized) if best_category in ["car", "motorcycle"] else None
         detected_body_type = self.detect_body_type(normalized) if best_category in ["car", "motorcycle"] else None
         detected_color = self.detect_color(normalized) if best_category in ["car", "motorcycle"] else None
+        # Campos para categorias não-veículo
+        detected_gender  = self._detect_gender(normalized)  if best_category == 'fashion' else None
+        detected_size    = self._detect_size(normalized)    if best_category == 'fashion' else None
+        detected_storage = self._detect_storage(normalized) if best_category == 'smartphone' else None
         
         # 🆕 DETECTAR CAMPOS FALTANTES (ORDEM DE PRIORIDADE)
         missing_fields = []
@@ -814,16 +818,169 @@ class ProductClassifier:
                     suggested_question = price_question
                 
                 logger.info(f"✅ [FIELDS] Pergunta gerada: {suggested_question}")
+        elif best_category == 'smartphone':
+            last_filters = user_context.get('last_filters', {})
+            # 1. Condição
+            if condition == 'unknown' and not user_context.get('condition') and not last_filters.get('condition'):
+                missing_fields.append('condition')
+                suggested_question = 'Você prefere novo ou usado?'
+            # 2. Faixa de preço
+            price_range_data = extract_price_range(normalized)
+            if not price_range_data and not last_filters.get('price_range'):
+                missing_fields.append('price_range')
+                if not suggested_question:
+                    suggested_question = {
+                        'question': 'Qual sua faixa de preço?',
+                        'suggestions': [
+                            {'label': 'Até 1.500', 'max': 1500},
+                            {'label': 'Entre 1.500 e 3.000', 'min': 1500, 'max': 3000},
+                            {'label': 'Entre 3.000 e 6.000', 'min': 3000, 'max': 6000},
+                            {'label': 'Acima de 6.000', 'min': 6000},
+                        ]
+                    }
+            # 3. Armazenamento/capacidade (ex: 128GB, 256GB)
+            detected_storage = self._detect_storage(normalized)
+            if not detected_storage and not last_filters.get('storage'):
+                missing_fields.append('storage')
+                if not suggested_question:
+                    suggested_question = {
+                        'question': 'Qual capacidade de armazenamento você precisa?',
+                        'suggestions': [
+                            {'label': '64 GB',  'value': '64gb'},
+                            {'label': '128 GB', 'value': '128gb'},
+                            {'label': '256 GB', 'value': '256gb'},
+                            {'label': '512 GB', 'value': '512gb'},
+                        ]
+                    }
+            # Perguntar só o primeiro campo
+            if missing_fields:
+                missing_fields = missing_fields[:1]
+
         elif best_category == 'electronics':
-            if condition == "unknown" and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'):
-                missing_fields.append("condition")
-                suggested_question = "Você prefere novo ou usado?"
-        elif best_category in ('smartphone', 'furniture', 'appliance', 'fashion', 'marketplace_used'):
-            # Categorias onde condição é relevante
-            if condition == "unknown" and not user_context.get('condition') and not user_context.get('last_filters', {}).get('condition'):
-                missing_fields.append("condition")
-                suggested_question = "Você prefere novo ou usado?"
-        # Para 'general': não perguntar condição (produto desconhecido, não faz sentido)
+            last_filters = user_context.get('last_filters', {})
+            # 1. Condição
+            if condition == 'unknown' and not user_context.get('condition') and not last_filters.get('condition'):
+                missing_fields.append('condition')
+                suggested_question = 'Você prefere novo ou usado?'
+            # 2. Faixa de preço
+            price_range_data = extract_price_range(normalized)
+            if not price_range_data and not last_filters.get('price_range'):
+                missing_fields.append('price_range')
+                if not suggested_question:
+                    suggested_question = {
+                        'question': 'Qual sua faixa de preço?',
+                        'suggestions': [
+                            {'label': 'Até 2.000',              'max': 2000},
+                            {'label': 'Entre 2.000 e 5.000',   'min': 2000, 'max': 5000},
+                            {'label': 'Entre 5.000 e 10.000',  'min': 5000, 'max': 10000},
+                            {'label': 'Acima de 10.000',        'min': 10000},
+                        ]
+                    }
+            if missing_fields:
+                missing_fields = missing_fields[:1]
+
+        elif best_category == 'fashion':
+            last_filters = user_context.get('last_filters', {})
+            # 1. Gênero
+            detected_gender = self._detect_gender(normalized)
+            if not detected_gender and not last_filters.get('gender'):
+                missing_fields.append('gender')
+                suggested_question = {
+                    'question': 'Para quem é?',
+                    'suggestions': [
+                        {'label': '👨 Masculino', 'value': 'masculino'},
+                        {'label': '👩 Feminino',  'value': 'feminino'},
+                        {'label': '🧒 Infantil',  'value': 'infantil'},
+                        {'label': '🔀 Unissex',   'value': 'unissex'},
+                    ]
+                }
+            # 2. Tamanho
+            detected_size = self._detect_size(normalized)
+            if not detected_size and not last_filters.get('size'):
+                missing_fields.append('size')
+                if not suggested_question:
+                    suggested_question = {
+                        'question': 'Qual tamanho/número você precisa?',
+                        'suggestions': [
+                            {'label': 'P / 36-37',  'value': 'P 36'},
+                            {'label': 'M / 38-39',  'value': 'M 38'},
+                            {'label': 'G / 40-41',  'value': 'G 40'},
+                            {'label': 'GG / 42-43', 'value': 'GG 42'},
+                        ]
+                    }
+            # 3. Faixa de preço
+            price_range_data = extract_price_range(normalized)
+            if not price_range_data and not last_filters.get('price_range'):
+                missing_fields.append('price_range')
+                if not suggested_question:
+                    suggested_question = {
+                        'question': 'Qual sua faixa de preço?',
+                        'suggestions': [
+                            {'label': 'Até 150',           'max': 150},
+                            {'label': 'Entre 150 e 400',   'min': 150, 'max': 400},
+                            {'label': 'Entre 400 e 800',   'min': 400, 'max': 800},
+                            {'label': 'Acima de 800',       'min': 800},
+                        ]
+                    }
+            if missing_fields:
+                missing_fields = missing_fields[:1]
+
+        elif best_category == 'appliance':
+            last_filters = user_context.get('last_filters', {})
+            if condition == 'unknown' and not user_context.get('condition') and not last_filters.get('condition'):
+                missing_fields.append('condition')
+                suggested_question = 'Você prefere novo ou usado?'
+            price_range_data = extract_price_range(normalized)
+            if not price_range_data and not last_filters.get('price_range'):
+                missing_fields.append('price_range')
+                if not suggested_question:
+                    suggested_question = {
+                        'question': 'Qual sua faixa de preço?',
+                        'suggestions': [
+                            {'label': 'Até 1.000',            'max': 1000},
+                            {'label': 'Entre 1.000 e 3.000',  'min': 1000, 'max': 3000},
+                            {'label': 'Entre 3.000 e 6.000',  'min': 3000, 'max': 6000},
+                            {'label': 'Acima de 6.000',        'min': 6000},
+                        ]
+                    }
+            if missing_fields:
+                missing_fields = missing_fields[:1]
+
+        elif best_category == 'furniture':
+            last_filters = user_context.get('last_filters', {})
+            if condition == 'unknown' and not user_context.get('condition') and not last_filters.get('condition'):
+                missing_fields.append('condition')
+                suggested_question = 'Você prefere novo ou usado?'
+            price_range_data = extract_price_range(normalized)
+            if not price_range_data and not last_filters.get('price_range'):
+                missing_fields.append('price_range')
+                if not suggested_question:
+                    suggested_question = {
+                        'question': 'Qual sua faixa de preço?',
+                        'suggestions': [
+                            {'label': 'Até 500',            'max': 500},
+                            {'label': 'Entre 500 e 1.500',  'min': 500,  'max': 1500},
+                            {'label': 'Entre 1.500 e 4.000','min': 1500, 'max': 4000},
+                            {'label': 'Acima de 4.000',      'min': 4000},
+                        ]
+                    }
+            if missing_fields:
+                missing_fields = missing_fields[:1]
+
+        elif best_category == 'marketplace_used':
+            last_filters = user_context.get('last_filters', {})
+            user_location = user_context.get('location', {})
+            has_location = self.detect_location(normalized)
+            if not has_location and not user_context.get('location') and not last_filters.get('location'):
+                missing_fields.append('location')
+                user_city = user_location.get('city') if isinstance(user_location, dict) else None
+                if user_city:
+                    suggested_question = f'Vi que você mora em {user_city}. Quer buscar perto de você ou em todo o Brasil?'
+                else:
+                    suggested_question = 'Em qual cidade você quer buscar?'
+            if missing_fields:
+                missing_fields = missing_fields[:1]
+        # Para 'general': não perguntar (produto desconhecido)
         
         # Incluir localização do usuário no resultado
         user_location = user_context.get('location', {})
@@ -848,6 +1005,9 @@ class ProductClassifier:
             "detected_fuel": detected_fuel,
             "detected_body_type": detected_body_type,
             "detected_color": detected_color,
+            "detected_gender": detected_gender,
+            "detected_size": detected_size,
+            "detected_storage": detected_storage,
             "normalized_query": normalized_for_scraper,
             "search_query": " ".join(filter(None, [
                 normalized_for_scraper,
@@ -860,6 +1020,9 @@ class ProductClassifier:
                 "condition": condition if condition != 'unknown' else None,
                 "year": detected_year,
                 "location": user_location or None,
+                "gender": detected_gender,
+                "size": detected_size,
+                "storage": detected_storage,
             },
             "user_location": user_location if user_location else None,
             "price_range": price_range_data,
@@ -907,6 +1070,37 @@ class ProductClassifier:
         self.moto_brands = set(brands.get("motorcycle", []))
         
         logger.info("Configurações recarregadas com sucesso!")
+
+    def _detect_gender(self, normalized: str) -> str | None:
+        """Detecta gênero em produtos de moda"""
+        if re.search(r'\b(masculino|masculina|homem|homen|masc|male)\b', normalized):
+            return 'masculino'
+        if re.search(r'\b(feminino|feminina|mulher|fem|female)\b', normalized):
+            return 'feminino'
+        if re.search(r'\b(infantil|crianca|criança|menino|menina|kids|bebe|bebê)\b', normalized):
+            return 'infantil'
+        if re.search(r'\b(unissex|unisex)\b', normalized):
+            return 'unissex'
+        return None
+
+    def _detect_size(self, normalized: str) -> str | None:
+        """Detecta tamanho/número em produtos de moda"""
+        # Número de calçado (ex: 38, 39, 40)
+        m = re.search(r'\b(n[\u00ba\u00b0]?\s*)?(3[4-9]|4[0-9]|[pPmMgG]{1,2})\b', normalized)
+        if m:
+            return m.group(0).strip()
+        # Tamanho por letra
+        m = re.search(r'\b(pp|gg|xgg|xg|xl|xxl|[pPmMgG])\b', normalized)
+        if m:
+            return m.group(0).upper()
+        return None
+
+    def _detect_storage(self, normalized: str) -> str | None:
+        """Detecta capacidade de armazenamento (ex: 128gb, 256gb)"""
+        m = re.search(r'\b(\d+)\s*(gb|tb)\b', normalized)
+        if m:
+            return f"{m.group(1)}{m.group(2)}"
+        return None
 
     def generate_smart_price_question(self, brand: str, model: str, year: int, condition: str, user_context: dict = None) -> dict:
         """Gera pergunta de preço inteligente com sugestões estruturadas"""

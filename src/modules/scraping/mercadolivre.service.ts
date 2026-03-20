@@ -34,6 +34,10 @@ export class MercadoLivreService {
           searchQuery = parts.join(' ');
           this.logger.log(`🚗 [MERCADOLIVRE] Query de veículo construída: "${searchQuery}"`);
         }
+      } else if (classification) {
+        // Produtos gerais: enriquecer query com filtros
+        searchQuery = this.buildEnrichedQuery(query, classification);
+        this.logger.log(`🛠️ [MERCADOLIVRE] Query enriquecida: "${searchQuery}"`);
       }
 
       const safeQuery = this.sanitizeForLog(searchQuery);
@@ -120,6 +124,30 @@ export class MercadoLivreService {
       this.logger.error(`❌ [MERCADOLIVRE] Erro: ${error.message}`);
       return { results: [], searchedNationally: false };
     }
+  }
+
+  /** Enriquece a query com filtros da classificação para produtos gerais */
+  private buildEnrichedQuery(query: string, classification: any): string {
+    const parts: string[] = [query];
+    const cat = classification.category;
+
+    if (classification.condition === 'new') parts.push('novo');
+    else if (classification.condition === 'used') parts.push('usado');
+
+    if (cat === 'fashion') {
+      if (classification.detected_gender) parts.push(classification.detected_gender);
+      if (classification.detected_size)   parts.push(classification.detected_size);
+    }
+
+    if (cat === 'smartphone' && classification.detected_storage) {
+      parts.push(classification.detected_storage);
+    }
+
+    if (classification.detected_brand && !query.toLowerCase().includes(classification.detected_brand)) {
+      parts.push(classification.detected_brand);
+    }
+
+    return parts.filter(Boolean).join(' ');
   }
 
   /** Infere condição pelo título do produto */

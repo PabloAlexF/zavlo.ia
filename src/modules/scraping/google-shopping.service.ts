@@ -11,9 +11,17 @@ export class GoogleShoppingService {
     this.apiToken = this.configService.get('APIFY_API_KEY');
   }
 
-  async search(query: string, limit = 50, sortBy: 'BEST_MATCH' | 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | 'TOP_RATED' = 'BEST_MATCH'): Promise<any[]> {
+  private sanitizeForLog(v: string): string {
+    return String(v).replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+  }
+
+  async search(query: string, limit = 50, sortBy: 'BEST_MATCH' | 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | 'TOP_RATED' = 'BEST_MATCH', classification?: any): Promise<any[]> {
     try {
-      this.logger.log(`Buscando no Google Shopping: ${query} (sortBy: ${sortBy})`);
+      this.logger.log(`Buscando no Google Shopping: ${this.sanitizeForLog(query)} (sortBy: ${sortBy})`);
+
+      // Enriquecer query com filtros da classificação
+      const enrichedQuery = this.buildEnrichedQuery(query, classification);
+      this.logger.log(`Query enriquecida: "${this.sanitizeForLog(enrichedQuery)}"`);
 
       // ✅ Limite mínimo 20, máximo 100 (conforme API)
       const maxLimit = Math.max(20, Math.min(limit, 100));
@@ -31,7 +39,7 @@ export class GoogleShoppingService {
         country: 'BR',
         language: 'pt-BR',
         limit: maxLimit,
-        searchQuery: query,
+        searchQuery: enrichedQuery,
         sortBy: sortByMap[sortBy] || 'BEST_MATCH',
       };
 
@@ -151,6 +159,36 @@ export class GoogleShoppingService {
       this.logger.error(`Erro no Google Shopping: ${error.message}`);
       return [];
     }
+  }
+
+  /** Enriquece a query com filtros extraídos da classificação */
+  private buildEnrichedQuery(query: string, classification?: any): string {
+    if (!classification) return query;
+    const parts: string[] = [query];
+    const cat = classification.category;
+
+    // Condição
+    if (classification.condition === 'new') parts.push('novo');
+    else if (classification.condition === 'used') parts.push('usado');
+
+    // Moda: gênero + tamanho
+    if (cat === 'fashion') {
+      if (classification.detected_gender) parts.push(classification.detected_gender);
+      if (classification.detected_size)   parts.push(classification.detected_size);
+    }
+
+    // Smartphone: armazenamento
+    if (cat === 'smartphone' && classification.detected_storage) {
+      parts.push(classification.detected_storage);
+    }
+
+    // Faixa de preço: não adicionar na query (Google Shopping filtra por parâmetro)
+    // Marca (se não estiver já na query)
+    if (classification.detected_brand && !query.toLowerCase().includes(classification.detected_brand)) {
+      parts.push(classification.detected_brand);
+    }
+
+    return parts.filter(Boolean).join(' ');
   }
 
   private detectCondition(item: any): 'new' | 'used' {

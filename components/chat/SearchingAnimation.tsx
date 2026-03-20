@@ -2,60 +2,46 @@
 
 import { motion } from 'framer-motion';
 
-export function SearchingAnimation() {
-  const steps = [
-    { text: 'Analisando marketplaces', delay: 0 },
-    { text: 'Comparando preços', delay: 0.6 },
-    { text: 'Organizando resultados', delay: 1.2 },
-  ];
+const steps = [
+  'Analisando marketplaces',
+  'Comparando preços',
+  'Organizando resultados',
+];
 
+export function SearchingAnimation() {
   return (
-    <div className="flex flex-col items-center justify-center py-6 space-y-5">
-      {/* Rings animados */}
-      <div className="relative w-20 h-20">
-        {[0, 1, 2].map((i) => (
-          <motion.div
-            key={i}
-            className="absolute inset-0 rounded-full border-2 border-violet-500/40"
-            style={{ inset: `${i * 6}px` }}
-            animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.7, 0.3] }}
-            transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.3, ease: 'easeInOut' }}
-          />
-        ))}
+    <div className="flex items-center gap-4 py-1">
+      {/* Spinner compacto */}
+      <div className="relative h-9 w-9 flex-shrink-0">
         <motion.div
-          className="absolute inset-0 m-auto w-10 h-10 rounded-full bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center"
+          className="absolute inset-0 rounded-full border-2 border-violet-500/20"
           animate={{ rotate: 360 }}
-          transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-        >
-          <span className="text-base">🔍</span>
-        </motion.div>
+          transition={{ duration: 2.4, repeat: Infinity, ease: 'linear' }}
+        />
+        <motion.div
+          className="absolute inset-0 rounded-full border-t-2 border-violet-500"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center text-sm">🔍</div>
       </div>
 
-      {/* Texto principal */}
-      <motion.p
-        className="text-sm font-semibold text-white"
-        animate={{ opacity: [1, 0.6, 1] }}
-        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        Buscando produtos...
-      </motion.p>
-
       {/* Steps */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {steps.map((step, i) => (
           <motion.div
             key={i}
-            className="flex items-center gap-2 text-xs text-slate-400"
-            initial={{ opacity: 0, x: -8 }}
+            className="flex items-center gap-2"
+            initial={{ opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: step.delay, duration: 0.4 }}
+            transition={{ delay: i * 0.5, duration: 0.3 }}
           >
             <motion.div
-              className="h-1.5 w-1.5 rounded-full bg-violet-400"
+              className="h-1 w-1 rounded-full bg-violet-400"
               animate={{ opacity: [0.3, 1, 0.3] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay: step.delay }}
+              transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.4 }}
             />
-            {step.text}
+            <span className="text-xs text-slate-400">{step}</span>
           </motion.div>
         ))}
       </div>

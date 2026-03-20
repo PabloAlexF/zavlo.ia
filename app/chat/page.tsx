@@ -7,7 +7,7 @@ import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
-import { QuestionModal } from '@/components/chat/QuestionModal';
+
 import { detectIntent } from '@/utils/chat/intentDetector';
 import { contextManager } from '@/utils/chat/contextManager';
 import { chatHistoryService } from '@/lib/chatHistory';
@@ -15,18 +15,20 @@ import { PLAN_PRICES, PLAN_CREDITS } from '@/lib/plans';
 
 interface Message {
   id: string;
-  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question';
+  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question' | 'question' | 'expansion';
   content: string;
   products?: any[];
   timestamp: Date;
   creditCost?: number;
   imageData?: string;
   detectedProduct?: string;
-  priceRangeApplied?: {
-    min?: number;
-    max?: number;
-    target?: number;
-  };
+  priceRangeApplied?: { min?: number; max?: number; target?: number };
+  questionType?: string;
+  questionSuggestions?: { label: string; min?: number; max?: number; value?: string }[];
+  userLocation?: { city?: string; state?: string };
+  expansionSources?: string[];
+  primarySource?: string;
+  isVehicle?: boolean;
 }
 
 interface ChatHistory {
@@ -55,6 +57,33 @@ function getNextQuestion(
         { label: 'acima de 80mil', min: 80000 },
       ],
     };
+  }
+  // Campos não-veículo: a pergunta e sugestões vêm do Python via classification.suggested_question
+  // Se disponível, usar; senão fallback genérico
+  if (['gender', 'size', 'storage'].includes(field)) {
+    const smartQ = classification?.suggested_question;
+    if (smartQ && typeof smartQ === 'object') return smartQ;
+    const fallbacks: Record<string, { question: string; suggestions: any[] }> = {
+      gender:  { question: 'Para quem é?', suggestions: [
+        { label: '👨 Masculino', value: 'masculino' },
+        { label: '👩 Feminino',  value: 'feminino' },
+        { label: '🧒 Infantil',  value: 'infantil' },
+        { label: '🔀 Unissex',   value: 'unissex' },
+      ]},
+      size:    { question: 'Qual tamanho/número?', suggestions: [
+        { label: 'P / 36-37', value: 'P 36' },
+        { label: 'M / 38-39', value: 'M 38' },
+        { label: 'G / 40-41', value: 'G 40' },
+        { label: 'GG / 42+',  value: 'GG 42' },
+      ]},
+      storage: { question: 'Qual capacidade de armazenamento?', suggestions: [
+        { label: '64 GB',  value: '64gb' },
+        { label: '128 GB', value: '128gb' },
+        { label: '256 GB', value: '256gb' },
+        { label: '512 GB', value: '512gb' },
+      ]},
+    };
+    return fallbacks[field] ?? field;
   }
   return field;
 }
@@ -100,10 +129,7 @@ export default function ChatPage() {
     sortBy: 'BEST_MATCH',
   });
 
-  // Derivado do searchSession
-  const hybridQuestion = searchSession.step === 'asking'
-    ? getNextQuestion(searchSession.missingFields[0], searchSession.classification)
-    : null;
+
 
   const [userCredits, setUserCredits] = useState(0);
   const userCreditsRef = useRef(0);
@@ -538,7 +564,13 @@ export default function ChatPage() {
       google_shopping: 'Google Shopping',
       mercadolivre: 'Mercado Livre',
     };
-    addMessage('ai', `🔍 Buscando também no **${sourceLabel[source] || source}**... isso irá custar **1 crédito**.`);
+    // Remove expansion bubble and update remaining sources
+    setMessages(prev => prev.map(m =>
+      m.type === 'expansion'
+        ? { ...m, expansionSources: (m.expansionSources || []).filter(s => s !== source) }
+        : m
+    ).filter(m => m.type !== 'expansion' || (m.expansionSources || []).length > 0));
+    addMessage('ai', `Buscando no ${sourceLabel[source] || source}...`);
     const enrichedClassification = {
       ...classification,
       scrapers: [{ name: source, score: 1.0 }],
@@ -546,7 +578,12 @@ export default function ChatPage() {
     await executeTextSearch(query, sortBy, enrichedClassification);
   };
 
+  const dismissQuestionBubble = () => {
+    setMessages(prev => prev.filter(m => m.type !== 'question'));
+  };
+
   const handleHybridAnswer = async (answer: string) => {
+    dismissQuestionBubble();
     const { missingFields, query, answers, classification } = searchSession;
     const currentField = missingFields[0];
     
@@ -561,10 +598,33 @@ export default function ChatPage() {
     const updatedAnswers = { ...answers, [currentField]: normalizedAnswer };
     const remainingFields = missingFields.slice(1);
 
+    // Enriquecer classificação com a resposta do usuário
+    const updatedClassification = { ...classification };
+    if (currentField === 'condition' && normalizedAnswer) {
+      updatedClassification.condition = normalizedAnswer === 'novo' ? 'new' : 'used';
+    } else if (currentField === 'price_range' && normalizedAnswer) {
+      try {
+        const parsed = JSON.parse(normalizedAnswer);
+        if (parsed?.value) updatedClassification.price_range = {
+          min_price: parsed.value.min,
+          max_price: parsed.value.max,
+        };
+      } catch {}
+    } else if (currentField === 'year' && normalizedAnswer) {
+      updatedClassification.detected_year = parseInt(normalizedAnswer) || null;
+    } else if (currentField === 'location' && normalizedAnswer) {
+      updatedClassification.user_location = { city: normalizedAnswer };
+    } else if (currentField === 'gender' && normalizedAnswer) {
+      updatedClassification.detected_gender = normalizedAnswer;
+    } else if (currentField === 'size' && normalizedAnswer) {
+      updatedClassification.detected_size = normalizedAnswer;
+    } else if (currentField === 'storage' && normalizedAnswer) {
+      updatedClassification.detected_storage = normalizedAnswer;
+    }
+
     // Enriquecer query textual para exibição
     let displayAnswer = answer;
     if (!normalizedAnswer) {
-      // Resposta de skip — não enriquecer a query
       displayAnswer = '';
     } else {
       try {
@@ -585,29 +645,44 @@ export default function ChatPage() {
       : `${query} ${displayAnswer}`;
 
     if (remainingFields.length > 0) {
+      const nextField = remainingFields[0];
+      const nextQ = getNextQuestion(nextField, updatedClassification);
+      const nextText = typeof nextQ === 'object' ? nextQ.question : nextQ;
+      const nextSuggestions = typeof nextQ === 'object' ? nextQ.suggestions : undefined;
       setSearchSession(s => ({
         ...s,
         query: enrichedQuery,
+        classification: updatedClassification,
         missingFields: remainingFields,
         answers: updatedAnswers,
       }));
-      const nextQ = getNextQuestion(remainingFields[0], classification);
-      addMessage('ai', typeof nextQ === 'object' ? nextQ.question : nextQ);
+      const qMsg: Message = {
+        id: crypto.randomUUID(),
+        type: 'question',
+        content: nextText,
+        timestamp: new Date(),
+        questionType: nextField,
+        questionSuggestions: nextSuggestions,
+        userLocation: updatedClassification?.user_location,
+      };
+      setMessages(prev => [...prev, qMsg]);
     } else {
-      // Todas perguntas respondidas — enviar answers ao backend para enriquecer
-      setSearchSession(s => ({ ...s, query: enrichedQuery, answers: updatedAnswers, step: 'idle' }));
-      await classifyWithAnswers(enrichedQuery, updatedAnswers, classification);
+      const currentSortBy = searchSession.sortBy;
+      setSearchSession(s => ({ ...s, query: enrichedQuery, classification: updatedClassification, answers: updatedAnswers, step: 'idle' }));
+      await classifyWithAnswers(enrichedQuery, updatedAnswers, updatedClassification, currentSortBy);
     }
   };
 
   const handleHybridSkip = async () => {
+    dismissQuestionBubble();
     const { query, classification, sortBy } = searchSession;
     setSearchSession(s => ({ ...s, step: 'idle', missingFields: [] }));
     await executeTextSearch(query, sortBy, classification);
   };
 
   // Reenvia ao backend com as respostas para enriquecer a classification lá
-  const classifyWithAnswers = async (query: string, answers: Record<string, string>, prevClassification: any) => {
+  // Recebe sortBy como parâmetro para evitar stale closure
+  const classifyWithAnswers = async (query: string, answers: Record<string, string>, prevClassification: any, sortBy: string) => {
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) { router.push('/auth'); return; }
@@ -625,13 +700,15 @@ export default function ChatPage() {
 
       if (!response.ok) throw new Error(`classify failed: ${response.status}`);
       const data = await response.json();
-      const enrichedClassification = data.classification || prevClassification;
+      // Mesclar enrichedClassification com prevClassification para preservar filtros acumulados
+      const enrichedClassification = data.classification
+        ? { ...prevClassification, ...data.classification }
+        : prevClassification;
 
       setSearchSession(s => ({ ...s, classification: enrichedClassification, step: 'idle' }));
-
-      await executeTextSearch(query, searchSession.sortBy, enrichedClassification);
+      await executeTextSearch(query, sortBy, enrichedClassification);
     } catch {
-      await executeTextSearch(query, searchSession.sortBy, prevClassification);
+      await executeTextSearch(query, sortBy, prevClassification);
     }
   };
 
@@ -653,6 +730,13 @@ export default function ChatPage() {
         addMessage('ai', '❓ Por favor, responda apenas com \"sim\" ou \"não\".');
         return;
       }
+    }
+
+    // Handle hybrid question — user typed instead of clicking a button
+    if (searchSession.step === 'asking') {
+      dismissQuestionBubble();
+      await handleHybridAnswer(currentInput);
+      return;
     }
 
     // Handle image sort — modal já está visível, ignorar input de texto
@@ -683,10 +767,8 @@ export default function ChatPage() {
     if (searchSession.expansionSources.length > 0) {
       const lower = currentInput.toLowerCase().trim();
       const sourceLabel: Record<string, string> = {
-        olx: 'OLX',
-        webmotors: 'Webmotors',
-        google_shopping: 'Google Shopping',
-        mercadolivre: 'Mercado Livre',
+        olx: 'OLX', webmotors: 'Webmotors',
+        google_shopping: 'Google Shopping', mercadolivre: 'Mercado Livre',
       };
       const sourceMap: Record<string, string> = {
         'olx': 'olx', 'webmotors': 'webmotors',
@@ -696,24 +778,18 @@ export default function ChatPage() {
       const matchedSource = Object.entries(sourceMap).find(([k]) => lower.includes(k))?.[1];
       if (matchedSource && searchSession.expansionSources.includes(matchedSource)) {
         setSearchSession(s => ({ ...s, expansionSources: s.expansionSources.filter(x => x !== matchedSource) }));
-        addMessage('ai', `🔍 Buscando no **${sourceLabel[matchedSource]}**... isso irá custar **1 crédito**.`);
         await handleExpandSearch(matchedSource);
         return;
       }
       const notSatisfied = ['não', 'nao', 'no', 'n', 'nope', 'negativo', 'nada', 'ruim', 'péssimo', 'pessimo', 'insatisfeito'].some(w => lower.includes(w));
       if (notSatisfied) {
-        const availableLabels = searchSession.expansionSources.map(s => sourceLabel[s] || s);
-        addMessage('ai',
-          `Entendido! Posso buscar em outras plataformas para você:\n\n` +
-          availableLabels.map(l => `• **${l}**`).join('\n') +
-          `\n\n⚠️ Cada plataforma custa **1 crédito**. Qual você quer?`
-        );
         setLoading(false);
         return;
       }
       const satisfied = ['sim', 'yes', 's', 'ok', 'obrigado', 'obrigada', 'valeu', 'perfeito', 'satisfeito', 'satisfeita', 'encerrar'].some(w => lower.includes(w));
       if (satisfied) {
         setSearchSession(s => ({ ...s, expansionSources: [] }));
+        setMessages(prev => prev.filter(m => m.type !== 'expansion'));
         addMessage('ai', 'Que ótimo! Se precisar de mais buscas, é só digitar. 😊');
         setLoading(false);
         return;
@@ -911,17 +987,30 @@ export default function ChatPage() {
         
         // HYBRID MODE: Check if needs question
         if (data.needsQuestion && data.question) {
+          const missingFields: string[] = data.missingFields || [];
+          const firstField = missingFields[0];
+          const q = data.question;
+          const questionText = typeof q === 'object' ? q.question : q;
+          const suggestions = typeof q === 'object' ? q.suggestions : undefined;
           setSearchSession(s => ({
             ...s,
             query,
             classification: data.classification,
-            missingFields: data.missingFields || [],
+            missingFields,
             answers: {},
             step: 'asking',
           }));
           setLoading(false);
-          const questionText = typeof data.question === 'object' ? data.question.question : data.question;
-          addMessage('ai', questionText);
+          const qMsg: Message = {
+            id: crypto.randomUUID(),
+            type: 'question',
+            content: questionText,
+            timestamp: new Date(),
+            questionType: firstField,
+            questionSuggestions: suggestions,
+            userLocation: data.classification?.user_location,
+          };
+          setMessages(prev => [...prev, qMsg]);
           return;
         }
         
@@ -1076,7 +1165,6 @@ export default function ChatPage() {
             };
             const isVehicle = classification?.category === 'car' || classification?.category === 'motorcycle';
             const primaryLabel = sourceLabel[data.primarySource] || data.primarySource || 'Google Shopping';
-            const expansionLabels = data.expansionSources.map((s: string) => sourceLabel[s] || s);
             setSearchSession(s => ({
               ...s,
               expansionSources: data.expansionSources,
@@ -1084,17 +1172,16 @@ export default function ChatPage() {
               sortBy,
               step: 'idle',
             }));
-            if (isVehicle) {
-              addMessage('ai',
-                `🔍 Encontrei **${products.length} resultados** no **${primaryLabel}**!\n\n` +
-                `Esses resultados te satisfizeram? Se quiser, posso buscar também em: ${expansionLabels.map((l: string) => `**${l}**`).join(' ou ')} (+1 crédito cada). É só me dizer! 😊`
-              );
-            } else {
-              addMessage('ai',
-                `🔍 Encontrei **${products.length} resultados** no **${primaryLabel}**!\n\n` +
-                `Deseja buscar em outras plataformas? Temos **OLX** e **Mercado Livre** disponíveis (+1 crédito cada). É só escolher! 😊`
-              );
-            }
+            const expansionMsg: Message = {
+              id: crypto.randomUUID(),
+              type: 'expansion',
+              content: `Encontrei **${products.length} resultados** no **${primaryLabel}**`,
+              timestamp: new Date(),
+              expansionSources: data.expansionSources,
+              primarySource: data.primarySource || '',
+              isVehicle,
+            };
+            setMessages(prev => [...prev, expansionMsg]);
           }
 
           setLoading(false);
@@ -1191,6 +1278,9 @@ export default function ChatPage() {
                 return updated;
               });
             }}
+            onQuestionAnswer={handleHybridAnswer}
+            onQuestionSkip={handleHybridSkip}
+            onExpandSearch={handleExpandSearch}
             messagesEndRef={messagesEndRef}
           />
         )}
@@ -1211,17 +1301,6 @@ export default function ChatPage() {
           fileInputRef={fileInputRef}
         />
       </div>
-
-      {/* Hybrid Mode Question Modal */}
-      {hybridQuestion && (
-        <QuestionModal
-          question={hybridQuestion}
-          missingFields={searchSession.missingFields}
-          onAnswer={handleHybridAnswer}
-          onSkip={handleHybridSkip}
-          userLocation={searchSession.classification?.user_location}
-        />
-      )}
 
     </div>
   );
