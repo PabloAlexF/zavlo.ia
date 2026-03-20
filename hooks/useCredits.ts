@@ -22,12 +22,6 @@ export function useCredits() {
   }, []);
 
   const updateCredits = useCallback((newCredits: number) => {
-    console.log('💳 [CREDITS] Atualizando créditos:', {
-      anterior: userCredits,
-      novo: newCredits,
-      diferença: userCredits - newCredits
-    });
-    
     setUserCredits(newCredits);
     
     const user = localStorage.getItem('zavlo_user');

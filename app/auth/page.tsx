@@ -80,7 +80,7 @@ export default function Auth() {
       setMessage({ type: 'success', text: successMsg });
       
       setTimeout(() => {
-        router.push('/plans');
+        router.push(isLogin ? '/dashboard' : '/plans');
       }, 1000);
     } catch (error) {
       setMessage({ type: 'error', text: 'Erro ao conectar com o servidor' });

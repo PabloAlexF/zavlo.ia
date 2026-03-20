@@ -17,3 +17,14 @@ export function getPlanPrice(plan: string, cycle: 'monthly' | 'yearly'): number 
 export function getPlanCredits(plan: string, cycle: 'monthly' | 'yearly'): number {
   return PLAN_CREDITS[plan]?.[cycle] ?? 15;
 }
+
+const PLAN_LIMITS: Record<string, { textSearchesPerMonth: number; imageSearchesPerMonth: number }> = {
+  free:     { textSearchesPerMonth: 3,        imageSearchesPerMonth: 0        },
+  basic:    { textSearchesPerMonth: 100,       imageSearchesPerMonth: 20       },
+  pro:      { textSearchesPerMonth: 500,       imageSearchesPerMonth: 100      },
+  business: { textSearchesPerMonth: Infinity,  imageSearchesPerMonth: Infinity },
+};
+
+export function getPlanLimits(plan: string) {
+  return PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+}

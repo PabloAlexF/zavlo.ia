@@ -5,8 +5,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
 import { transactionService, Transaction } from '@/lib/transactions';
 import { getPlanLimits } from '@/lib/plans';
 import { motion } from 'framer-motion';
@@ -71,7 +69,7 @@ export default function Profile() {
       };
       
       loadProfile();
-      const interval = setInterval(loadProfile, 5000);
+      const interval = setInterval(loadProfile, 30000);
       return () => clearInterval(interval);
     }
   }, [user?.userId]);
@@ -112,8 +110,9 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
+  const handleLogout = () => {
+    localStorage.removeItem('zavlo_user');
+    window.dispatchEvent(new Event('userChanged'));
     router.push('/');
   };
 
@@ -338,7 +337,7 @@ export default function Profile() {
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm font-medium text-gray-300">Buscas por Texto</span>
                     <span className="text-sm font-bold text-white">
-                      {user.searchesUsedToday || 0} / {planLimits.textSearches === Infinity ? '∞' : planLimits.textSearches}
+                      {user.searchesUsedToday || 0} / {planLimits.textSearchesPerMonth === Infinity ? '∞' : planLimits.textSearchesPerMonth}
                     </span>
                   </div>
                   <div className="h-3 rounded-full bg-white/5 overflow-hidden">
@@ -346,9 +345,9 @@ export default function Profile() {
                       className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
                       initial={{ width: 0 }}
                       animate={{ 
-                        width: planLimits.textSearches === Infinity 
+                        width: planLimits.textSearchesPerMonth === Infinity 
                           ? '50%' 
-                          : `${Math.min(((user.searchesUsedToday || 0) / planLimits.textSearches) * 100, 100)}%` 
+                          : `${Math.min(((user.searchesUsedToday || 0) / planLimits.textSearchesPerMonth) * 100, 100)}%` 
                       }}
                       transition={{ duration: 1, ease: "easeOut" }}
                     />
@@ -359,7 +358,7 @@ export default function Profile() {
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm font-medium text-gray-300">Análises por Imagem</span>
                     <span className="text-sm font-bold text-white">
-                      {user.imageSearchesUsedToday || 0} / {planLimits.imageSearches === Infinity ? '∞' : planLimits.imageSearches}
+                      {user.imageSearchesUsedToday || 0} / {planLimits.imageSearchesPerMonth === Infinity ? '∞' : planLimits.imageSearchesPerMonth}
                     </span>
                   </div>
                   <div className="h-3 rounded-full bg-white/5 overflow-hidden">
@@ -367,11 +366,11 @@ export default function Profile() {
                       className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
                       initial={{ width: 0 }}
                       animate={{ 
-                        width: planLimits.imageSearches === Infinity 
+                        width: planLimits.imageSearchesPerMonth === Infinity 
                           ? '50%' 
-                          : planLimits.imageSearches === 0 
+                          : planLimits.imageSearchesPerMonth === 0 
                           ? '0%' 
-                          : `${Math.min(((user.imageSearchesUsedToday || 0) / planLimits.imageSearches) * 100, 100)}%` 
+                          : `${Math.min(((user.imageSearchesUsedToday || 0) / planLimits.imageSearchesPerMonth) * 100, 100)}%` 
                       }}
                       transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
                     />

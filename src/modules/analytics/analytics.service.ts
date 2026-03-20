@@ -40,7 +40,7 @@ export class AnalyticsService {
     }
   }
 
-  async getSearchMetrics(days: number = 7): Promise<any> {
+  async getSearchMetrics(days: number = 7, userId?: string): Promise<any> {
     const metrics = {
       totalSearches: 0,
       textSearches: 0,
@@ -55,11 +55,16 @@ export class AnalyticsService {
       const endDate = new Date();
       const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
 
-      const snapshot = await this.firebaseService.getFirestore()
+      let query: any = this.firebaseService.getFirestore()
         .collection('search_logs')
         .where('timestamp', '>=', startDate)
-        .where('timestamp', '<=', endDate)
-        .get();
+        .where('timestamp', '<=', endDate);
+
+      if (userId) {
+        query = query.where('userId', '==', userId);
+      }
+
+      const snapshot = await query.get();
 
       const logs = snapshot.docs.map(doc => doc.data() as SearchLog);
 

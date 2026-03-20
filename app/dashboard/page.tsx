@@ -162,14 +162,12 @@ export default function DashboardPage() {
       const profileResponse = await fetchWithRetry(`${API_URL}/users/profile`, { headers });
       if (profileResponse.ok) {
         const userProfile = await profileResponse.json();
-        console.log('✅ Dados do perfil carregados:', userProfile);
         setUserName(userProfile.name || 'Usuário');
         
         const usageResponse = await fetchWithRetry(`${API_URL}/users/usage`, { headers });
         let usageData = { textToday: 0, imageToday: 0, textMonth: 0, imageMonth: 0 };
         if (usageResponse.ok) {
           usageData = await usageResponse.json();
-          console.log('✅ Dados de uso carregados:', usageData);
         }
 
         const favoritesResponse = await fetchWithRetry(`${API_URL}/favorites`, { headers });
@@ -178,7 +176,6 @@ export default function DashboardPage() {
           const favoritesData = await favoritesResponse.json();
           setFavorites(favoritesData.slice(0, 5));
           favoritesCount = favoritesData.length;
-          console.log('✅ Favoritos carregados:', favoritesCount);
         }
 
         const listingsResponse = await fetchWithRetry(`${API_URL}/listings/my`, { headers });
@@ -195,18 +192,16 @@ export default function DashboardPage() {
           const alertsData = await alertsResponse.json();
           setAlerts(alertsData.slice(0, 5));
           alertsCount = alertsData.length;
-          console.log('✅ Alertas carregados:', alertsCount);
         } else {
-          console.warn('⚠️ Erro ao carregar alertas (não crítico)');
+          // não crítico
         }
 
         const alertStatsResponse = await fetchWithRetry(`${API_URL}/price-alerts/stats`, { headers });
         if (alertStatsResponse.ok) {
           const alertStatsData = await alertStatsResponse.json();
           setAlertStats(alertStatsData);
-          console.log('✅ Stats de alertas carregados:', alertStatsData);
         } else {
-          console.warn('⚠️ Erro ao carregar stats de alertas (não crítico)');
+          // não crítico
         }
 
         const notificationsResponse = await fetchWithRetry(`${API_URL}/notifications`, { headers });
@@ -214,9 +209,8 @@ export default function DashboardPage() {
         if (notificationsResponse.ok) {
           const notifications = await notificationsResponse.json();
           notificationsCount = notifications.filter((n: any) => !n.read).length;
-          console.log('✅ Notificações carregadas:', notificationsCount);
         } else {
-          console.warn('⚠️ Erro ao carregar notificações (não crítico)');
+          // não crítico
         }
 
         const planStatusResponse = await fetchWithRetry(`${API_URL}/users/plan-status`, { headers });
@@ -247,14 +241,12 @@ export default function DashboardPage() {
       const metricsResponse = await fetchWithRetry(`${API_URL}/analytics/metrics?days=30`, { headers });
       if (metricsResponse.ok) {
         const metricsData = await metricsResponse.json();
-        console.log('✅ Métricas de analytics carregadas:', metricsData);
         setMetrics(metricsData);
       }
 
       const historyResponse = await fetchWithRetry(`${API_URL}/analytics/history?limit=10`, { headers });
       if (historyResponse.ok) {
         const historyData = await historyResponse.json();
-        console.log('✅ Histórico carregado:', historyData);
         setHistory(historyData);
       }
 
@@ -297,16 +289,6 @@ export default function DashboardPage() {
   const monthlyTotal = (stats?.textSearchesMonth || 0) + (stats?.imageSearchesMonth || 0);
   const hasRealData = monthlyTotal > 0;
   
-  console.log('📊 [DASHBOARD] Dados para gráficos:', {
-    monthlyTotal,
-    textSearchesMonth: stats?.textSearchesMonth,
-    imageSearchesMonth: stats?.imageSearchesMonth,
-    textSearchesToday: stats?.textSearchesToday,
-    imageSearchesToday: stats?.imageSearchesToday,
-    hasRealData,
-    metricsAvailable: !!metrics?.dailyStats,
-  });
-  
   // Gráfico de Atividade Mensal (12 meses)
   const salesData = metrics?.dailyStats && metrics.dailyStats.length > 0
     ? metrics.dailyStats.slice(-12).map(d => d.searches || 0)
@@ -316,7 +298,6 @@ export default function DashboardPage() {
         const data = Array(11).fill(0);
         // Colocar todas as buscas no mês atual (último)
         data.push(monthlyTotal);
-        console.log('📊 [DASHBOARD] Gráfico mensal (simulado):', data);
         return data;
       })()
     : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -342,7 +323,6 @@ export default function DashboardPage() {
           Math.round(avgPerDay * 0.6), // Sáb
           todaySearches > 0 ? todaySearches : Math.round(avgPerDay * 0.7), // Dom (hoje)
         ];
-        console.log('📊 [DASHBOARD] Gráfico semanal (simulado):', weekData);
         return weekData;
       })()
     : [0, 0, 0, 0, 0, 0, 0];
