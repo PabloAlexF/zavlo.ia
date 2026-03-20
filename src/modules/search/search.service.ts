@@ -449,18 +449,19 @@ export class SearchService {
 
     // GOOGLE SHOPPING SEARCH (planos pagos)
     let products: Product[] = [];
-    const fixedLimit = 20; // ✅ SEMPRE 20 resultados
-    const usedSources: string[] = []; // Declarar antes do try
+    const fixedLimit = 20;
+    const usedSources: string[] = [];
+    let availableExpansionSources: string[] = [];
+    let primarySource = '';
 
     // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
     const category = classification?.category;
     const scrapers = (classification?.scrapers as { name: string; score: number }[] | undefined)
       ?.map(s => s.name)
       ?? (category === 'car' || category === 'motorcycle' ? ['mercadolivre', 'webmotors', 'olx'] : ['google_shopping', 'mercadolivre', 'olx']);
-    const SATISFACTORY_THRESHOLD = 20; // ML retornou suficiente → parar e oferecer expansão
+    const SATISFACTORY_THRESHOLD = 20;
     const resultLimit = 20;
     let searchedNationally = false;
-    // Normalizar cidade: decodificar URL encoding e capitalizar
     const rawCity = classification?.user_location?.city || undefined;
     const originalCity = rawCity
       ? rawCity.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
@@ -468,14 +469,17 @@ export class SearchService {
     this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
 
     try {
-      // ✅ ESTRATÉGIA: Executar scrapers sequencialmente.
-      // Se o primeiro retornar >= SATISFACTORY_THRESHOLD resultados, parar e oferecer expansão.
-      // Veículos (webmotors) sempre executam sem threshold.
       const isVehicle = category === 'car' || category === 'motorcycle';
-      let primarySource = '';
-      let availableExpansionSources: string[] = [];
 
-      for (const scraper of scrapers) {
+      // Para veículos: buscar SOMENTE Mercado Livre primeiro.
+      // Webmotors e OLX ficam disponíveis como expansão (usuário decide).
+      const vehiclePrimaryScrapers = isVehicle ? ['mercadolivre'] : scrapers;
+      const vehicleExpansionPool = isVehicle
+        ? ['webmotors', 'olx'].filter(s => this.isScraperAvailable(s))
+        : [];
+      const activeScrapers = isVehicle ? vehiclePrimaryScrapers : scrapers;
+
+      for (const scraper of activeScrapers) {
         if (!this.isScraperAvailable(scraper)) {
           this.logger.warn(`[${scraper.toUpperCase()}] Pulado - circuit breaker ativo`);
           continue;
@@ -485,8 +489,8 @@ export class SearchService {
         let cached = false;
 
         // Verificar cache
-        const cacheKey = `${normalizedQuery}:${resultLimit}`;
-        const cachedData = await this.getCachedScraperResult(scraper, cacheKey);
+        const scraperCacheKey = `${normalizedQuery}:${resultLimit}:${classification?.condition || 'any'}:${classification?.detected_year || '0'}:${classification?.user_location?.city || 'all'}`;
+        const cachedData = await this.getCachedScraperResult(scraper, scraperCacheKey);
         if (cachedData) {
           scraperResults = cachedData;
           cached = true;
@@ -495,7 +499,7 @@ export class SearchService {
           try {
             if (scraper === 'mercadolivre') {
               const { results } = await this.withTimeout(
-                this.mercadoLivreService.search(normalizedQuery, resultLimit),
+                this.mercadoLivreService.search(normalizedQuery, resultLimit, classification),
                 60000, 'MercadoLivre'
               );
               scraperResults = results;
@@ -517,7 +521,7 @@ export class SearchService {
                 8000, 'GoogleShopping'
               );
             }
-            await this.setCachedScraperResult(scraper, cacheKey, scraperResults);
+            await this.setCachedScraperResult(scraper, scraperCacheKey, scraperResults);
             this.resetScraperFailures(scraper);
           } catch (error) {
             this.logger.warn(`[${scraper.toUpperCase()}] Erro: ${error.message}`);
@@ -531,9 +535,15 @@ export class SearchService {
 
         if (primarySource === '') primarySource = scraper;
 
-        // Se não é veículo e já temos resultados suficientes, parar e oferecer expansão
-        if (!isVehicle && products.length >= SATISFACTORY_THRESHOLD) {
-          // Calcular quais scrapers ainda não foram usados
+        // Para veículos: sempre parar após Mercado Livre e oferecer expansão
+        if (isVehicle) {
+          availableExpansionSources = vehicleExpansionPool;
+          this.logger.log(`🚗 [VEHICLE STRATEGY] Mercado Livre concluído (${products.length} resultados). Expansão disponível: ${availableExpansionSources.join(', ') || 'nenhuma'}`);
+          break;
+        }
+
+        // Para não-veículos: parar se já temos resultados suficientes
+        if (products.length >= SATISFACTORY_THRESHOLD) {
           availableExpansionSources = scrapers
             .filter(s => !usedSources.some(u => u.startsWith(s)))
             .filter(s => this.isScraperAvailable(s));
@@ -541,8 +551,6 @@ export class SearchService {
           break;
         }
       }
-
-      // Fontes de expansão ficam em variáveis locais (evita race condition no singleton)
 
       this.logger.log(`📊 [TOTAL] ${products.length} produtos consolidados de ${scrapers.length} fonte(s)`);
       this.logger.log(`💾 [SOURCES] Fontes usadas: ${usedSources.join(', ')}`);

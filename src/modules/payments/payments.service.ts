@@ -1,7 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
+import { FirebaseService } from '@config/firebase.service';
 import axios from 'axios';
+
+// Mapeamento de créditos por plano (sincronizado com plans.constants.ts)
+const PLAN_CREDITS_MAP: Record<string, { monthly: number; yearly: number }> = {
+  basic:    { monthly: 15,  yearly: 180  },
+  pro:      { monthly: 48,  yearly: 576  },
+  business: { monthly: 200, yearly: 2400 },
+};
 
 @Injectable()
 export class PaymentsService {
@@ -11,58 +19,37 @@ export class PaymentsService {
   constructor(
     private configService: ConfigService,
     private usersService: UsersService,
+    private firebaseService: FirebaseService,
   ) {
     this.accessToken = this.configService.get('MERCADOPAGO_ACCESS_TOKEN');
     this.logger.log('PaymentsService initialized');
     this.logger.debug('Access token present:', !!this.accessToken);
   }
 
-  async debugInfo() {
-    const hasToken = !!this.accessToken;
-    const tokenValue = this.accessToken || 'NO_TOKEN_SET';
-    
-    return {
-      hasAccessToken: hasToken,
-      tokenStart: hasToken ? tokenValue.substring(0, 20) + '...' : 'NO_TOKEN',
-      envCheck: !!this.configService.get('MERCADOPAGO_ACCESS_TOKEN'),
-      nodeEnv: this.configService.get('NODE_ENV'),
-      port: this.configService.get('PORT'),
-      mercadopagoConfigured: hasToken && tokenValue.length > 10,
-    };
+  private resolveCreditsForPlan(plan: string, amount: number): { credits: number; billingCycle: 'monthly' | 'yearly' } {
+    const billingCycle = amount >= 200 ? 'yearly' : 'monthly';
+    const credits = PLAN_CREDITS_MAP[plan]?.[billingCycle] ?? PLAN_CREDITS_MAP['basic'].monthly;
+    return { credits, billingCycle };
   }
 
-  async testConnection() {
+  private async isPaymentProcessed(paymentId: string): Promise<boolean> {
     try {
-      this.logger.log('Testing Mercado Pago connection...');
-      
-      if (!this.accessToken) {
-        return { 
-          error: 'MERCADOPAGO_ACCESS_TOKEN not configured',
-          solution: 'Add MERCADOPAGO_ACCESS_TOKEN to your .env file',
-          hint: 'Get your token from https://www.mercadopago.com.br/developers/panel/credentials'
-        };
-      }
-      
-      const response = await axios.get(
-        'https://api.mercadopago.com/v1/payment_methods',
-        {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-        }
-      );
-      
-      return {
-        success: true,
-        message: 'Mercado Pago connection successful',
-        methods: response.data.length,
-      };
+      const firestore = this.firebaseService.getFirestore();
+      if (!firestore) return false;
+      const doc = await firestore.collection('processed_payments').doc(paymentId).get();
+      return doc.exists;
+    } catch {
+      return false;
+    }
+  }
+
+  private async markPaymentProcessed(paymentId: string): Promise<void> {
+    try {
+      const firestore = this.firebaseService.getFirestore();
+      if (!firestore) return;
+      await firestore.collection('processed_payments').doc(paymentId).set({ processedAt: new Date() });
     } catch (error) {
-      this.logger.error('Mercado Pago connection failed:', error.response?.data || error.message);
-      return {
-        error: 'Connection failed',
-        details: error.response?.data || error.message,
-      };
+      this.logger.error('[WEBHOOK] Failed to mark payment as processed:', error.message);
     }
   }
 
@@ -77,13 +64,9 @@ export class PaymentsService {
   }) {
     try {
       this.logger.log('[CARD] Creating direct card payment...');
-      
+
       if (!this.accessToken) {
-        return {
-          error: true,
-          statusCode: 503,
-          message: 'Payment gateway is not configured',
-        };
+        return { error: true, statusCode: 503, message: 'Payment gateway is not configured' };
       }
 
       const payload = {
@@ -91,7 +74,6 @@ export class PaymentsService {
         token: data.cardToken,
         description: `Plano ${data.plan} - Zavlo.ia`,
         installments: data.installments,
-        payment_method_id: 'visa', // Será detectado automaticamente pelo token
         payer: {
           email: data.payer.email,
           identification: {
@@ -99,11 +81,11 @@ export class PaymentsService {
             number: data.payer.identification?.number,
           },
         },
-        external_reference: `${data.userId}-${data.plan}`,
+        external_reference: `${data.userId}|${data.plan}`,
         statement_descriptor: 'ZAVLO.IA',
       };
 
-      this.logger.log('[CARD] Payload:', JSON.stringify(payload, null, 2));
+      this.logger.log('[CARD] Creating payment:', { plan: data.plan, amount: data.amount, userId: data.userId });
 
       const response = await axios.post(
         'https://api.mercadopago.com/v1/payments',
@@ -117,26 +99,13 @@ export class PaymentsService {
         }
       );
 
-      this.logger.log('[CARD] Payment created:', response.data.id);
-      this.logger.log('[CARD] Status:', response.data.status);
+      this.logger.log('[CARD] Payment created:', response.data.id, 'Status:', response.data.status);
 
-      // Se aprovado, atualizar usuário imediatamente
       if (response.data.status === 'approved') {
-        const billingCycle = (data.plan === 'basic' && data.amount >= 300) || (data.plan === 'pro' && data.amount >= 700) || (data.plan === 'business' && data.amount >= 2000) ? 'yearly' : 'monthly';
-        let creditsToAdd = 15;
-        
-        if (data.plan === 'basic') {
-          creditsToAdd = billingCycle === 'yearly' ? 180 : 15;
-        } else if (data.plan === 'pro') {
-          creditsToAdd = billingCycle === 'yearly' ? 576 : 48;
-        } else if (data.plan === 'business') {
-          creditsToAdd = billingCycle === 'yearly' ? 2400 : 200;
-        }
-
-        await this.usersService.addCredits(data.userId, creditsToAdd);
+        const { credits, billingCycle } = this.resolveCreditsForPlan(data.plan, data.amount);
+        await this.usersService.addCredits(data.userId, credits);
         await this.usersService.updatePlan(data.userId, data.plan as any, billingCycle);
-        
-        this.logger.log(`[CARD] ✅ User updated: ${creditsToAdd} credits, plan ${data.plan}`);
+        this.logger.log(`[CARD] ✅ User updated: ${credits} credits, plan ${data.plan}`);
       }
 
       return {
@@ -148,21 +117,10 @@ export class PaymentsService {
       };
     } catch (error) {
       this.logger.error('[CARD] Error:', error.response?.data || error.message);
-      
       if (error.response) {
-        return {
-          error: true,
-          statusCode: error.response.status,
-          message: error.response.data?.message || 'Payment failed',
-          details: error.response.data,
-        };
+        return { error: true, statusCode: error.response.status, message: error.response.data?.message || 'Payment failed', details: error.response.data };
       }
-      
-      return {
-        error: true,
-        statusCode: 500,
-        message: 'Internal payment error',
-      };
+      return { error: true, statusCode: 500, message: 'Internal payment error' };
     }
   }
 
@@ -171,58 +129,29 @@ export class PaymentsService {
     amount: number;
     userId: string;
     userEmail: string;
-    payer?: {
-      name?: string;
-      surname?: string;
-      email?: string;
-      phone?: { number?: string };
-    };
+    payer?: { name?: string; surname?: string; email?: string; phone?: { number?: string } };
   }) {
     try {
       this.logger.log('[PAYMENT] Creating payment preference:', { plan: data.plan, amount: data.amount });
-      
+
       if (!this.accessToken) {
-        this.logger.error('[PAYMENT] MERCADOPAGO_ACCESS_TOKEN is not configured');
-        return {
-          error: true,
-          statusCode: 503,
-          message: 'Payment gateway is not configured',
-          solution: 'Add MERCADOPAGO_ACCESS_TOKEN to your .env file'
-        };
-      }
-      
-      // Preparar dados do pagador
-      const payerData: any = {
-        email: data.payer?.email || data.userEmail,
-      };
-
-      // Adicionar nome se fornecido
-      if (data.payer?.name) {
-        payerData.name = data.payer.name;
-      }
-      if (data.payer?.surname) {
-        payerData.surname = data.payer.surname;
+        return { error: true, statusCode: 503, message: 'Payment gateway is not configured', solution: 'Add MERCADOPAGO_ACCESS_TOKEN to your .env file' };
       }
 
-      // Adicionar telefone se fornecido
+      const payerData: any = { email: data.payer?.email || data.userEmail };
+      if (data.payer?.name) payerData.name = data.payer.name;
+      if (data.payer?.surname) payerData.surname = data.payer.surname;
       if (data.payer?.phone?.number) {
         payerData.phone = {
           area_code: data.payer.phone.number.substring(0, 2),
           number: data.payer.phone.number.substring(2),
         };
       }
-      
+
       const response = await axios.post(
         'https://api.mercadopago.com/checkout/preferences',
         {
-          items: [
-            {
-              title: `Plano ${data.plan} - Zavlo.ia`,
-              quantity: 1,
-              unit_price: data.amount,
-              currency_id: 'BRL',
-            },
-          ],
+          items: [{ title: `Plano ${data.plan} - Zavlo.ia`, quantity: 1, unit_price: data.amount, currency_id: 'BRL' }],
           payer: payerData,
           back_urls: {
             success: 'https://zavlo.ia/checkout/success',
@@ -230,40 +159,19 @@ export class PaymentsService {
             pending: 'https://zavlo.ia/checkout/pending',
           },
           auto_return: 'approved',
-          external_reference: `${data.userId}-${data.plan}`,
+          external_reference: `${data.userId}|${data.plan}`,
           statement_descriptor: 'ZAVLO.IA',
         },
-        {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' } }
       );
 
-      return {
-        id: response.data.id,
-        init_point: response.data.init_point,
-        sandbox_init_point: response.data.sandbox_init_point,
-      };
+      return { id: response.data.id, init_point: response.data.init_point, sandbox_init_point: response.data.sandbox_init_point };
     } catch (error) {
       this.logger.error('[PAYMENT] Mercado Pago Error:', error.response?.data || error.message);
-      
       if (error.response) {
-        return {
-          error: true,
-          statusCode: error.response.status,
-          message: error.response.data?.message || 'Payment failed',
-          details: error.response.data,
-        };
+        return { error: true, statusCode: error.response.status, message: error.response.data?.message || 'Payment failed', details: error.response.data };
       }
-      
-      return {
-        error: true,
-        statusCode: 500,
-        message: 'Internal payment error',
-        details: error.message,
-      };
+      return { error: true, statusCode: 500, message: 'Internal payment error', details: error.message };
     }
   }
 
@@ -272,106 +180,56 @@ export class PaymentsService {
     amount: number;
     userId: string;
     userEmail: string;
-    payer?: {
-      firstName?: string;
-      lastName?: string;
-      email?: string;
-      phone?: string;
-      cpf?: string;
-    };
+    payer?: { firstName?: string; lastName?: string; email?: string; phone?: string; cpf?: string };
   }) {
     try {
-      this.logger.log('[PIX] Starting payment creation...');
-      this.logger.log('[PIX] Input data:', { plan: data.plan, amount: data.amount, userId: data.userId, email: data.userEmail });
-      this.logger.log('[PIX] Payer data:', data.payer);
-      
-      // Validate email format
+      this.logger.log('[PIX] Starting payment creation...', { plan: data.plan, amount: data.amount, userId: data.userId });
+
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(data.userEmail)) {
-        this.logger.error('[PIX] Invalid email format:', data.userEmail);
-        return {
-          error: true,
-          statusCode: 400,
-          message: 'Email inválido',
-          details: 'O email fornecido não é válido',
-        };
+        return { error: true, statusCode: 400, message: 'Email inválido', details: 'O email fornecido não é válido' };
       }
-      
-      // Check if token is configured FIRST, before making any API calls
+
       if (!this.accessToken) {
-        this.logger.error('[PIX] MERCADOPAGO_ACCESS_TOKEN is not configured in .env file');
-        
-        // Return a clear error instead of throwing
         return {
-          error: true,
-          statusCode: 503,
-          message: 'Payment gateway is not configured',
-          details: 'MERCADOPAGO_ACCESS_TOKEN is missing. Please configure your Mercado Pago credentials.',
-          solution: 'Add MERCADOPAGO_ACCESS_TOKEN to your backend/.env file. Get your credentials from: https://www.mercadopago.com.br/developers/panel/credentials',
-          hint: 'For testing, you can use the /pix-test endpoint without authentication',
+          error: true, statusCode: 503, message: 'Payment gateway is not configured',
+          details: 'MERCADOPAGO_ACCESS_TOKEN is missing.',
+          solution: 'Add MERCADOPAGO_ACCESS_TOKEN to your backend/.env file.',
         };
       }
-      
-      this.logger.log('[PIX] Access token check:', {
-        hasToken: !!this.accessToken,
-        tokenStart: this.accessToken.substring(0, 20),
-        tokenLength: this.accessToken.length,
-      });
-      
-      // Generate idempotency key
+
       const idempotencyKey = `${data.userId}-${data.plan}-${Date.now()}`;
-      
-      // Clean and validate email one more time
       const cleanEmail = data.userEmail.trim().toLowerCase();
-      
-      // Prepare payer object with all available data
+
       const payerData: any = {
         email: cleanEmail,
         first_name: data.payer?.firstName || 'Cliente',
         last_name: data.payer?.lastName || 'Zavlo',
       };
-      
-      // Add CPF if provided (required for production)
+
       if (data.payer?.cpf) {
-        const cpfClean = data.payer.cpf.replace(/\D/g, '');
-        payerData.identification = {
-          type: 'CPF',
-          number: cpfClean,
-        };
+        payerData.identification = { type: 'CPF', number: data.payer.cpf.replace(/\D/g, '') };
       }
-      
-      // Add phone if provided
+
       if (data.payer?.phone) {
         const phoneClean = data.payer.phone.replace(/\D/g, '');
         if (phoneClean.length >= 10) {
-          payerData.phone = {
-            area_code: phoneClean.substring(0, 2),
-            number: phoneClean.substring(2),
-          };
+          payerData.phone = { area_code: phoneClean.substring(0, 2), number: phoneClean.substring(2) };
         }
       }
-      
+
       const payload = {
         transaction_amount: data.amount,
         description: `Plano ${data.plan} - Zavlo.ia`,
         payment_method_id: 'pix',
         payer: payerData,
-        external_reference: `${data.userId}-${data.plan}`,
+        external_reference: `${data.userId}|${data.plan}`,
         statement_descriptor: 'ZAVLO.IA',
         notification_url: `${this.configService.get('API_URL') || 'https://zavlo-ia.onrender.com/api/v1'}/payments/webhook`,
       };
-      
-      this.logger.log('[PIX] Request payload:', JSON.stringify(payload, null, 2));
-      this.logger.log('[PIX] Payer object:', JSON.stringify(payerData, null, 2));
-      this.logger.log('[PIX] Idempotency-Key:', idempotencyKey);
-      this.logger.log('[PIX] Making request to Mercado Pago...');
-      this.logger.log('[PIX] URL:', 'https://api.mercadopago.com/v1/payments');
-      this.logger.log('[PIX] Headers:', {
-        Authorization: `Bearer ${this.accessToken.substring(0, 20)}...`,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': idempotencyKey,
-      });
-      
+
+      this.logger.log(`[PIX] Sending payment request, idempotency-key: ${idempotencyKey}`);
+
       const response = await axios.post(
         'https://api.mercadopago.com/v1/payments',
         payload,
@@ -384,9 +242,8 @@ export class PaymentsService {
         }
       );
 
-      this.logger.log('[PIX] Success! Payment ID:', response.data.id);
-      this.logger.log('[PIX] Response status:', response.data.status);
-      
+      this.logger.log('[PIX] Success! Payment ID:', response.data.id, 'Status:', response.data.status);
+
       return {
         id: response.data.id,
         payment_id: response.data.id,
@@ -396,138 +253,87 @@ export class PaymentsService {
         ticket_url: response.data.point_of_interaction?.transaction_data?.ticket_url,
       };
     } catch (error) {
-      this.logger.error('[PIX] ERROR OCCURRED!');
-      this.logger.error('[PIX] Error type:', error.constructor.name);
-      this.logger.error('[PIX] Error message:', error.message);
-      
+      this.logger.error('[PIX] Error:', error.message);
       if (error.response) {
-        this.logger.error('[PIX] HTTP Status:', error.response.status);
-        this.logger.error('[PIX] HTTP Status Text:', error.response.statusText);
-        this.logger.error('[PIX] Response Data:', JSON.stringify(error.response.data, null, 2));
-        
-        // Return a more informative error instead of throwing
         return {
-          error: true,
-          statusCode: error.response.status,
+          error: true, statusCode: error.response.status,
           message: error.response.data?.message || 'Payment failed',
           details: error.response.data,
           merchant_message: error.response.data?.cause?.[0]?.description || error.response.data?.message || 'Unknown error',
         };
       } else if (error.request) {
-        this.logger.error('[PIX] No response received:', error.request);
-        return {
-          error: true,
-          statusCode: 503,
-          message: 'Payment gateway unavailable',
-          details: 'Could not reach Mercado Pago API',
-        };
-      } else {
-        this.logger.error('[PIX] Request setup error:', error.message);
-        return {
-          error: true,
-          statusCode: 500,
-          message: error.message || 'Internal payment error',
-        };
+        return { error: true, statusCode: 503, message: 'Payment gateway unavailable', details: 'Could not reach Mercado Pago API' };
       }
+      return { error: true, statusCode: 500, message: error.message || 'Internal payment error' };
     }
   }
 
   async handleWebhook(data: any) {
     try {
       this.logger.log('[WEBHOOK] Received notification:', JSON.stringify(data, null, 2));
-      
-      // Mercado Pago webhook structure
+
       if (data.type === 'payment') {
         const paymentId = data.data?.id;
-        
+
         if (paymentId) {
-          // Get payment details
           const paymentDetails = await this.getPaymentDetails(paymentId);
-          
           this.logger.log('[WEBHOOK] Payment details:', paymentDetails);
-          
-          // Process payment status
+
+          // Idempotência: evitar processar o mesmo pagamento duas vezes
+          const alreadyProcessed = await this.isPaymentProcessed(String(paymentId));
+          if (alreadyProcessed) {
+            this.logger.warn(`[WEBHOOK] Payment ${paymentId} already processed, skipping.`);
+            return { received: true, processed: false, reason: 'already_processed' };
+          }
+
           if (paymentDetails.status === 'approved') {
             this.logger.log('[WEBHOOK] Payment approved:', paymentId);
-            
-            // Extract userId and planName from external_reference (format: userId-planName)
+
+            // Separador | para evitar ambiguidade com Firebase UIDs que contêm hífens
             const externalRef = paymentDetails.external_reference || '';
-            const dashIdx = externalRef.indexOf('-');
-            const userId = dashIdx >= 0 ? externalRef.slice(0, dashIdx) : externalRef;
-            const planName = dashIdx >= 0 ? externalRef.slice(dashIdx + 1) : 'basic';
+            const separatorIdx = externalRef.indexOf('|');
+            const userId = externalRef.substring(0, separatorIdx);
+            const planName = externalRef.substring(separatorIdx + 1);
             const amount = paymentDetails.transaction_amount;
-            
+
             if (userId && planName) {
               this.logger.log(`[WEBHOOK] Processing payment for user ${userId}, plan ${planName}`);
-              
-              // Check if it's a credits purchase
+
+              await this.markPaymentProcessed(String(paymentId));
+
               if (planName.startsWith('credits-')) {
                 const credits = parseInt(planName.replace('credits-', ''));
                 await this.usersService.addCredits(userId, credits);
                 this.logger.log(`[WEBHOOK] ✅ Added ${credits} credits to user ${userId}`);
-                
-                return { 
-                  received: true, 
-                  processed: true,
-                  userId,
-                  credits: credits,
-                };
+                return { received: true, processed: true, userId, credits };
               }
-              
-              // 1. Determine credits based on plan and billing cycle
-              let creditsToAdd = 15;
-              const billingCycle = (planName === 'basic' && amount >= 300) || (planName === 'pro' && amount >= 700) || (planName === 'business' && amount >= 2000) ? 'yearly' : 'monthly';
-              
-              if (planName === 'basic') {
-                creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês
-              } else if (planName === 'pro') {
-                creditsToAdd = billingCycle === 'yearly' ? 576 : 48; // 48/mês
-              } else if (planName === 'business') {
-                creditsToAdd = billingCycle === 'yearly' ? 2400 : 200; // 200/mês
-              }
-              
+
+              const { credits: creditsToAdd, billingCycle } = this.resolveCreditsForPlan(planName, amount);
               await this.usersService.addCredits(userId, creditsToAdd);
-              this.logger.log(`[WEBHOOK] ✅ Added ${creditsToAdd} credits to user ${userId}`);
-              
-              // 2. Update user plan
               await this.usersService.updatePlan(userId, planName as any, billingCycle);
-              this.logger.log(`[WEBHOOK] ✅ Updated user plan to ${planName} (${billingCycle})`);
-              
-              // 3. Email confirmation (TODO: implement email service)
-              this.logger.log(`[WEBHOOK] 📧 Email confirmation would be sent here`);
-              
-              return { 
-                received: true, 
-                processed: true,
-                userId,
-                credits: creditsToAdd,
-                plan: planName
-              };
+              this.logger.log(`[WEBHOOK] ✅ user=${userId} plan=${planName} credits=${creditsToAdd}`);
+
+              return { received: true, processed: true, userId, credits: creditsToAdd, plan: planName };
             } else {
               this.logger.warn('[WEBHOOK] Invalid external_reference format:', externalRef);
             }
           }
         }
       }
-      
+
       return { received: true, processed: false };
     } catch (error) {
       this.logger.error('[WEBHOOK] Error processing webhook:', error);
       return { error: true, message: error.message };
     }
   }
-  
+
   async getPaymentDetails(paymentId: string) {
     try {
       const response = await axios.get(
         `https://api.mercadopago.com/v1/payments/${paymentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${this.accessToken}` } }
       );
-      
       return response.data;
     } catch (error) {
       this.logger.error('[WEBHOOK] Error getting payment details:', error);
@@ -541,44 +347,25 @@ export class PaymentsService {
     userId: string;
     userEmail: string;
     payer: {
-      firstName: string;
-      lastName: string;
-      email: string;
-      phone: string;
-      cpf: string;
-      address: {
-        zipCode: string;
-        street: string;
-        number: string;
-        complement?: string;
-        neighborhood: string;
-        city: string;
-        state: string;
-      };
+      firstName: string; lastName: string; email: string; phone: string; cpf: string;
+      address: { zipCode: string; street: string; number: string; complement?: string; neighborhood: string; city: string; state: string };
     };
   }) {
     try {
-      this.logger.log('[BOLETO] Starting payment creation...');
-      this.logger.log('[BOLETO] Input data:', { plan: data.plan, amount: data.amount, userId: data.userId });
-      
+      this.logger.log('[BOLETO] Starting payment creation...', { plan: data.plan, amount: data.amount, userId: data.userId });
+
       if (!this.accessToken) {
-        return {
-          error: true,
-          statusCode: 503,
-          message: 'Payment gateway is not configured',
-        };
+        return { error: true, statusCode: 503, message: 'Payment gateway is not configured' };
       }
 
-      // Limpar e formatar dados
       const cpfClean = data.payer.cpf.replace(/\D/g, '');
       const phoneClean = data.payer.phone.replace(/\D/g, '');
       const zipCodeClean = data.payer.address.zipCode.replace(/\D/g, '');
 
-      // Data de expiração: 3 dias úteis
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + 3);
 
-      const payload = {
+      const payload: any = {
         transaction_amount: data.amount,
         description: `Plano ${data.plan} - Zavlo.ia`,
         payment_method_id: 'bolbradesco',
@@ -586,10 +373,7 @@ export class PaymentsService {
           email: data.payer.email,
           first_name: data.payer.firstName,
           last_name: data.payer.lastName,
-          identification: {
-            type: 'CPF',
-            number: cpfClean,
-          },
+          identification: { type: 'CPF', number: cpfClean },
           address: {
             zip_code: zipCodeClean,
             street_name: data.payer.address.street,
@@ -599,21 +383,15 @@ export class PaymentsService {
             federal_unit: data.payer.address.state,
           },
         },
-        external_reference: `${data.userId}-${data.plan}`,
+        external_reference: `${data.userId}|${data.plan}`,
         statement_descriptor: 'ZAVLO.IA',
         date_of_expiration: expirationDate.toISOString(),
         notification_url: `${this.configService.get('API_URL') || 'https://zavlo-ia.onrender.com/api/v1'}/payments/webhook`,
       };
 
-      // Adicionar telefone se fornecido
       if (phoneClean.length >= 10) {
-        payload.payer['phone'] = {
-          area_code: phoneClean.substring(0, 2),
-          number: phoneClean.substring(2),
-        };
+        payload.payer.phone = { area_code: phoneClean.substring(0, 2), number: phoneClean.substring(2) };
       }
-
-      this.logger.log('[BOLETO] Request payload:', JSON.stringify(payload, null, 2));
 
       const response = await axios.post(
         'https://api.mercadopago.com/v1/payments',
@@ -627,8 +405,7 @@ export class PaymentsService {
         }
       );
 
-      this.logger.log('[BOLETO] Success! Payment ID:', response.data.id);
-      this.logger.log('[BOLETO] Response status:', response.data.status);
+      this.logger.log('[BOLETO] Success! Payment ID:', response.data.id, 'Status:', response.data.status);
 
       return {
         id: response.data.id,
@@ -640,125 +417,68 @@ export class PaymentsService {
         expiration_date: response.data.date_of_expiration,
       };
     } catch (error) {
-      this.logger.error('[BOLETO] ERROR OCCURRED!');
-      this.logger.error('[BOLETO] Error message:', error.message);
-      
+      this.logger.error('[BOLETO] Error:', error.message);
       if (error.response) {
-        this.logger.error('[BOLETO] HTTP Status:', error.response.status);
-        this.logger.error('[BOLETO] Response Data:', JSON.stringify(error.response.data, null, 2));
-        
-        return {
-          error: true,
-          statusCode: error.response.status,
-          message: error.response.data?.message || 'Payment failed',
-          details: error.response.data,
-        };
+        return { error: true, statusCode: error.response.status, message: error.response.data?.message || 'Payment failed', details: error.response.data };
       }
-      
-      return {
-        error: true,
-        statusCode: 500,
-        message: error.message || 'Internal payment error',
-      };
+      return { error: true, statusCode: 500, message: error.message || 'Internal payment error' };
     }
   }
 
   async confirmPixPayment(paymentId: string, userId: string) {
     try {
       this.logger.log(`[PIX CONFIRM] Checking payment ${paymentId} for user ${userId}`);
-      
-      // Get payment details from Mercado Pago
+
       const paymentDetails = await this.getPaymentDetails(paymentId);
-      
-      this.logger.log(`[PIX CONFIRM] Payment status: ${paymentDetails.status}`);
-      this.logger.log(`[PIX CONFIRM] Payment amount: ${paymentDetails.transaction_amount}`);
-      this.logger.log(`[PIX CONFIRM] External reference: ${paymentDetails.external_reference}`);
-      
-      // Check if payment is approved
+      this.logger.log(`[PIX CONFIRM] Status: ${paymentDetails.status}, Amount: ${paymentDetails.transaction_amount}, Ref: ${paymentDetails.external_reference}`);
+
+      // Validar ownership
+      const externalRefCheck = paymentDetails.external_reference || '';
+      const ownerUserId = externalRefCheck.substring(0, externalRefCheck.indexOf('|'));
+      if (ownerUserId && ownerUserId !== userId) {
+        this.logger.warn(`[PIX CONFIRM] Ownership mismatch: token=${userId}, payment owner=${ownerUserId}`);
+        return { success: false, status: 'forbidden', message: 'Pagamento não pertence a este usuário.' };
+      }
+
       if (paymentDetails.status === 'approved') {
-        // Extract plan from external_reference (format: userId-planName)
         const externalRef = paymentDetails.external_reference || '';
-        const dashIdx = externalRef.indexOf('-');
-        const planName = dashIdx >= 0 ? externalRef.slice(dashIdx + 1) : 'basic';
+        const separatorIdx = externalRef.indexOf('|');
+        const planName = externalRef.substring(separatorIdx + 1) || 'basic';
         const amount = paymentDetails.transaction_amount;
-        
+
         this.logger.log(`[PIX CONFIRM] Processing approved payment for plan: ${planName}`);
-        
-        // Check if it's a credits purchase (format: credits-10, credits-25, credits-60)
+
         if (planName.startsWith('credits-')) {
           const credits = parseInt(planName.replace('credits-', ''));
           await this.usersService.addCredits(userId, credits);
           this.logger.log(`[PIX CONFIRM] ✅ Added ${credits} credits to user ${userId}`);
-          
           return {
-            success: true,
-            status: 'approved',
+            success: true, status: 'approved',
             message: 'Pagamento confirmado! Créditos adicionados à sua conta.',
-            payment: {
-              id: paymentDetails.id,
-              status: paymentDetails.status,
-              amount: paymentDetails.transaction_amount,
-            },
-            credits: credits,
+            payment: { id: paymentDetails.id, status: paymentDetails.status, amount: paymentDetails.transaction_amount },
+            credits,
           };
         }
-        
-        // 1. Determine credits based on plan and billing cycle
-        let creditsToAdd = 15;
-        const billingCycle = (planName === 'basic' && amount >= 300) || (planName === 'pro' && amount >= 700) || (planName === 'business' && amount >= 2000) ? 'yearly' : 'monthly';
-        
-        if (planName === 'basic') {
-          creditsToAdd = billingCycle === 'yearly' ? 180 : 15; // 15/mês
-        } else if (planName === 'pro') {
-          creditsToAdd = billingCycle === 'yearly' ? 576 : 48; // 48/mês
-        } else if (planName === 'business') {
-          creditsToAdd = billingCycle === 'yearly' ? 2400 : 200; // 200/mês
-        }
-        
+
+        const { credits: creditsToAdd, billingCycle } = this.resolveCreditsForPlan(planName, amount);
         await this.usersService.addCredits(userId, creditsToAdd);
-        this.logger.log(`[PIX CONFIRM] ✅ Added ${creditsToAdd} credits to user ${userId}`);
-        
-        // 2. Update user plan
         await this.usersService.updatePlan(userId, planName as any, billingCycle);
-        this.logger.log(`[PIX CONFIRM] ✅ Updated user plan to ${planName} (${billingCycle})`);
-        
-        // 3. Send confirmation email (TODO: implement email service)
-        this.logger.log(`[PIX CONFIRM] 📧 Email confirmation would be sent here`);
-        // await this.emailService.sendPaymentConfirmation(userId, planName, amount);
-        
+        this.logger.log(`[PIX CONFIRM] ✅ user=${userId} plan=${planName} credits=${creditsToAdd}`);
+
         return {
-          success: true,
-          status: 'approved',
+          success: true, status: 'approved',
           message: 'Pagamento confirmado! Créditos adicionados à sua conta.',
-          payment: {
-            id: paymentDetails.id,
-            status: paymentDetails.status,
-            amount: paymentDetails.transaction_amount,
-          },
-          credits: creditsToAdd,
-          plan: planName,
+          payment: { id: paymentDetails.id, status: paymentDetails.status, amount: paymentDetails.transaction_amount },
+          credits: creditsToAdd, plan: planName,
         };
       } else if (paymentDetails.status === 'pending') {
-        return {
-          success: false,
-          status: 'pending',
-          message: 'Pagamento ainda não foi identificado. Aguarde alguns instantes.',
-        };
+        return { success: false, status: 'pending', message: 'Pagamento ainda não foi identificado. Aguarde alguns instantes.' };
       } else {
-        return {
-          success: false,
-          status: paymentDetails.status,
-          message: 'Pagamento não foi aprovado.',
-        };
+        return { success: false, status: paymentDetails.status, message: 'Pagamento não foi aprovado.' };
       }
     } catch (error) {
       this.logger.error('[PIX CONFIRM] Error:', error);
-      return {
-        success: false,
-        status: 'error',
-        message: 'Erro ao verificar pagamento.',
-        error: error.message,
-      };
+      return { success: false, status: 'error', message: 'Erro ao verificar pagamento.', error: error.message };
     }
   }
 }
