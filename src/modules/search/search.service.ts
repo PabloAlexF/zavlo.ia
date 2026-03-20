@@ -413,16 +413,32 @@ export class SearchService {
       }
     }
 
+    // GOOGLE SHOPPING SEARCH (planos pagos)
+    let products: Product[] = [];
+    const fixedLimit = 20;
+    const usedSources: string[] = [];
+    let availableExpansionSources: string[] = [];
+    let primarySource = '';
+
+    // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
+    const category = classification?.category;
+    const scrapers = (classification?.scrapers as { name: string; score: number }[] | undefined)
+      ?.map(s => s.name)
+      ?? (category === 'car' || category === 'motorcycle' ? ['mercadolivre', 'webmotors', 'olx'] : ['google_shopping', 'mercadolivre', 'olx']);
+    const SATISFACTORY_THRESHOLD = 20;
+    const resultLimit = 20;
+    let searchedNationally = false;
+    const rawCity = classification?.user_location?.city || undefined;
+    const originalCity = rawCity
+      ? rawCity.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
+      : undefined;
+    this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
+
     // Se freeMode (plano free/usuário não logado), busca limitada
     if (filters?.freeMode) {
-      const fixedLimit = 20;
-      const category = classification?.category;
-      
-      // Veículos: usar scrapers corretos mesmo no freeMode
-      if (category === 'car' || category === 'motorcycle') {
-        this.logger.log(`🆓 [FREE MODE] Veículo detectado - usando scrapers de veículos`);
-        // Não retorna aqui, deixa cair no bloco de scrapers abaixo
-      } else {
+      const isVehicleFree = category === 'car' || category === 'motorcycle';
+
+      if (!isVehicleFree) {
         this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - ${fixedLimit} resultados (freeMode=${filters.freeMode})`);
         
         try {
@@ -454,29 +470,9 @@ export class SearchService {
           remainingCredits
         };
       }
+      // Veículos no freeMode: cai no loop principal abaixo
+      this.logger.log(`🆓 [FREE MODE] Veículo detectado - usando scrapers de veículos`);
     }
-
-    // GOOGLE SHOPPING SEARCH (planos pagos)
-    let products: Product[] = [];
-    const fixedLimit = 20;
-    const usedSources: string[] = [];
-    let availableExpansionSources: string[] = [];
-    let primarySource = '';
-
-    // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
-    const category = classification?.category;
-    const scrapers = (classification?.scrapers as { name: string; score: number }[] | undefined)
-      ?.map(s => s.name)
-      ?? (category === 'car' || category === 'motorcycle' ? ['mercadolivre', 'webmotors', 'olx'] : ['google_shopping', 'mercadolivre', 'olx']);
-    const SATISFACTORY_THRESHOLD = 20; // ML retornou suficiente → parar e oferecer expansão
-    const resultLimit = 20;
-    let searchedNationally = false;
-    // Normalizar cidade: decodificar URL encoding e capitalizar
-    const rawCity = classification?.user_location?.city || undefined;
-    const originalCity = rawCity
-      ? rawCity.replace(/\+/g, ' ').replace(/%20/g, ' ').trim()
-      : undefined;
-    this.logger.log(`🎯 [SCRAPERS] Executando: ${scrapers.join(', ')} com limite fixo de ${resultLimit} resultados`);
 
     try {
       // ✅ ESTRATÉGIA: Executar scrapers sequencialmente.
@@ -486,9 +482,10 @@ export class SearchService {
 
       // Para veículos: buscar SOMENTE Mercado Livre primeiro.
       // Webmotors e OLX ficam disponíveis como expansão (usuário decide).
+      // Garantir expansão independente do que o Python retornar nos scrapers.
       const vehiclePrimaryScrapers = isVehicle ? ['mercadolivre'] : scrapers;
       const vehicleExpansionPool = isVehicle
-        ? scrapers.filter(s => s !== 'mercadolivre').filter(s => this.isScraperAvailable(s))
+        ? ['webmotors', 'olx'].filter(s => this.isScraperAvailable(s))
         : [];
 
       const activeScrapers = isVehicle ? vehiclePrimaryScrapers : scrapers;

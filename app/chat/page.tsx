@@ -788,8 +788,22 @@ export default function ChatPage() {
         return;
       }
 
-      if (intent.type === 'credits_question' || intent.type === 'plans_question') {
-        await classifyQuery(currentInput);
+      if (intent.type === 'credits_question') {
+        const creditsMessage = `💰 **Seus Créditos: ${userCredits}**\n\n📊 **Custos por busca:**\n• Busca por texto: **1 crédito**\n• Busca por imagem: **2 créditos** (1 para identificar + 1 para buscar preços)\n\n🔄 **Precisa de mais créditos?**\nVocê pode comprar créditos avulsos ou assinar um plano mensal!`;
+        addMessage('ai', creditsMessage);
+        setLoading(false);
+        return;
+      }
+
+      if (intent.type === 'plans_question') {
+        const plansMessage =
+          `📊 **Nossos Planos:**\n\n` +
+          `🌱 **Básico - R$ ${PLAN_PRICES.basic.monthly.toFixed(2).replace('.', ',')}/mês**\n• ${PLAN_CREDITS.basic.monthly} créditos/mês\n• Busca por texto e imagem\n• Suporte por email\n\n` +
+          `🚀 **Pro - R$ ${PLAN_PRICES.pro.monthly.toFixed(2).replace('.', ',')}/mês**\n• ${PLAN_CREDITS.pro.monthly} créditos/mês\n• Todos os recursos do Básico\n• Alertas de preço\n• Suporte prioritário\n\n` +
+          `👑 **Business - R$ ${PLAN_PRICES.business.monthly.toFixed(2).replace('.', ',')}/mês**\n• ${PLAN_CREDITS.business.monthly} créditos/mês\n• Todos os recursos do Pro\n• API de integração\n• Suporte dedicado\n\n` +
+          `👉 **Para assinar:** Acesse **Perfil → Planos**`;
+        addMessage('ai', plansMessage);
+        setLoading(false);
         return;
       }
 
