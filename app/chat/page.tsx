@@ -108,6 +108,7 @@ export default function ChatPage() {
     searchSession.classification?.category !== 'motorcycle';
 
   const [userCredits, setUserCredits] = useState(0);
+  const userCreditsRef = useRef(0);
   
   // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -153,7 +154,9 @@ export default function ChatPage() {
       });
       if (response.ok) {
         const profile = await response.json();
-        setUserCredits(profile.credits || 0);
+        const credits = profile.credits || 0;
+        setUserCredits(credits);
+        userCreditsRef.current = credits;
       }
     } catch (error) {
       console.error('Erro ao carregar créditos:', error);
@@ -327,7 +330,7 @@ export default function ChatPage() {
     };
     setMessages(prev => [...prev, userMessage]);
 
-    if (userCredits < 1) {
+    if (userCreditsRef.current < 1) {
       await delay(500);
       addMessage('ai', 'Créditos insuficientes para busca por imagem!');
       setLoading(false);
@@ -663,7 +666,7 @@ export default function ChatPage() {
     setInput('');
     setLoading(true);
 
-    if (userCredits < 1) {
+    if (userCreditsRef.current < 1) {
       await delay(300);
       addMessage('ai', '💳 Créditos insuficientes! Você precisa de pelo menos 1 crédito para fazer buscas.');
       setLoading(false);
@@ -1104,6 +1107,7 @@ export default function ChatPage() {
 
   const updateCredits = (newCredits: number, userData: any) => {
     setUserCredits(newCredits);
+    userCreditsRef.current = newCredits;
     const updatedUser = { ...userData, credits: newCredits };
     localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
     window.dispatchEvent(new Event('userChanged'));
