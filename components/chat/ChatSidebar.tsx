@@ -53,15 +53,17 @@ function groupChatsByDate(chats: ChatHistory[]) {
   const lastWeek = new Date(today);
   lastWeek.setDate(lastWeek.getDate() - 7);
 
+  const toDate = (v: any) => v instanceof Date ? v : new Date(v);
+
   return {
     pinned: [] as ChatHistory[],
-    today: chats.filter(c => new Date(c.updatedAt) >= today),
+    today: chats.filter(c => toDate(c.updatedAt) >= today),
     yesterday: chats.filter(c => {
-      const d = new Date(c.updatedAt);
+      const d = toDate(c.updatedAt);
       return d >= yesterday && d < today;
     }),
     lastWeek: chats.filter(c => {
-      const d = new Date(c.updatedAt);
+      const d = toDate(c.updatedAt);
       return d >= lastWeek && d < yesterday;
     }),
   };

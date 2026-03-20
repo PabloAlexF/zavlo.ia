@@ -119,6 +119,13 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Refs para evitar stale closure no saveChatToHistory
+  const messagesRef = useRef(messages);
+  const chatHistoryRef = useRef(chatHistory);
+  const currentChatIdRef = useRef(currentChatId);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { chatHistoryRef.current = chatHistory; }, [chatHistory]);
+  useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
 
   useEffect(() => {
     if (messages.length > 1) {
@@ -210,33 +217,39 @@ export default function ChatPage() {
       if (!user) return;
       const userData = JSON.parse(user);
       const userId = userData.userId;
-      
-      const chatTitle = messages.find(m => m.type === 'user')?.content.slice(0, 30) || 'Nova conversa';
-      const existingIndex = chatHistory.findIndex(c => c.id === currentChatId);
-      
-      const cleanedMessages = messages.slice(-50).map(m => 
+
+      // Usar refs para evitar stale closure
+      const currentMessages = messagesRef.current;
+      const currentHistory = chatHistoryRef.current;
+      const chatId = currentChatIdRef.current;
+      if (!chatId || currentMessages.length <= 1) return;
+
+      const chatTitle = currentMessages.find(m => m.type === 'user')?.content.slice(0, 30) || 'Nova conversa';
+      const existingIndex = currentHistory.findIndex(c => c.id === chatId);
+
+      const cleanedMessages = currentMessages.slice(-50).map(m =>
         m.type === 'products' ? { ...m, products: m.products?.slice(0, 6) } : { ...m }
       );
-      
+
       const chatData: ChatHistory = {
-        id: currentChatId,
+        id: chatId,
         title: chatTitle,
         messages: cleanedMessages,
-        createdAt: existingIndex >= 0 ? chatHistory[existingIndex].createdAt : new Date(),
+        createdAt: existingIndex >= 0 ? currentHistory[existingIndex].createdAt : new Date(),
         updatedAt: new Date(),
       };
-      
+
       let updatedHistory;
       if (existingIndex >= 0) {
-        updatedHistory = [...chatHistory];
+        updatedHistory = [...currentHistory];
         updatedHistory[existingIndex] = chatData;
       } else {
-        updatedHistory = [chatData, ...chatHistory];
+        updatedHistory = [chatData, ...currentHistory];
       }
-      
+
       setChatHistory(updatedHistory);
       localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(updatedHistory));
-      chatHistoryService.save(userId, currentChatId, chatTitle, cleanedMessages).catch(() => {});
+      chatHistoryService.save(userId, chatId, chatTitle, cleanedMessages).catch(() => {});
     } catch (error) {
       console.error('Erro ao salvar chat:', error);
     }

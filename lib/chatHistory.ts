@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { getDbInstance } from './firebase';
 import { collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 
 export interface ChatMessage {
@@ -29,6 +29,7 @@ export interface ChatHistory {
 
 export const chatHistoryService = {
   async save(userId: string, chatId: string, title: string, messages: ChatMessage[]) {
+    const db = getDbInstance();
     if (!db) return;
     
     try {
@@ -72,6 +73,7 @@ export const chatHistoryService = {
   },
 
   async load(userId: string, limitCount = 50): Promise<ChatHistory[]> {
+    const db = getDbInstance();
     if (!db) return [];
     
     try {
@@ -105,6 +107,7 @@ export const chatHistoryService = {
   },
 
   async delete(userId: string, chatId: string) {
+    const db = getDbInstance();
     if (!db) return;
     
     try {
