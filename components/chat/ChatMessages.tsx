@@ -218,6 +218,9 @@ export function ChatMessages({
                   <div className="max-w-[90%] sm:max-w-[78%]">
                     <AIBubble>
                       <p className="mb-3 text-slate-400 text-xs uppercase tracking-wider">Produto identificado</p>
+                      {message.content && message.content !== 'image_confirmation' && (
+                        <p className="mb-3 text-xs text-slate-400 whitespace-pre-wrap">{message.content.split('\n\n').slice(1).join('\n\n')}</p>
+                      )}
                       <div className="relative mb-4">
                         <input
                           type="text"

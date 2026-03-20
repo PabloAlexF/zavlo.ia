@@ -191,7 +191,6 @@ export default function ChatPage() {
         if (firestoreHistory.length > 0) {
           setChatHistory(firestoreHistory);
           localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(firestoreHistory));
-          setCurrentChatId(id => id || Date.now().toString());
           return;
         }
       } catch (firestoreError) {
@@ -655,6 +654,7 @@ export default function ChatPage() {
   const handleSend = async (messageText?: string) => {
     const currentInput = messageText || input;
     if (!currentInput || !String(currentInput).trim() || loading) return;
+    if (messageText) setInput('');
 
     // Handle image confirmation
     if (awaitingImageConfirmation) {
@@ -949,6 +949,7 @@ export default function ChatPage() {
   const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any) => {
     const enrichedQuery = contextManager.applyContext(query);
     if (enrichedQuery !== query) query = enrichedQuery;
+    setMessages(prev => prev.filter(m => m.content !== 'searching_animation'));
     addMessage('ai', 'searching_animation');
 
     try {

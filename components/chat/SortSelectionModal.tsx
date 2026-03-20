@@ -49,16 +49,16 @@ export function SortSelectionModal({ onSelect, onCancel }: SortSelectionModalPro
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      className="fixed inset-x-0 bottom-0 z-50 flex justify-center bg-gradient-to-t from-black/80 to-transparent pb-2 pt-8 px-4"
       onClick={onCancel}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        exit={{ scale: 0.9, y: 20, opacity: 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        initial={{ y: '100%', opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-gradient-to-br from-[#13131f] to-[#1a1a2e] p-6 shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg rounded-t-2xl border border-white/10 bg-gradient-to-br from-[#13131f] to-[#1a1a2e] p-5 shadow-2xl overflow-hidden"
       >
         {/* Animated Background Gradient */}
         <motion.div
