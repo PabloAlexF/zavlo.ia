@@ -1085,7 +1085,7 @@ class ProductClassifier:
             "normalized_query": normalized_for_scraper,
             "search_query": " ".join(filter(None, [
                 normalized_for_scraper,
-                str(detected_year) if detected_year else None,
+                str(detected_year) if detected_year and str(detected_year) not in normalized_for_scraper else None,
                 condition if condition != 'unknown' else None,
                 " ".join(filter(None, [user_location.get('city'), user_location.get('state')])) or None if user_location else None
             ])),
