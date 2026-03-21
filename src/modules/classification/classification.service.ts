@@ -65,11 +65,25 @@ export class ClassificationService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(request),
+        signal: AbortSignal.timeout(15000), // 15s timeout
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        this.logger.error(`❌ Erro na classificação: ${response.status} - ${errorText}`);
+        this.logger.error(`❌ Erro na classificação: ${response.status} - ${errorText.substring(0, 200)}`);
+        // Para 502/503 (serviço hibernando), usar fallback em vez de lançar erro
+        if (response.status === 502 || response.status === 503 || response.status === 504) {
+          this.logger.warn(`⚠️ Python service indisponível (${response.status}), usando fallback`);
+          return {
+            category: 'general',
+            confidence: 0.5,
+            scrapers: [{ name: 'google_shopping', score: 0.6 }],
+            condition: 'unknown',
+            all_scores: { general: 0.5 },
+            missing_fields: [],
+            suggested_question: null,
+          };
+        }
         throw new HttpException(
           `Erro no serviço de classificação: ${errorText}`,
           response.status
