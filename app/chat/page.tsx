@@ -749,7 +749,8 @@ export default function ChatPage() {
           'Authorization': `Bearer ${userData.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query, answers }),
+        // Passar prevClassification para o backend mesclar sem reprocessar do zero
+        body: JSON.stringify({ query, answers, prevClassification }),
       });
 
       if (!response.ok) throw new Error(`classify failed: ${response.status}`);
@@ -1069,7 +1070,7 @@ export default function ChatPage() {
         
         setSearchSession(s => ({ ...s, query, classification: data.classification, step: 'idle' }));
         setLoading(false);
-        const currentSortBy = searchSession.sortBy;
+        const currentSortBy = searchSession.sortBy; // capturar antes do await para evitar stale closure
         await executeTextSearch(query, currentSortBy, data.classification);
         
       } else {

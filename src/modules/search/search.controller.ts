@@ -33,10 +33,10 @@ export class SearchController {
   @Post('classify')
   @UseGuards(OptionalJwtAuthGuard)
   async classifyQuery(
-    @Body() body: { query: string; answers?: Record<string, string | { value: any }> },
+    @Body() body: { query: string; answers?: Record<string, string | { value: any }>; prevClassification?: any },
     @CurrentUser() user?: any,
   ) {
-    const { query, answers } = body;
+    const { query, answers, prevClassification } = body;
     const answersStr = answers
       ? Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]))
       : undefined;
@@ -45,7 +45,7 @@ export class SearchController {
 
     // Se vieram respostas do modal, enriquecer a classification no backend (imutável)
     if (answersStr && classification.classification) {
-      const base = classification.classification as any;
+      const base = { ...(prevClassification || {}), ...classification.classification } as any;
       const enriched: Record<string, any> = {};
 
       if (answersStr.location) {
@@ -113,9 +113,16 @@ export class SearchController {
   }
 
   private parsePriceInput(value: string): { min_price?: number; max_price?: number } {
+    // Formato JSON de sugestões do frontend: {"value":{"min":X,"max":Y}} ou {"label":"...","value":{...}}
     try {
       const parsed = JSON.parse(value);
-      if (parsed?.value) return { min_price: parsed.value.min, max_price: parsed.value.max };
+      const v = parsed?.value ?? parsed;
+      if (v && typeof v === 'object' && ('min' in v || 'max' in v)) {
+        return {
+          min_price: typeof v.min === 'number' ? v.min : undefined,
+          max_price: typeof v.max === 'number' ? v.max : undefined,
+        };
+      }
     } catch {}
 
     const clean = value.replace(/r\$\s?/gi, '');

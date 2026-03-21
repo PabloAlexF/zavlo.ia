@@ -343,12 +343,15 @@ export class SearchService {
       this.logger.log(`🔍 [SEARCH DEBUG] No user ID provided, proceeding without credit deduction`);
     }
     
-    const normalizedQuery = (filters?.providedClassification?.normalized_query)
+    // Preferir search_query (rico: inclui ano/condição/cidade) sobre normalized_query
+    const normalizedQuery = (filters?.providedClassification?.search_query)
+      ? filters.providedClassification.search_query
+      : (filters?.providedClassification?.normalized_query)
       ? filters.providedClassification.normalized_query
       : this.normalizeQuery(query);
 
     this.logger.log(`🔍 [SEARCH DEBUG] Query original: ${query}`);
-    this.logger.log(`🔍 [SEARCH DEBUG] Query normalizada: ${normalizedQuery}`);
+    this.logger.log(`🔍 [SEARCH DEBUG] Query para scrapers: ${normalizedQuery}`);
 
     // Buscar localização do usuário
     let userLocation: { city: string; state: string } | undefined;
@@ -524,7 +527,7 @@ export class SearchService {
         let scraperResults: Product[] = [];
         let cached = false;
 
-        // Verificar cache
+        // Verificar cache — usar search_query como chave para evitar colisão entre filtros diferentes
         const scraperCacheKey = `${scraper}:${normalizedQuery}:${resultLimit}:${classification?.condition || 'any'}:${classification?.detected_year || '0'}:${classification?.user_location?.city || 'all'}`;
         const cachedData = await this.getCachedScraperResult(scraper, scraperCacheKey);
         if (cachedData) {
