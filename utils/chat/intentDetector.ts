@@ -8,7 +8,7 @@ export interface Entities {
 
 // Detector de intenção do usuário com sistema de pontuação
 export interface UserIntent {
-  type: 'buy' | 'sell' | 'search' | 'greeting' | 'despedida' | 'question' | 'help' | 'credits_question' | 'plans_question' | 'platform_question' | 'introduction' | 'casual_talk' | 'negotiation' | 'offer' | 'other';
+  type: 'buy' | 'sell' | 'search' | 'greeting' | 'despedida' | 'thanks' | 'question' | 'help' | 'credits_question' | 'plans_question' | 'platform_question' | 'introduction' | 'casual_talk' | 'negotiation' | 'offer' | 'other';
   confidence: number;
   entities?: Entities;
   // Deprecated - mantido para compatibilidade
@@ -28,7 +28,7 @@ interface IntentScore {
 // Patterns de intenção com pesos
 const INTENT_PATTERNS = {
   // Comandos específicos (alta prioridade)
-  help: { pattern: /\b(ajuda|help|socorro|como usar|como funciona|tutorial|comandos)\b/i, weight: 1.0 },
+  help: { pattern: /\b(socorro|como usar|como funciona|tutorial|comandos)\b|^(ajuda|help)$/i, weight: 1.0 },
   credits_question: { pattern: /\b(meus? créditos?|saldo|quanto tenho|creditos|quantos creditos)\b/i, weight: 1.0 },
   plans_question: { pattern: /\b(planos?|assinaturas?|quanto custa o plano|pacotes? de creditos?|assinar)\b/i, weight: 1.0 },
   platform_question: { pattern: /\b(zavlo|plataforma)\b|^(o que (e|é)|quem (e|é)|sobre)\s+(voc[eê]s?|o\s+zavlo|a\s+zavlo|o\s+site|o\s+app)/i, weight: 1.0 },
@@ -50,6 +50,7 @@ const INTENT_PATTERNS = {
   greeting: { pattern: /^(oi|ola|olá|bom dia|boa tarde|boa noite|hey|hello|opa|e ai|eai)\b/i, weight: 0.7 },
   casual_talk: { pattern: /\b(tudo bem|como vai|beleza|tranquilo)\b/i, weight: 0.6 },
   despedida: { pattern: /^(tchau|adeus|até logo|até mais|falou|flw|bye|xau)\b/i, weight: 0.8 },
+  thanks: { pattern: /^(obrigad[oa]|obg|valeu|vlw|grato|grata|muito obrigad[oa])\b/i, weight: 0.85 },
   
   // Pergunta (baixa prioridade, muito genérica)
   question: { pattern: /^(como|quando|onde|por que|porque|qual|quanto)\b|\?$/i, weight: 0.5 }

@@ -699,6 +699,9 @@ export default function ChatPage() {
       ? `${query} em ${displayAnswer}`
       : `${query} ${displayAnswer}`;
 
+    // Manter search_query sincronizado com enrichedQuery para que o scraper receba a query acumulada
+    updatedClassification.search_query = enrichedQuery;
+
     if (remainingFields.length > 0) {
       const nextField = remainingFields[0];
       const nextQ = getNextQuestion(nextField, updatedClassification);
@@ -729,6 +732,7 @@ export default function ChatPage() {
   };
 
   const handleHybridSkip = async () => {
+    if (searchSession.step !== 'asking') return;
     dismissQuestionBubble();
     const { query, classification, sortBy } = searchSession;
     setSearchSession(s => ({ ...s, step: 'idle', missingFields: [] }));
@@ -763,7 +767,9 @@ export default function ChatPage() {
       setSearchSession(s => ({ ...s, classification: enrichedClassification, step: 'idle' }));
       await executeTextSearch(query, sortBy, enrichedClassification);
     } catch {
-      await executeTextSearch(query, sortBy, prevClassification);
+      // fallback: usar prevClassification já enriquecida (search_query atualizado pelo handleHybridAnswer)
+      const fallbackClassification = { ...prevClassification, search_query: query };
+      await executeTextSearch(query, sortBy, fallbackClassification);
     }
   };
 
@@ -869,6 +875,12 @@ export default function ChatPage() {
 
       if (intent.type === 'despedida') {
         addMessage('ai', 'Até logo! 👋 Volte sempre que precisar encontrar o melhor preço. 😊');
+        setLoading(false);
+        return;
+      }
+
+      if (intent.type === 'thanks') {
+        addMessage('ai', 'De nada! 😊 Se precisar de mais alguma busca, é só digitar.');
         setLoading(false);
         return;
       }
@@ -1016,9 +1028,12 @@ export default function ChatPage() {
         if (data.classification?.is_greeting) {
           setLoading(false);
           const lower = query.toLowerCase();
-          const isFarewell = ['tchau', 'adeus', 'ate logo', 'falou', 'flw', 'bye', 'obrigado', 'obrigada', 'valeu'].some(w => lower.includes(w));
+          const isFarewell = ['tchau', 'adeus', 'ate logo', 'falou', 'flw', 'bye'].some(w => lower.includes(w));
+          const isThanks = ['obrigado', 'obrigada', 'valeu', 'vlw', 'obg'].some(w => lower.includes(w));
           addMessage('ai', isFarewell
             ? 'Até logo! 👋 Volte sempre que precisar encontrar o melhor preço. 😊'
+            : isThanks
+            ? 'De nada! 😊 Se precisar de mais alguma busca, é só digitar.'
             : 'Olá! 👋 Que produto você está procurando?'
           );
           return;

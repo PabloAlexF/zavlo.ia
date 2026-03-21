@@ -152,6 +152,8 @@ export class SearchService {
       filters?.limit || '50',
       filters?.providedClassification?.category || 'general',
       filters?.providedClassification?.condition || 'unknown',
+      filters?.providedClassification?.detected_year || '0',
+      filters?.providedClassification?.user_location?.city || 'all',
     ].join(':');
     
     const cacheData = `${query}:${filterStr}:${location || 'all'}`;
@@ -344,10 +346,18 @@ export class SearchService {
     }
     
     // Preferir search_query (rico: inclui ano/condição/cidade) sobre normalized_query
-    const normalizedQuery = (filters?.providedClassification?.search_query)
-      ? filters.providedClassification.search_query
-      : (filters?.providedClassification?.normalized_query)
-      ? filters.providedClassification.normalized_query
+    // Sempre normalizar para garantir consistência de encoding (sem acentos) para os scrapers
+    const normalizedQuery = this.normalizeQuery(
+      (filters?.providedClassification?.search_query)
+        ? filters.providedClassification.search_query
+        : (filters?.providedClassification?.normalized_query)
+        ? filters.providedClassification.normalized_query
+        : query
+    );
+
+    // Para freeMode, usar apenas normalized_query simples (sem cidade/condição) para não restringir resultados gratuitos
+    const freeQuery = (filters?.providedClassification?.normalized_query)
+      ? this.normalizeQuery(filters.providedClassification.normalized_query)
       : this.normalizeQuery(query);
 
     this.logger.log(`🔍 [SEARCH DEBUG] Query original: ${query}`);
@@ -463,7 +473,7 @@ export class SearchService {
         this.logger.log(`🆓 [SEARCH DEBUG] Busca gratuita - ${fixedLimit} resultados (freeMode=${filters.freeMode})`);
         
         try {
-          const results = await this.googleShoppingService.search(normalizedQuery, fixedLimit, sortBy, classification);
+          const results = await this.googleShoppingService.search(freeQuery, fixedLimit, sortBy, classification);
           const result = { 
             results: results, 
             total: results.length,
@@ -483,7 +493,7 @@ export class SearchService {
           this.logger.warn(`⚠️ [SEARCH DEBUG] Erro na busca gratuita: ${error.message}`);
         }
 
-        const fallback = await this.searchInFirebase(normalizedQuery, filters);
+        const fallback = await this.searchInFirebase(freeQuery, filters);
         this.logger.log(`🆓 [SEARCH DEBUG] Using Firebase fallback with ${fallback.results.length} results`);
         return {
           ...fallback,

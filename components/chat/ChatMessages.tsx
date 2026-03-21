@@ -361,7 +361,7 @@ export function ChatMessages({
                       {message.questionType === 'year' && (
                         <div className="space-y-2">
                           <div className="flex flex-wrap gap-2">
-                            {['2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2015'].map((year) => (
+                            {['2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'].map((year) => (
                               <QuestionChip key={year} onClick={() => onQuestionAnswer(year)}>
                                 {year}
                               </QuestionChip>
@@ -385,6 +385,14 @@ export function ChatMessages({
                                 🗺️ {message.userLocation.state}
                               </QuestionChip>
                             )}
+                            {!message.userLocation?.city && [
+                              'São Paulo', 'Rio de Janeiro', 'Belo Horizonte',
+                              'Curitiba', 'Porto Alegre', 'Brasília'
+                            ].map((city) => (
+                              <QuestionChip key={city} onClick={() => onQuestionAnswer(city)}>
+                                📍 {city}
+                              </QuestionChip>
+                            ))}
                             <QuestionChip onClick={() => onQuestionAnswer('todo o brasil')}>
                               🇧🇷 Todo o Brasil
                             </QuestionChip>

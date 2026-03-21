@@ -82,9 +82,33 @@ export class SearchController {
         enriched.last_filters = { ...(base.last_filters || {}), shoe_type: answersStr.shoe_type };
       }
 
-      enriched.missing_fields = (base.missing_fields || []).filter(
-        (f: string) => !answersStr[f]
-      );
+      // Reconstruir search_query com todos os filtros acumulados (ano, condição, cidade)
+      const finalBase = { ...base, ...enriched };
+      const sq = [
+        finalBase.normalized_query || base.normalized_query || '',
+        finalBase.detected_year ? String(finalBase.detected_year) : null,
+        finalBase.condition && finalBase.condition !== 'unknown' ? finalBase.condition : null,
+        finalBase.user_location?.city ?? null,
+      ].filter(Boolean).join(' ');
+      if (sq.trim()) enriched.search_query = sq.trim();
+
+      // Limpar missing_fields: remover campos já respondidos OU já preenchidos na base
+      const alreadyFilled = (f: string) => {
+        if (answersStr[f]) return true;
+        if (f === 'year'        && finalBase.detected_year)       return true;
+        if (f === 'condition'   && finalBase.condition !== 'unknown') return true;
+        if (f === 'location'    && finalBase.user_location)        return true;
+        if (f === 'price_range' && finalBase.price_range)          return true;
+        if (f === 'brand'       && finalBase.detected_brand)       return true;
+        if (f === 'gender'      && finalBase.detected_gender)      return true;
+        if (f === 'size'        && finalBase.detected_size)        return true;
+        if (f === 'storage'     && finalBase.detected_storage)     return true;
+        if (f === 'transmission'&& finalBase.detected_transmission)return true;
+        if (f === 'fuel'        && finalBase.detected_fuel)        return true;
+        if (f === 'body_type'   && finalBase.detected_body_type)   return true;
+        return false;
+      };
+      enriched.missing_fields = (base.missing_fields || []).filter((f: string) => !alreadyFilled(f));
 
       classification.classification = { ...base, ...enriched };
     }
