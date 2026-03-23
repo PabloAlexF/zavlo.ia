@@ -180,10 +180,10 @@ html {
 
 @keyframes shimmer {
   0% {
-    background-position: -250% 0;
+    transform: translateX(-100%);
   }
   100% {
-    background-position: 250% 0;
+    transform: translateX(100%);
   }
 }
 

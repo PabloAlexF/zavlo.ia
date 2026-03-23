@@ -139,127 +139,79 @@ export default function DashboardPage() {
       const userData = JSON.parse(user);
       const headers = { 'Authorization': `Bearer ${userData.token}` };
 
-      const fetchWithRetry = async (url: string, options: any, retries = 2) => {
-        for (let i = 0; i < retries; i++) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-            
-            const response = await fetch(url, { 
-              ...options, 
-              signal: controller.signal 
-            });
-            
-            clearTimeout(timeoutId);
-            return response;
-          } catch (error) {
-            if (i === retries - 1) throw error;
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
+      const safeFetch = async (url: string) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        try {
+          const res = await fetch(url, { headers, signal: controller.signal });
+          clearTimeout(timeoutId);
+          return res.ok ? res.json() : null;
+        } catch {
+          clearTimeout(timeoutId);
+          return null;
         }
       };
 
-      const profileResponse = await fetchWithRetry(`${API_URL}/users/profile`, { headers });
-      if (profileResponse.ok) {
-        const userProfile = await profileResponse.json();
+      const [
+        userProfile,
+        usageData,
+        favoritesData,
+        userListings,
+        alertsData,
+        alertStatsData,
+        notifications,
+        planStatusData,
+        metricsData,
+        historyData,
+      ] = await Promise.all([
+        safeFetch(`${API_URL}/users/profile`),
+        safeFetch(`${API_URL}/users/usage`),
+        safeFetch(`${API_URL}/favorites`),
+        safeFetch(`${API_URL}/listings/my`),
+        safeFetch(`${API_URL}/price-alerts`),
+        safeFetch(`${API_URL}/price-alerts/stats`),
+        safeFetch(`${API_URL}/notifications`),
+        safeFetch(`${API_URL}/users/plan-status`),
+        safeFetch(`${API_URL}/analytics/metrics?days=30`),
+        safeFetch(`${API_URL}/analytics/history?limit=10`),
+      ]);
+
+      if (userProfile) {
         setUserName(userProfile.name || 'Usuário');
-        
-        const usageResponse = await fetchWithRetry(`${API_URL}/users/usage`, { headers });
-        let usageData = { textToday: 0, imageToday: 0, textMonth: 0, imageMonth: 0 };
-        if (usageResponse.ok) {
-          usageData = await usageResponse.json();
-        }
+        const usage = usageData || { textToday: 0, imageToday: 0, textMonth: 0, imageMonth: 0 };
+        const favCount = favoritesData?.length || 0;
+        const listCount = userListings?.length || 0;
+        const alertCount = alertsData?.length || 0;
+        const notifCount = notifications ? notifications.filter((n: any) => !n.read).length : 0;
 
-        const favoritesResponse = await fetchWithRetry(`${API_URL}/favorites`, { headers });
-        let favoritesCount = 0;
-        if (favoritesResponse.ok) {
-          const favoritesData = await favoritesResponse.json();
-          setFavorites(favoritesData.slice(0, 5));
-          favoritesCount = favoritesData.length;
-        }
-
-        const listingsResponse = await fetchWithRetry(`${API_URL}/listings/my`, { headers });
-        let listingsCount = 0;
-        if (listingsResponse.ok) {
-          const userListings = await listingsResponse.json();
-          setListings(userListings.slice(0, 5));
-          listingsCount = userListings.length;
-        }
-
-        const alertsResponse = await fetchWithRetry(`${API_URL}/price-alerts`, { headers });
-        let alertsCount = 0;
-        if (alertsResponse.ok) {
-          const alertsData = await alertsResponse.json();
-          setAlerts(alertsData.slice(0, 5));
-          alertsCount = alertsData.length;
-        } else {
-          // não crítico
-        }
-
-        const alertStatsResponse = await fetchWithRetry(`${API_URL}/price-alerts/stats`, { headers });
-        if (alertStatsResponse.ok) {
-          const alertStatsData = await alertStatsResponse.json();
-          setAlertStats(alertStatsData);
-        } else {
-          // não crítico
-        }
-
-        const notificationsResponse = await fetchWithRetry(`${API_URL}/notifications`, { headers });
-        let notificationsCount = 0;
-        if (notificationsResponse.ok) {
-          const notifications = await notificationsResponse.json();
-          notificationsCount = notifications.filter((n: any) => !n.read).length;
-        } else {
-          // não crítico
-        }
-
-        const planStatusResponse = await fetchWithRetry(`${API_URL}/users/plan-status`, { headers });
-        if (planStatusResponse.ok) {
-          const planStatusData = await planStatusResponse.json();
-          setPlanStatus(planStatusData);
-        }
+        if (favoritesData) setFavorites(favoritesData.slice(0, 5));
+        if (userListings) setListings(userListings.slice(0, 5));
+        if (alertsData) setAlerts(alertsData.slice(0, 5));
+        if (alertStatsData) setAlertStats(alertStatsData);
+        if (planStatusData) setPlanStatus(planStatusData);
+        if (metricsData) setMetrics(metricsData);
+        if (historyData) setHistory(historyData);
 
         setStats({
           name: userProfile.name || 'Usuário',
           email: userProfile.email || '',
-          textSearchesToday: usageData.textToday || 0,
-          imageSearchesToday: usageData.imageToday || 0,
-          textSearchesMonth: usageData.textMonth || 0,
-          imageSearchesMonth: usageData.imageMonth || 0,
-          totalSearches: (usageData.textToday || 0) + (usageData.imageToday || 0),
-          favoritesCount,
-          listingsCount,
-          alertsCount,
-          notificationsCount,
+          textSearchesToday: usage.textToday || 0,
+          imageSearchesToday: usage.imageToday || 0,
+          textSearchesMonth: usage.textMonth || 0,
+          imageSearchesMonth: usage.imageMonth || 0,
+          totalSearches: (usage.textToday || 0) + (usage.imageToday || 0),
+          favoritesCount: favCount,
+          listingsCount: listCount,
+          alertsCount: alertCount,
+          notificationsCount: notifCount,
           plan: userProfile.plan || 'free',
           credits: userProfile.credits || 0,
           planExpiresAt: userProfile.planExpiresAt,
           memberSince: userProfile.createdAt,
         });
       }
-
-      const metricsResponse = await fetchWithRetry(`${API_URL}/analytics/metrics?days=30`, { headers });
-      if (metricsResponse.ok) {
-        const metricsData = await metricsResponse.json();
-        setMetrics(metricsData);
-      }
-
-      const historyResponse = await fetchWithRetry(`${API_URL}/analytics/history?limit=10`, { headers });
-      if (historyResponse.ok) {
-        const historyData = await historyResponse.json();
-        setHistory(historyData);
-      }
-
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      
-      // Não mostrar toast se for apenas timeout - dados podem estar parcialmente carregados
-      if (error instanceof Error && error.name !== 'AbortError') {
-        const errorMessage = error.message === 'Failed to fetch'
-          ? 'Servidor offline. Usando dados em cache.'
-          : 'Erro ao carregar alguns dados';
-        setToast({ message: errorMessage, type: 'info' });
-      }
     } finally {
       setLoading(false);
     }
@@ -271,13 +223,64 @@ export default function DashboardPage() {
         <DashboardSidebar />
         <MobileSidebar />
         <div className="flex-1 lg:ml-64">
-          <div className="p-4 sm:p-8 animate-pulse">
-            <div className="h-16 bg-white/5 rounded-xl mb-8"></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-              {[...Array(4)].map((_, i) => <div key={i} className="bg-white/5 rounded-2xl h-32"></div>)}
+          <div className="p-4 sm:p-8">
+            {/* Header skeleton */}
+            <div className="h-16 rounded-xl mb-8 overflow-hidden relative bg-white/5">
+              <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
-              {[...Array(3)].map((_, i) => <div key={i} className="bg-white/5 rounded-2xl h-64"></div>)}
+
+            {/* Stats cards skeleton */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6 mb-8">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="rounded-2xl h-32 overflow-hidden relative bg-white/5" style={{ animationDelay: `${i * 80}ms` }}>
+                  <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" style={{ animationDelay: `${i * 80}ms` }} />
+                  <div className="p-4 space-y-3">
+                    <div className="w-8 h-8 rounded-lg bg-white/10" />
+                    <div className="w-16 h-6 rounded bg-white/10" />
+                    <div className="w-24 h-3 rounded bg-white/5" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Credits + Plan skeleton */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-8">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="rounded-2xl h-36 overflow-hidden relative bg-white/5">
+                  <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" style={{ animationDelay: `${200 + i * 100}ms` }} />
+                  <div className="p-6 space-y-3">
+                    <div className="w-32 h-3 rounded bg-white/10" />
+                    <div className="w-20 h-10 rounded bg-white/10" />
+                    <div className="w-40 h-3 rounded bg-white/5" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Charts skeleton */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="rounded-2xl h-64 overflow-hidden relative bg-white/5">
+                  <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" style={{ animationDelay: `${400 + i * 100}ms` }} />
+                  <div className="p-6">
+                    <div className="w-40 h-4 rounded bg-white/10 mb-6" />
+                    <div className="flex items-end gap-2 h-32">
+                      {[...Array(7)].map((_, j) => (
+                        <div key={j} className="flex-1 rounded-t bg-white/10" style={{ height: `${30 + Math.random() * 70}%` }} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Loading indicator */}
+            <div className="flex flex-col items-center justify-center py-8 gap-4">
+              <div className="relative w-12 h-12">
+                <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+                <div className="absolute inset-0 rounded-full border-2 border-t-purple-500 border-r-blue-500 border-b-transparent border-l-transparent animate-spin" />
+              </div>
+              <p className="text-sm text-gray-400 animate-pulse">Carregando seu dashboard...</p>
             </div>
           </div>
         </div>
