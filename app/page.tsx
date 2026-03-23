@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Package, Store, MapPin, Zap, Bot, Search, DollarSign, Sparkles, Check, Shield, Clock, Bell, TrendingDown, Image as ImageIcon, MousePointer, ArrowRight, Rocket, BrainCircuit } from 'lucide-react';
+import { Package, Store, MapPin, Zap, Bot, Search, DollarSign, Sparkles, Check, Shield, Clock, Bell, TrendingDown, Image as ImageIcon, MousePointer, ArrowRight, Rocket, BrainCircuit, Tag, ShoppingBag, ChevronRight } from 'lucide-react';
 import { motion, useMotionValue, useTransform, useTime, useInView } from 'framer-motion';
 import { MouseEvent, ReactNode, useRef, useEffect, useState } from 'react';
 import LimitedOfferSection from '@/components/sections/LimitedOfferSection';
@@ -508,6 +508,153 @@ export default function Home() {
                   </div>
                 </motion.div>
               ))}
+            </div>
+          </div>
+        </AnimatedSection>
+
+        {/* ─── MARKETPLACE CTA ─── */}
+        <AnimatedSection className="container mx-auto px-4 py-16 sm:py-24">
+          <div className="max-w-5xl mx-auto">
+            <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-white/[0.02]">
+
+              {/* Background glow */}
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute -top-32 -right-32 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl" />
+                <div className="absolute -bottom-32 -left-32 w-64 h-64 rounded-full bg-purple-500/10 blur-3xl" />
+              </div>
+
+              <div className="relative z-10 grid lg:grid-cols-2 gap-0">
+
+                {/* Left — Text */}
+                <div className="p-6 sm:p-10 lg:p-12 flex flex-col justify-center">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-full w-fit mb-5 sm:mb-6">
+                    <ShoppingBag className="w-3 h-3 text-purple-400" />
+                    <span className="text-[10px] sm:text-xs font-medium text-gray-400 tracking-wide">Marketplace Zavlo</span>
+                  </div>
+
+                  <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold text-white leading-tight mb-3 sm:mb-4">
+                    Não achou o preço{' '}
+                    <span className="text-purple-400">que você deseja?</span>
+                  </h2>
+
+                  <p className="text-xs sm:text-sm md:text-base text-gray-500 leading-relaxed mb-6 sm:mb-8 max-w-md">
+                    Explore o nosso marketplace com anúncios de vendedores reais.
+                    Produtos verificados, preços negociáveis e entrega em todo o Brasil.
+                  </p>
+
+                  <div className="space-y-2.5 mb-7 sm:mb-9">
+                    {[
+                      { icon: Check, text: 'Anúncios verificados e seguros' },
+                      { icon: Tag, text: 'Preços direto de vendedores' },
+                      { icon: Shield, text: 'Proteção contra fraudes com IA' },
+                      { icon: Zap, text: 'Publique seu anúncio em segundos' },
+                    ].map((item, i) => (
+                      <motion.div
+                        key={i}
+                        className="flex items-center gap-2.5"
+                        initial={{ opacity: 0, x: -12 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: i * 0.07 }}
+                      >
+                        <div className="w-5 h-5 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                          <item.icon className="w-3 h-3 text-green-400" />
+                        </div>
+                        <span className="text-xs sm:text-sm text-gray-400">{item.text}</span>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Link href="/marketplace" className="w-full sm:w-auto">
+                      <motion.button
+                        className="w-full sm:w-auto group flex items-center justify-center gap-2 px-5 sm:px-6 py-3 sm:py-3.5 bg-white text-black hover:bg-gray-100 rounded-xl font-medium text-sm transition-all"
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        Explorar Marketplace
+                        <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                      </motion.button>
+                    </Link>
+                    <Link href="/sell" className="w-full sm:w-auto">
+                      <motion.button
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 sm:px-6 py-3 sm:py-3.5 border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] rounded-xl font-medium text-sm text-gray-400 hover:text-white transition-all"
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <Tag className="w-4 h-4" />
+                        Anunciar Produto
+                      </motion.button>
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Right — Stats grid */}
+                <div className="border-t lg:border-t-0 lg:border-l border-white/[0.06] p-6 sm:p-10 lg:p-12 flex flex-col justify-center">
+                  <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-widest mb-5 sm:mb-6">Por que usar o marketplace?</p>
+
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
+                    {[
+                      { value: 'R$ 0', label: 'Para anunciar', color: 'text-green-400' },
+                      { value: '100%', label: 'Verificado por IA', color: 'text-blue-400' },
+                      { value: '24h', label: 'Suporte ativo', color: 'text-purple-400' },
+                      { value: '27', label: 'Estados cobertos', color: 'text-yellow-400' },
+                    ].map((stat, i) => (
+                      <motion.div
+                        key={i}
+                        className="p-3 sm:p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] hover:border-white/[0.10] transition-all cursor-default"
+                        whileHover={{ y: -2 }}
+                        initial={{ opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: i * 0.08 }}
+                      >
+                        <p className={`text-xl sm:text-2xl font-bold ${stat.color} leading-none mb-1`}>{stat.value}</p>
+                        <p className="text-[10px] sm:text-xs text-gray-600">{stat.label}</p>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {/* Preview cards */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-gray-700 uppercase tracking-widest mb-3">Anúncios recentes</p>
+                    {[
+                      { title: 'iPhone 13 Pro 256GB', price: 'R$ 2.800', tag: 'Usado · SP' },
+                      { title: 'Notebook Dell i5 8GB', price: 'R$ 1.950', tag: 'Seminovo · RJ' },
+                      { title: 'PS5 + 2 Controles', price: 'R$ 3.200', tag: 'Novo · MG' },
+                    ].map((item, i) => (
+                      <motion.div
+                        key={i}
+                        className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05] hover:border-white/[0.10] transition-all cursor-pointer group"
+                        initial={{ opacity: 0, x: 12 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.2 + i * 0.08 }}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-6 h-6 rounded-md bg-white/[0.04] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                            <Package className="w-3 h-3 text-gray-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-gray-300 truncate group-hover:text-white transition-colors">{item.title}</p>
+                            <p className="text-[10px] text-gray-600">{item.tag}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-semibold text-green-400 flex-shrink-0 ml-2">{item.price}</span>
+                      </motion.div>
+                    ))}
+                    <Link href="/marketplace">
+                      <motion.div
+                        className="flex items-center justify-center gap-1.5 py-2 text-[11px] text-gray-600 hover:text-gray-400 transition-colors cursor-pointer mt-1"
+                        whileHover={{ x: 2 }}
+                      >
+                        Ver todos os anúncios
+                        <ArrowRight className="w-3 h-3" />
+                      </motion.div>
+                    </Link>
+                  </div>
+                </div>
+
+              </div>
             </div>
           </div>
         </AnimatedSection>

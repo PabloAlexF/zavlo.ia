@@ -401,8 +401,14 @@ export class SearchService {
         this.logger.warn('[CACHE] Entrada inválida no cache — ignorando');
       } else {
 
-      // Deduzir crédito e buscar saldo mesmo em cache hit
-      if (userId) {
+      // Aplicar filtros de preço se especificados
+      let filteredResults = cachedResult.results;
+      if (filters?.minPrice || filters?.maxPrice) {
+        filteredResults = this.applyPriceFilter(cachedResult.results, filters.minPrice, filters.maxPrice);
+      }
+
+      // Deduzir crédito apenas se o cache hit retornou resultados
+      if (userId && filteredResults.length > 0) {
         try {
           await this.usersService.useCredit(userId, 1);
           creditsUsed = 1;
@@ -420,25 +426,22 @@ export class SearchService {
           }
           this.logger.warn(`[CACHE] Falha ao deduzir crédito no cache hit: ${creditError.message}`);
         }
+      } else if (userId) {
+        const user = await this.usersService.findById(userId);
+        remainingCredits = user?.credits || 0;
       }
 
-      // Aplicar filtros de preço se especificados
-      let filteredResults = cachedResult.results;
-      if (filters?.minPrice || filters?.maxPrice) {
-        filteredResults = this.applyPriceFilter(cachedResult.results, filters.minPrice, filters.maxPrice);
-      }
-      
-        return {
-          ...cachedResult,
-          results: filteredResults,
-          total: filteredResults.length,
-          creditsUsed,
-          remainingCredits,
-          searchedNationally: cachedResult.searchedNationally ?? undefined,
-          originalCity: cachedResult.originalCity ?? undefined,
-          cityFilterApplied: cachedResult.cityFilterApplied ?? undefined,
-          relaxedFilters: cachedResult.relaxedFilters ?? undefined,
-        };
+      return {
+        ...cachedResult,
+        results: filteredResults,
+        total: filteredResults.length,
+        creditsUsed,
+        remainingCredits,
+        searchedNationally: cachedResult.searchedNationally ?? undefined,
+        originalCity: cachedResult.originalCity ?? undefined,
+        cityFilterApplied: cachedResult.cityFilterApplied ?? undefined,
+        relaxedFilters: cachedResult.relaxedFilters ?? undefined,
+      };
       }
     }
 
@@ -944,10 +947,18 @@ export class SearchService {
         });
       }
       
-      // Deduct credits for image identification only (1 credit)
+    }
+
+    // 1. Identificar produto com Google Vision (SEM buscar preços)
+    const { productName: identifiedProduct } = await this.googleLensService.identifyProduct(imageUrl);
+    productName = identifiedProduct;
+
+    // Deduzir crédito APÓS identificação bem-sucedida
+    if (userId) {
       try {
         await this.usersService.useCredit(userId, 1);
         creditsUsed = 1;
+        await this.usersService.incrementUsage(userId, 'image');
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
         this.logger.log(`[CREDITS] Deducted 1 credit for image identification. Remaining: ${remainingCredits}`);
@@ -963,13 +974,7 @@ export class SearchService {
         }
         this.logger.warn(`[CREDITS] Failed to deduct credits: ${creditError.message}`);
       }
-      
-      await this.usersService.incrementUsage(userId, 'image');
     }
-
-    // 1. Identificar produto com Google Vision (SEM buscar preços)
-    const { productName: identifiedProduct } = await this.googleLensService.identifyProduct(imageUrl);
-    productName = identifiedProduct;
     
     // Log analytics
     if (userId) {
@@ -997,7 +1002,7 @@ export class SearchService {
   /* ============================================
      BUSCA DE PREÇOS APÓS IDENTIFICAÇÃO
   ============================================ */
-  async searchProductPrices(productName: string, userId?: string): Promise<{ 
+  async searchProductPrices(productName: string, userId?: string, sortBy: string = 'BEST_MATCH'): Promise<{ 
     results: Product[]; 
     creditsUsed?: number; 
     remainingCredits?: number;
@@ -1029,7 +1034,7 @@ export class SearchService {
     }
 
     // Buscar no Google Shopping
-    const results = await this.googleShoppingService.search(productName, 20);
+    const results = await this.googleShoppingService.search(productName, 20, sortBy as any);
 
     // Log analytics
     if (userId) {

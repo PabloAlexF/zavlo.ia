@@ -100,7 +100,17 @@ export class AnalyticsService {
         .limit(limit)
         .get();
 
-      return snapshot.docs.map(doc => doc.data() as SearchLog);
+      return snapshot.docs.map(doc => {
+        const data = doc.data() as SearchLog;
+        return {
+          ...data,
+          timestamp: data.timestamp instanceof Date
+            ? data.timestamp.toISOString()
+            : (data.timestamp as any)?._seconds
+            ? new Date((data.timestamp as any)._seconds * 1000).toISOString()
+            : new Date().toISOString(),
+        };
+      });
     } catch (error) {
       console.error('Error getting user history:', error);
       return [];

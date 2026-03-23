@@ -275,7 +275,6 @@ export class SearchController {
     @Body() body: { imageUrl?: string; imageData?: string },
     @CurrentUser() user: any,
   ) {
-    // Busca por imagem NÃO disponível no plano free
     if (user.plan === 'free') {
       throw new ForbiddenException({
         error: 'FEATURE_NOT_AVAILABLE',
@@ -284,14 +283,19 @@ export class SearchController {
       });
     }
 
-    // Usar imageData se fornecido (enviado diretamente), ou imageUrl como fallback
-    const imageUrl = body.imageData || body.imageUrl;
-
-    if (!imageUrl) {
+    if (!body.imageData && !body.imageUrl) {
       throw new BadRequestException({
         error: 'MISSING_IMAGE',
         message: 'Forneça uma imagem (imageUrl ou imageData)',
       });
+    }
+
+    // Se recebeu base64, fazer upload para Cloudinary para obter URL pública
+    let imageUrl: string;
+    if (body.imageData) {
+      imageUrl = await this.cloudinaryService.uploadBase64(body.imageData);
+    } else {
+      imageUrl = body.imageUrl!;
     }
 
     return this.searchService.searchByImage(imageUrl, user.id);
@@ -316,10 +320,9 @@ export class SearchController {
   @Post('prices')
   @UseGuards(JwtAuthGuard)
   async searchProductPrices(
-    @Body() body: { productName: string },
+    @Body() body: { productName: string; sortBy?: string },
     @CurrentUser() user: any,
   ) {
-    // Busca de preços NÃO disponível no plano free
     if (user.plan === 'free') {
       throw new ForbiddenException({
         error: 'FEATURE_NOT_AVAILABLE',
@@ -335,7 +338,7 @@ export class SearchController {
       });
     }
 
-    return this.searchService.searchProductPrices(body.productName, user.id);
+    return this.searchService.searchProductPrices(body.productName, user.id, body.sortBy);
   }
 
   @Get('suggestions')

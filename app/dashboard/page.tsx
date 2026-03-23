@@ -687,46 +687,57 @@ export default function DashboardPage() {
                 <span className="text-sm text-gray-400">{history.length} buscas</span>
               </div>
               <div className="space-y-3">
-                {history.map((item, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 1.0 + index * 0.05 }}
-                    className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all group"
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="p-2 rounded-lg bg-white/5 border border-white/10">
-                        {item.type === 'image' ? (
-                          <ImageIcon className="w-4 h-4 text-purple-400" />
+                {history.map((item, index) => {
+                  const ts = (item as any).timestamp;
+                  let date: Date | null = null;
+                  if (ts) {
+                    if (typeof ts === 'string') date = new Date(ts);
+                    else if (ts._seconds) date = new Date(ts._seconds * 1000);
+                    else if (ts.seconds) date = new Date(ts.seconds * 1000);
+                    else if (ts instanceof Date) date = ts;
+                  }
+                  const isValidDate = date && !isNaN(date.getTime());
+
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 1.0 + index * 0.05 }}
+                      className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all group"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className={`p-2 rounded-lg border ${item.type === 'image' ? 'bg-purple-500/10 border-purple-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
+                          {item.type === 'image' ? (
+                            <ImageIcon className="w-4 h-4 text-purple-400" />
+                          ) : (
+                            <Type className="w-4 h-4 text-blue-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">
+                            {item.type === 'image' ? '📸 Busca por Imagem' : item.query || 'Busca sem título'}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {isValidDate
+                              ? date!.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                              : 'Agora mesmo'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {item.resultsCount > 0 && (
+                          <span className="text-xs text-gray-400">{item.resultsCount} resultados</span>
+                        )}
+                        {item.success ? (
+                          <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
                         ) : (
-                          <Type className="w-4 h-4 text-blue-400" />
+                          <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">
-                          {item.type === 'image' ? 'Busca por Imagem' : item.query}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(item.timestamp).toLocaleString('pt-BR', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-gray-400">{item.resultsCount} resultados</span>
-                      {item.success ? (
-                        <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                      ) : (
-                        <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
             </motion.div>
           )}

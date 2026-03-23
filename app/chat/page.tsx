@@ -188,9 +188,11 @@ export default function ChatPage() {
   const messagesRef = useRef(messages);
   const chatHistoryRef = useRef(chatHistory);
   const currentChatIdRef = useRef(currentChatId);
+  const sortByRef = useRef(searchSession.sortBy);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { chatHistoryRef.current = chatHistory; }, [chatHistory]);
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
+  useEffect(() => { sortByRef.current = searchSession.sortBy; }, [searchSession.sortBy]);
 
   useEffect(() => {
     if (messages.length > 1) {
@@ -216,8 +218,11 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!currentChatId || messages.length <= 1) return;
-    const timeout = setTimeout(() => saveChatToHistory(), 2000);
-    return () => clearTimeout(timeout);
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      if (!cancelled) saveChatToHistory();
+    }, 2000);
+    return () => { cancelled = true; clearTimeout(timeout); };
   }, [messages.length, currentChatId]);
 
   const loadUserCredits = async () => {
@@ -244,6 +249,7 @@ export default function ChatPage() {
       const user = localStorage.getItem('zavlo_user');
       if (!user) {
         setChatHistory([]);
+        setCurrentChatId(id => id || Date.now().toString());
         return;
       }
       
@@ -255,23 +261,21 @@ export default function ChatPage() {
         if (firestoreHistory.length > 0) {
           setChatHistory(firestoreHistory);
           localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(firestoreHistory));
-          return;
         }
       } catch (firestoreError) {
         console.warn('Firestore indisponível, usando localStorage');
-      }
-      
-      const saved = localStorage.getItem(`zavlo_chat_history_${userId}`);
-      if (saved) {
-        const parsedHistory = JSON.parse(saved);
-        setChatHistory(Array.isArray(parsedHistory) ? parsedHistory : []);
+        const saved = localStorage.getItem(`zavlo_chat_history_${userId}`);
+        if (saved) {
+          const parsedHistory = JSON.parse(saved);
+          setChatHistory(Array.isArray(parsedHistory) ? parsedHistory : []);
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
       setChatHistory([]);
+    } finally {
+      setCurrentChatId(id => id || Date.now().toString());
     }
-
-    setCurrentChatId(id => id || Date.now().toString());
   };
 
   const saveChatToHistory = async () => {
@@ -312,7 +316,7 @@ export default function ChatPage() {
 
       setChatHistory(updatedHistory);
       localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(updatedHistory));
-      chatHistoryService.save(userId, chatId, chatTitle, cleanedMessages).catch(() => {});
+      chatHistoryService.save(userId, chatId, chatTitle, cleanedMessages).catch(e => console.warn('Firestore save failed:', e));
     } catch (error) {
       console.error('Erro ao salvar chat:', error);
     }
@@ -376,7 +380,7 @@ export default function ChatPage() {
       const userData = JSON.parse(user);
       const userId = userData.userId;
       localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(updatedHistory));
-      chatHistoryService.delete(userId, chatId).catch(() => {});
+      chatHistoryService.delete(userId, chatId).catch(e => console.warn('Firestore delete failed:', e));
     }
     
     if (currentChatId === chatId) {
@@ -451,6 +455,14 @@ export default function ChatPage() {
       if (response.status === 401) {
         localStorage.removeItem('zavlo_user');
         router.push('/auth');
+        return;
+      }
+
+      if (response.status === 403) {
+        addMessage('ai', '🔒 Busca por imagem disponível apenas para planos pagos. Acesse **Perfil → Planos** para fazer upgrade!');
+        setUploadedImage(null);
+        setImageFile(null);
+        setLoading(false);
         return;
       }
 
@@ -811,17 +823,13 @@ export default function ChatPage() {
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setInput('');
     setLoading(true);
 
     if (userCreditsRef.current < 1) {
-      await delay(300);
       addMessage('ai', '💳 Créditos insuficientes! Você precisa de pelo menos 1 crédito para fazer buscas.');
       setLoading(false);
       return;
     }
-
-    await delay(300);
 
     // ✅ Bug Medium #1: verificar expansionSources ANTES do detectIntent
     // Evita que "OLX", "Mercado Livre" etc. caiam no fallback classifyQuery e consumam crédito
@@ -1085,8 +1093,7 @@ export default function ChatPage() {
         
         setSearchSession(s => ({ ...s, query, classification: data.classification, step: 'idle' }));
         setLoading(false);
-        const currentSortBy = searchSession.sortBy; // capturar antes do await para evitar stale closure
-        await executeTextSearch(query, currentSortBy, data.classification);
+        await executeTextSearch(query, sortByRef.current, data.classification);
         
       } else {
         addMessage('ai', 'Erro ao processar. Tente novamente.');
@@ -1103,9 +1110,10 @@ export default function ChatPage() {
 
   const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any, isExpansion = false, replaceMsgId?: string) => {
     const enrichedQuery = contextManager.applyContext(query);
-    if (enrichedQuery !== query) query = enrichedQuery;
-    setMessages(prev => prev.filter(m => m.content !== 'searching_animation' && m.id !== replaceMsgId));
-    addMessage('ai', 'searching_animation');
+    const effectiveQuery = enrichedQuery !== query ? enrichedQuery : query;
+    const searchingMsgId = crypto.randomUUID();
+    setMessages(prev => prev.filter(m => m.id !== replaceMsgId));
+    setMessages(prev => [...prev, { id: searchingMsgId, type: 'ai' as const, content: 'searching_animation', timestamp: new Date() }]);
 
     try {
       const user = localStorage.getItem('zavlo_user');
@@ -1113,7 +1121,7 @@ export default function ChatPage() {
 
       const userData = JSON.parse(user);
 
-      const params = new URLSearchParams({ query, sortBy });
+      const params = new URLSearchParams({ query: effectiveQuery, sortBy });
       if (classification) params.append('classification', JSON.stringify(classification));
 
       const response = await fetch(apiUrl(`/search/text?${params.toString()}`), {
@@ -1142,6 +1150,8 @@ export default function ChatPage() {
       if (response.ok) {
         const data = await response.json();
         const products = data.results || [];
+
+        setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
 
         if (data.error === 'INSUFFICIENT_CREDITS') {
           setUserCredits(0);
@@ -1262,6 +1272,7 @@ export default function ChatPage() {
         setLoading(false);
       }
     } catch {
+      setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
       addMessage('ai', 'Erro ao processar busca. Tente novamente.');
       setLoading(false);
     }
@@ -1306,7 +1317,7 @@ export default function ChatPage() {
           if (user) {
             const { userId } = JSON.parse(user);
             localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(updatedHistory));
-            chatHistoryService.save(userId, chatId, newTitle, updatedHistory.find(c => c.id === chatId)?.messages || []).catch(() => {});
+            chatHistoryService.save(userId, chatId, newTitle, updatedHistory.find(c => c.id === chatId)?.messages || []).catch(e => console.warn('Firestore save failed:', e));
           }
         }}
       />
