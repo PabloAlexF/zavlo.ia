@@ -5,6 +5,7 @@ import { Sparkles, User, Edit2, CreditCard, ExternalLink } from 'lucide-react';
 import { ProductCard } from '@/components/features/ProductCard';
 import { SearchingAnimation } from '@/components/chat/SearchingAnimation';
 import Link from 'next/link';
+import { useState } from 'react';
 
 interface PriceSuggestion { label: string; min?: number; max?: number; value?: string }
 
@@ -54,6 +55,34 @@ const UserAvatar = () => (
     <User className="h-3.5 w-3.5 text-slate-400" />
   </div>
 );
+
+// ── Controlled product name editor ─────────────────────────────────────────
+function EditableProductName({ messageId, initialValue, onUpdate }: {
+  messageId: string;
+  initialValue: string;
+  onUpdate: (id: string, name: string) => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  return (
+    <div className="relative mb-4">
+      <input
+        type="text"
+        value={value}
+        maxLength={100}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            onUpdate(messageId, value);
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        onBlur={() => onUpdate(messageId, value)}
+        className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 pr-9 text-sm text-slate-100 outline-none transition-colors focus:border-violet-500/50"
+      />
+      <Edit2 className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+    </div>
+  );
+}
 
 // ── Bubble base ───────────────────────────────────────────────────────────────
 const AIBubble = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
@@ -281,20 +310,11 @@ export function ChatMessages({
                   <div className="max-w-[88%] sm:max-w-[80%]">
                     <AIBubble>
                       <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Produto identificado</p>
-                      <div className="relative mb-4">
-                        <input
-                          type="text"
-                          defaultValue={message.detectedProduct || ''}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              onUpdateDetectedProduct(message.id, (e.target as HTMLInputElement).value);
-                              (e.target as HTMLInputElement).blur();
-                            }
-                          }}
-                          className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 pr-9 text-sm text-slate-100 outline-none transition-colors focus:border-violet-500/50"
-                        />
-                        <Edit2 className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-                      </div>
+                      <EditableProductName
+                        messageId={message.id}
+                        initialValue={message.detectedProduct || ''}
+                        onUpdate={onUpdateDetectedProduct}
+                      />
                       <div className="flex gap-2">
                         <OptionButton onClick={onImageSearchReject} variant="danger">Não é isso</OptionButton>
                         <OptionButton onClick={onImagePriceSearch} variant="primary">Buscar preços →</OptionButton>

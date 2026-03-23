@@ -61,7 +61,14 @@ function normalizeText(text: string): string {
 /**
  * Calcula distância de Levenshtein entre duas strings
  */
+const LEVENSHTEIN_MAX_LEN = 40;
+
 function levenshtein(a: string, b: string): number {
+  // Evita O(n²) com strings longas
+  if (a.length > LEVENSHTEIN_MAX_LEN || b.length > LEVENSHTEIN_MAX_LEN) {
+    return Math.abs(a.length - b.length) + 1;
+  }
+
   const matrix: number[][] = [];
   
   for (let i = 0; i <= b.length; i++) {
@@ -78,9 +85,9 @@ function levenshtein(a: string, b: string): number {
         matrix[i][j] = matrix[i - 1][j - 1];
       } else {
         matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // substituição
-          matrix[i][j - 1] + 1,     // inserção
-          matrix[i - 1][j] + 1      // deleção
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
         );
       }
     }
@@ -143,11 +150,13 @@ export function parseAnswer(answer: string, options: string[]): ParsedAnswer {
   // ============================================
   // 1️⃣ DETECÇÃO DE NÚMERO (confidence: 1.0)
   // ============================================
-  // Detecta número em qualquer lugar: "1", "1.", "2)", "opção 3-"
-  const numberMatch = normalized.match(/\b(\d+)[\.\)\-]?\b/);
+  // Detecta apenas números pequenos usados como índice de opção (1-9)
+  // Evita capturar anos (2020), preços (1500) ou quantidades (128gb)
+  const numberMatch = normalized.match(/^(\d)[\.\)\-]?$|^opção\s*(\d)$|^opcao\s*(\d)$/);
   
   if (numberMatch) {
-    const index = parseInt(numberMatch[1]) - 1;
+    const raw = numberMatch[1] ?? numberMatch[2] ?? numberMatch[3];
+    const index = parseInt(raw) - 1;
     
     if (index >= 0 && index < options.length) {
       const result = {

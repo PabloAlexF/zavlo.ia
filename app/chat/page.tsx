@@ -9,7 +9,7 @@ import { ChatMessages } from '@/components/chat/ChatMessages';
 import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
 
 import { detectIntent } from '@/utils/chat/intentDetector';
-import { contextManager } from '@/utils/chat/contextManager';
+import { ContextManager } from '@/utils/chat/contextManager';
 import { chatHistoryService } from '@/lib/chatHistory';
 import { PLAN_PRICES, PLAN_CREDITS } from '@/lib/plans';
 
@@ -131,6 +131,7 @@ function getNextQuestion(
 
 export default function ChatPage() {
   const router = useRouter();
+  const contextManager = useRef(new ContextManager()).current;
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -181,6 +182,8 @@ export default function ChatPage() {
   const [currentChatId, setCurrentChatId] = useState<string>('');
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   
+  const isProcessingRef = useRef(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -216,16 +219,19 @@ export default function ChatPage() {
     return () => window.removeEventListener('userChanged', handleUserChanged);
   }, []);
 
+  const isMountedRef = useRef(true);
+  useEffect(() => () => { isMountedRef.current = false; }, []);
+
   useEffect(() => {
     if (!currentChatId || messages.length <= 1) return;
     let cancelled = false;
     const timeout = setTimeout(() => {
-      if (!cancelled) saveChatToHistory();
+      if (!cancelled && isMountedRef.current) saveChatToHistory();
     }, 2000);
     return () => { cancelled = true; clearTimeout(timeout); };
   }, [messages.length, currentChatId]);
 
-  const loadUserCredits = async () => {
+  const loadUserCredits = async (retries = 2) => {
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) return;
@@ -238,9 +244,12 @@ export default function ChatPage() {
         const credits = profile.credits || 0;
         setUserCredits(credits);
         userCreditsRef.current = credits;
+      } else if (retries > 0) {
+        setTimeout(() => loadUserCredits(retries - 1), 2000);
       }
     } catch (error) {
       console.error('Erro ao carregar créditos:', error);
+      if (retries > 0) setTimeout(() => loadUserCredits(retries - 1), 2000);
     }
   };
 
@@ -294,9 +303,12 @@ export default function ChatPage() {
       const chatTitle = currentMessages.find(m => m.type === 'user')?.content.slice(0, 30) || 'Nova conversa';
       const existingIndex = currentHistory.findIndex(c => c.id === chatId);
 
-      const cleanedMessages = currentMessages.slice(-50).map(m =>
-        m.type === 'products' ? { ...m, products: m.products?.slice(0, 6) } : { ...m }
-      );
+      const cleanedMessages = currentMessages
+        .filter(m => m.content !== 'searching_animation')
+        .slice(-50)
+        .map(m =>
+          m.type === 'products' ? { ...m, products: m.products?.slice(0, 6) } : { ...m }
+        );
 
       const chatData: ChatHistory = {
         id: chatId,
@@ -411,8 +423,14 @@ export default function ChatPage() {
   };
 
   const handleImageSearch = async () => {
-    if (!imageFile || loading) return;
-
+    if (!imageFile || loading || isProcessingRef.current) return;
+    if (!uploadedImage || !uploadedImage.startsWith('data:image/')) {
+      addMessage('ai', 'Imagem inválida. Por favor, selecione uma imagem válida.');
+      setUploadedImage(null);
+      setImageFile(null);
+      return;
+    }
+    isProcessingRef.current = true;
     setLoading(true);
 
     const userMessage: Message = {
@@ -430,6 +448,7 @@ export default function ChatPage() {
       setLoading(false);
       setUploadedImage(null);
       setImageFile(null);
+      isProcessingRef.current = false;
       return;
     }
 
@@ -438,22 +457,37 @@ export default function ChatPage() {
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) {
+        setLoading(false);
+        setUploadedImage(null);
+        setImageFile(null);
         router.push('/auth');
         return;
       }
 
       const userData = JSON.parse(user);
-      const response = await fetch(apiUrl('/search/image'), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${userData.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageData: uploadedImage }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+
+      let response: Response;
+      try {
+        response = await fetch(apiUrl('/search/image'), {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${userData.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ imageData: uploadedImage }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (response.status === 401) {
         localStorage.removeItem('zavlo_user');
+        setLoading(false);
+        setUploadedImage(null);
+        setImageFile(null);
         router.push('/auth');
         return;
       }
@@ -475,16 +509,15 @@ export default function ChatPage() {
 
         const creditsUsed = data.creditsUsed || 1;
         const remainingCredits = data.remainingCredits ?? userCredits - 1;
-        let productName = (data.productName || 'Produto não identificado')
-          .replace(/^Esta imagem mostra uma?\s*/i, '')
-          .replace(/^Esta é uma?\s*/i, '')
-          .replace(/^Este é um\s*/i, '')
-          .trim();
+        const productName = data.productName || 'Produto não identificado';
 
         await delay(800);
         setUploadedImage(null);
         setImageFile(null);
         setDetectedProductName(productName);
+        if (data.classification) {
+          setSearchSession(s => ({ ...s, classification: data.classification }));
+        }
         const confirmationMessage: Message = {
           id: crypto.randomUUID(),
           type: 'image_confirmation',
@@ -502,12 +535,17 @@ export default function ChatPage() {
         setImageFile(null);
         setLoading(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Image search error:', error);
-      addMessage('ai', 'Erro ao processar imagem. Tente novamente.');
+      const msg = error?.name === 'AbortError'
+        ? '⏱️ A análise da imagem demorou demais. Tente novamente.'
+        : 'Erro ao processar imagem. Tente novamente.';
+      addMessage('ai', msg);
       setUploadedImage(null);
       setImageFile(null);
       setLoading(false);
+    } finally {
+      isProcessingRef.current = false;
     }
   };
 
@@ -527,14 +565,19 @@ export default function ChatPage() {
 
   const executeImageSearch = async (sortBy: string) => {
     if (!detectedProductName || loading) return;
-    
+
     setLoading(true);
     setMessages(prev => prev.filter(m => m.type !== 'sort_question'));
-    addMessage('ai', 'searching_animation');
+    const searchingMsgId = crypto.randomUUID();
+    setMessages(prev => [...prev, { id: searchingMsgId, type: 'ai' as const, content: 'searching_animation', timestamp: new Date() }]);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) {
+        clearTimeout(timeout);
         router.push('/auth');
         return;
       }
@@ -547,8 +590,10 @@ export default function ChatPage() {
           'Authorization': `Bearer ${userData.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ productName: detectedProductName, sortBy }),
+        body: JSON.stringify({ productName: detectedProductName, sortBy, classification: searchSession.classification }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (response.status === 401) {
         localStorage.removeItem('zavlo_user');
@@ -556,10 +601,12 @@ export default function ChatPage() {
         return;
       }
 
+      setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
+
       if (response.ok) {
         const data = await response.json();
         const products = data.results || [];
-        
+
         if (typeof data.remainingCredits === 'number') {
           updateCredits(data.remainingCredits, userData);
         }
@@ -587,7 +634,12 @@ export default function ChatPage() {
       }
     } catch (error) {
       console.error('Image price search error:', error);
-      addMessage('ai', 'Erro ao buscar preços. Tente novamente.');
+      clearTimeout(timeout);
+      setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
+      const msg = (error as any)?.name === 'AbortError'
+        ? '⏱️ A busca de preços demorou demais. Tente novamente.'
+        : 'Erro ao buscar preços. Tente novamente.';
+      addMessage('ai', msg);
       setAwaitingImageSort(false);
       setLoading(false);
     }
@@ -641,6 +693,7 @@ export default function ChatPage() {
   const handleHybridAnswer = async (answer: string) => {
     dismissQuestionBubble();
     const { missingFields, query, answers, classification } = searchSession;
+    if (!missingFields.length) return;
     const currentField = missingFields[0];
     
     // Normalizar respostas especiais
@@ -744,7 +797,7 @@ export default function ChatPage() {
   };
 
   const handleHybridSkip = async () => {
-    if (searchSession.step !== 'asking') return;
+    if (searchSession.step !== 'asking' || loading) return;
     dismissQuestionBubble();
     const { query, classification, sortBy } = searchSession;
     setSearchSession(s => ({ ...s, step: 'idle', missingFields: [] }));
@@ -754,20 +807,27 @@ export default function ChatPage() {
   // Reenvia ao backend com as respostas para enriquecer a classification lá
   // Recebe sortBy como parâmetro para evitar stale closure
   const classifyWithAnswers = async (query: string, answers: Record<string, string>, prevClassification: any, sortBy: string) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) { router.push('/auth'); return; }
       const userData = JSON.parse(user);
 
-      const response = await fetch(apiUrl('/search/classify'), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${userData.token}`,
-          'Content-Type': 'application/json',
-        },
-        // Passar prevClassification para o backend mesclar sem reprocessar do zero
-        body: JSON.stringify({ query, answers, prevClassification }),
-      });
+      let response: Response;
+      try {
+        response = await fetch(apiUrl('/search/classify'), {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${userData.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query, answers, prevClassification }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!response.ok) throw new Error(`classify failed: ${response.status}`);
       const data = await response.json();
@@ -812,8 +872,12 @@ export default function ChatPage() {
       return;
     }
 
-    // Handle image sort — modal já está visível, ignorar input de texto
-    if (awaitingImageSort) return;
+    // Handle image sort — orientar o usuário em vez de ignorar silenciosamente
+    if (awaitingImageSort) {
+      addMessage('ai', '⏳ Selecione uma opção de ordenação acima para continuar.');
+      setLoading(false);
+      return;
+    }
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -863,6 +927,10 @@ export default function ChatPage() {
         setLoading(false);
         return;
       }
+      // Input não reconhecido com expansionSources ativo — orientar sem consumir crédito
+      addMessage('ai', '👆 Clique em um marketplace acima para expandir a busca, ou diga **"não"** para encerrar.');
+      setLoading(false);
+      return;
     }
 
     const intent = detectIntent(currentInput);
@@ -971,15 +1039,23 @@ export default function ChatPage() {
 
       const userData = JSON.parse(user);
       
-      // ✅ USAR ENDPOINT CORRETO: /search/classify (NÃO consome créditos)
-      const response = await fetch(apiUrl('/search/classify'), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${userData.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
+      let response: Response;
+      try {
+        response = await fetch(apiUrl('/search/classify'), {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${userData.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (response.status === 401) {
         localStorage.removeItem('zavlo_user');
@@ -1099,8 +1175,11 @@ export default function ChatPage() {
         addMessage('ai', 'Erro ao processar. Tente novamente.');
         setLoading(false);
       }
-    } catch {
-      addMessage('ai', 'Erro ao processar. Tente novamente.');
+    } catch (error: any) {
+      const msg = error?.name === 'AbortError'
+        ? '⏱️ O serviço de classificação demorou demais. Tente novamente.'
+        : 'Erro ao processar. Tente novamente.';
+      addMessage('ai', msg);
       setLoading(false);
     }
   };
@@ -1114,6 +1193,9 @@ export default function ChatPage() {
     const searchingMsgId = crypto.randomUUID();
     setMessages(prev => prev.filter(m => m.id !== replaceMsgId));
     setMessages(prev => [...prev, { id: searchingMsgId, type: 'ai' as const, content: 'searching_animation', timestamp: new Date() }]);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     try {
       const user = localStorage.getItem('zavlo_user');
@@ -1129,7 +1211,9 @@ export default function ChatPage() {
         headers: {
           'Authorization': `Bearer ${userData.token}`,
         },
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (response.status === 401) {
         localStorage.removeItem('zavlo_user');
@@ -1155,6 +1239,7 @@ export default function ChatPage() {
 
         if (data.error === 'INSUFFICIENT_CREDITS') {
           setUserCredits(0);
+          userCreditsRef.current = 0;
           addMessage('ai', '💳 Créditos insuficientes! Adquira mais créditos para continuar buscando.');
           setLoading(false);
           return;
@@ -1271,9 +1356,13 @@ export default function ChatPage() {
         addMessage('ai', 'Erro na busca. Tente novamente.');
         setLoading(false);
       }
-    } catch {
+    } catch (error: any) {
+      clearTimeout(timeout);
       setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
-      addMessage('ai', 'Erro ao processar busca. Tente novamente.');
+      const msg = error?.name === 'AbortError'
+        ? '⏱️ A busca demorou demais. Tente novamente.'
+        : 'Erro ao processar busca. Tente novamente.';
+      addMessage('ai', msg);
       setLoading(false);
     }
   };
@@ -1288,13 +1377,17 @@ export default function ChatPage() {
     setMessages(prev => [...prev, message]);
   };
 
-  const updateCredits = (newCredits: number, userData: any) => {
-    setUserCredits(newCredits);
-    userCreditsRef.current = newCredits;
-    const updatedUser = { ...userData, credits: newCredits };
-    localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
-    window.dispatchEvent(new Event('userChanged'));
+  const setCredits = (n: number, userData?: any) => {
+    setUserCredits(n);
+    userCreditsRef.current = n;
+    if (userData) {
+      const updatedUser = { ...userData, credits: n };
+      localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
+      window.dispatchEvent(new Event('userChanged'));
+    }
   };
+
+  const updateCredits = (newCredits: number, userData: any) => setCredits(newCredits, userData);
 
   return (
     <div className="h-screen bg-[#0A0A12] flex overflow-hidden">

@@ -19,14 +19,22 @@ class ConfigLoader:
         self.config = self._load_config()
     
     def _load_config(self) -> Dict:
-        """Carrega arquivo JSON de configuração"""
+        """Carrega arquivo JSON de configuração com fallback seguro"""
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
-            raise FileNotFoundError(f"Arquivo de configuração não encontrado: {self.config_path}")
+            import logging
+            logging.getLogger(__name__).error(
+                f"categories.json não encontrado: {self.config_path} — usando configuração vazia"
+            )
+            return {"categories": {}, "brands": {}, "synonyms": {}}
         except json.JSONDecodeError as e:
-            raise ValueError(f"Erro ao parsear JSON: {e}")
+            import logging
+            logging.getLogger(__name__).error(
+                f"categories.json corrompido: {e} — usando configuração vazia"
+            )
+            return {"categories": {}, "brands": {}, "synonyms": {}}
     
     def get_categories(self) -> Dict:
         """Retorna dicionário de categorias"""

@@ -320,7 +320,7 @@ export class SearchController {
   @Post('prices')
   @UseGuards(JwtAuthGuard)
   async searchProductPrices(
-    @Body() body: { productName: string; sortBy?: string },
+    @Body() body: { productName: string; sortBy?: string; classification?: any },
     @CurrentUser() user: any,
   ) {
     if (user.plan === 'free') {
@@ -338,7 +338,7 @@ export class SearchController {
       });
     }
 
-    return this.searchService.searchProductPrices(body.productName, user.id, body.sortBy);
+    return this.searchService.searchProductPrices(body.productName, user.id, body.sortBy, body.classification);
   }
 
   @Get('suggestions')

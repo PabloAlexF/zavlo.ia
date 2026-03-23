@@ -4,9 +4,11 @@ Aprende novas keywords baseado em buscas dos usuários
 """
 import json
 import os
+import tempfile
 from datetime import datetime
 from typing import Dict, List
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +20,15 @@ class KeywordLearner:
     - Padrões emergentes
     """
     
+    MAX_FREQUENCY_ENTRIES = 5000  # Limite para evitar memory leak
+
     def __init__(self, learned_path: str = None):
         if learned_path is None:
             base_dir = os.path.dirname(os.path.dirname(__file__))
             learned_path = os.path.join(base_dir, "config", "learned_keywords.json")
         
         self.learned_path = learned_path
+        self._lock = threading.Lock()
         self.data = self._load_learned_data()
         
         # Thresholds para aprendizado
@@ -50,11 +55,15 @@ class KeywordLearner:
             }
     
     def _save_learned_data(self):
-        """Salva dados de keywords aprendidas"""
+        """Salva dados de keywords aprendidas atomicamente (evita corrupção com múltiplos workers)"""
         try:
             self.data["last_updated"] = datetime.now().isoformat()
-            with open(self.learned_path, 'w', encoding='utf-8') as f:
-                json.dump(self.data, f, indent=2, ensure_ascii=False)
+            dir_path = os.path.dirname(self.learned_path)
+            with tempfile.NamedTemporaryFile('w', dir=dir_path, delete=False,
+                                             suffix='.tmp', encoding='utf-8') as tmp:
+                json.dump(self.data, tmp, indent=2, ensure_ascii=False)
+                tmp_path = tmp.name
+            os.replace(tmp_path, self.learned_path)
             logger.info(f"✅ Learned keywords salvas: {len(self.data['learned_keywords'])} keywords")
         except Exception as e:
             logger.error(f"❌ Erro ao salvar learned_keywords.json: {e}")
@@ -70,30 +79,37 @@ class KeywordLearner:
         """
         normalized_query = query.lower().strip()
         
-        # Incrementar frequência
-        if normalized_query not in self.data["search_frequency"]:
-            self.data["search_frequency"][normalized_query] = {
-                "count": 0,
-                "category": category,
-                "confidence": confidence,
-                "first_seen": datetime.now().isoformat()
-            }
-        
-        self.data["search_frequency"][normalized_query]["count"] += 1
-        self.data["search_frequency"][normalized_query]["last_seen"] = datetime.now().isoformat()
-        
-        # Se atingiu threshold, aprender keyword
-        freq_data = self.data["search_frequency"][normalized_query]
-        if freq_data["count"] >= self.MIN_FREQUENCY and confidence >= self.CONFIDENCE_THRESHOLD:
-            self._learn_keyword(normalized_query, category, freq_data["count"])
-        
-        # Salvar a cada 10 buscas (evita I/O excessivo)
-        total_searches = sum(item["count"] for item in self.data["search_frequency"].values())
-        if total_searches % 10 == 0:
-            self._save_learned_data()
+        with self._lock:
+            # Evitar crescimento ilimitado de search_frequency (memory leak)
+            if normalized_query not in self.data["search_frequency"]:
+                if len(self.data["search_frequency"]) >= self.MAX_FREQUENCY_ENTRIES:
+                    # Remover a entrada menos frequente para liberar espaço
+                    oldest = min(self.data["search_frequency"],
+                                 key=lambda k: self.data["search_frequency"][k]["count"])
+                    del self.data["search_frequency"][oldest]
+                    logger.debug(f"🧹 search_frequency: removida entrada '{oldest}' (limite atingido)")
+                self.data["search_frequency"][normalized_query] = {
+                    "count": 0,
+                    "category": category,
+                    "confidence": confidence,
+                    "first_seen": datetime.now().isoformat()
+                }
+            
+            self.data["search_frequency"][normalized_query]["count"] += 1
+            self.data["search_frequency"][normalized_query]["last_seen"] = datetime.now().isoformat()
+            
+            # Se atingiu threshold, aprender keyword
+            freq_data = self.data["search_frequency"][normalized_query]
+            if freq_data["count"] >= self.MIN_FREQUENCY and confidence >= self.CONFIDENCE_THRESHOLD:
+                self._learn_keyword(normalized_query, category, freq_data["count"])
+            
+            # Salvar a cada 10 buscas (evita I/O excessivo)
+            total_searches = sum(item["count"] for item in self.data["search_frequency"].values())
+            if total_searches % 10 == 0:
+                self._save_learned_data()
     
     def _learn_keyword(self, query: str, category: str, frequency: int):
-        """Aprende uma nova keyword"""
+        """Aprende uma nova keyword (deve ser chamado dentro do lock)"""
         if query not in self.data["learned_keywords"]:
             self.data["learned_keywords"][query] = {
                 "category": category,
@@ -153,10 +169,11 @@ class KeywordLearner:
     
     def reset_learning(self):
         """Reseta todo o aprendizado (usar com cuidado!)"""
-        self.data = {
-            "learned_keywords": {},
-            "search_frequency": {},
-            "last_updated": None
-        }
-        self._save_learned_data()
+        with self._lock:
+            self.data = {
+                "learned_keywords": {},
+                "search_frequency": {},
+                "last_updated": None
+            }
+            self._save_learned_data()
         logger.warning("⚠️ Aprendizado resetado!")

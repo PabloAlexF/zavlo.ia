@@ -2,8 +2,9 @@
 Zavlo.ia - Serviço de Classificação Inteligente
 FastAPI service para classificar queries e rotear scrapers
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from typing import List, Dict, Optional
 import logging
 
@@ -28,6 +29,8 @@ import os
 
 # CORS (permitir requisições do NestJS)
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+if "*" in ALLOWED_ORIGINS:
+    logger.warning("⚠️  ALLOWED_ORIGINS=* detectado. Defina origens específicas em produção via variável de ambiente ALLOWED_ORIGINS.")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -35,6 +38,17 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
+
+def verify_admin(x_admin_key: Optional[str] = Header(default=None)):
+    if not ADMIN_SECRET or x_admin_key != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+
+class ClassifyRequest(BaseModel):
+    query: str
+    context: Optional[dict] = {}
 
 # Inicializar classificador (carrega config/categories.json)
 logger.info("Inicializando ProductClassifier...")
@@ -68,13 +82,13 @@ async def health_check():
     }
 
 @app.post("/api/classify")
-async def classify_query(request: dict):
+async def classify_query(request: ClassifyRequest):
     """Classifica a query do usuário"""
     try:
-        query = request.get("query", "")
-        context = request.get("context", {})  # 🆕 RECEBER CONTEXTO DO USUÁRIO
+        query = request.query
+        context = request.context or {}
         
-        if not query or not query.strip():
+        if not query.strip():
             raise HTTPException(status_code=400, detail="Query não pode ser vazia")
         
         # 🆕 PASSAR CONTEXTO PARA O CLASSIFICADOR
@@ -141,8 +155,9 @@ async def test_classify(queries: List[str]):
     }
 
 @app.post("/api/reload-config")
-async def reload_config():
+async def reload_config(x_admin_key: Optional[str] = Header(default=None)):
     """Hot-reload de configurações sem reiniciar servidor"""
+    verify_admin(x_admin_key)
     try:
         classifier.reload_config()
         logger.info("✅ Configurações recarregadas com sucesso!")
@@ -210,8 +225,9 @@ async def export_learned_keywords():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/learning/reset")
-async def reset_learning():
+async def reset_learning(x_admin_key: Optional[str] = Header(default=None)):
     """⚠️ Reseta todo o aprendizado (usar com cuidado!)"""
+    verify_admin(x_admin_key)
     learner.reset_learning()
     return {
         "status": "success",

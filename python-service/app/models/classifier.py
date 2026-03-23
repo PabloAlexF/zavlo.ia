@@ -132,7 +132,6 @@ class ProductClassifier:
             re.compile(r'\bcreditos?\b.*\b(tenho|restantes?|sobrando|disponiveis?)\b'),
             re.compile(r'\bmeus?\b.*\bcreditos?\b'),
             re.compile(r'\bsaldo\b.*\b(de\s+)?creditos?\b'),
-            re.compile(r'\bsaldo\b.*\b(de\s+)?creditos?\b'),  # exige contexto de créditos
             re.compile(r'\bver\b.*\bcreditos?\b'),
             re.compile(r'\bconsultar\b.*\bcreditos?\b'),
             re.compile(r'\bcreditos?\b.*\b(restam|faltam)\b')
@@ -191,8 +190,14 @@ class ProductClassifier:
         return query
     
     def keyword_match(self, keyword: str, text: str) -> bool:
-        """Match de keyword com word boundary"""
-        return keyword in (text if isinstance(text, list) else text.split())
+        """Match de keyword com suporte a keywords multi-palavra"""
+        if isinstance(text, list):
+            return keyword in text
+        # Keyword de uma palavra: word boundary via split
+        if ' ' not in keyword:
+            return keyword in text.split()
+        # Keyword multi-palavra (ex: "smart tv"): substring match
+        return keyword in text
     
     def detect_brand(self, normalized: str) -> str | None:
         """Detecta marca do produto — prioriza primeira ocorrência na query"""
@@ -501,7 +506,7 @@ class ProductClassifier:
         """
         user_context = user_context or {}
         # 🚀 OTIMIZAÇÃO: Limitar tamanho da query (evita queries gigantes)
-        MAX_TOKENS = 20
+        MAX_TOKENS = 40
         tokens = query.split()
         if len(tokens) > MAX_TOKENS:
             logger.warning(f"Query muito longa ({len(tokens)} tokens), truncando para {MAX_TOKENS}")
@@ -1202,7 +1207,7 @@ class ProductClassifier:
         if brand_lower in premium_brands:
             category = 'premium'
             base_min, base_max = 80000, 250000
-        elif brand_lower in moto_brands or brand_lower == 'honda' and any(m in model_lower for m in ['cg', 'cb', 'xre', 'biz', 'fan']):
+        elif brand_lower in moto_brands or (brand_lower == 'honda' and any(re.search(rf'\b{m}\b', model_lower) for m in ['cg', 'cb', 'xre', 'biz', 'fan'])):
             category = 'moto'
             base_min, base_max = 8000, 35000
         elif model_lower in suv_models:

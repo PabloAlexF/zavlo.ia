@@ -158,7 +158,12 @@ export class GoogleLensService {
       // Extrair do campo 'all.aiPreview' (descrição gerada por IA)
       if (firstResult.all?.aiPreview) {
         productName = firstResult.all.aiPreview.split('\n')[0].trim();
-        productName = productName.replace(/^(Esta é uma|Este é um|Esta é|Este é)\s*/i, '');
+        productName = productName
+          .replace(/^(foto|imagem|foto de|imagem de|imagem mostrando|foto mostrando)\s+(um|uma|o|a)?\s*/i, '')
+          .replace(/^(esta|este)\s+(é\s+)?(uma?|um)?\s*/i, '')
+          .replace(/^(a\s+imagem\s+(mostra|cont[eé]m|exibe)|the\s+image\s+shows?)\s*/i, '')
+          .replace(/^(trata-se\s+de\s+(um|uma)|se\s+trata\s+de\s+(um|uma))\s*/i, '')
+          .trim();
       } else if (firstResult.all?.results && firstResult.all.results.length > 0) {
         // Fallback: buscar título no primeiro resultado válido
         const validResult = firstResult.all.results.find(r => 

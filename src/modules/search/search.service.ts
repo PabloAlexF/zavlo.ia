@@ -930,6 +930,7 @@ export class SearchService {
     creditsUsed?: number; 
     remainingCredits?: number;
     productName?: string;
+    classification?: any;
   }> {
     const startTime = Date.now();
     let creditsUsed = 0;
@@ -952,6 +953,15 @@ export class SearchService {
     // 1. Identificar produto com Google Vision (SEM buscar preços)
     const { productName: identifiedProduct } = await this.googleLensService.identifyProduct(imageUrl);
     productName = identifiedProduct;
+
+    // 2. Classificar o produto identificado via Python (sem custo de crédito)
+    let classification: any = null;
+    try {
+      classification = await this.classificationService.classifyQuery(productName, {}, userId);
+      this.logger.log(`[IMAGE] Produto classificado: categoria=${classification.category}, scrapers=${classification.scrapers?.map((s: any) => s.name).join(', ')}`);
+    } catch (classifyError) {
+      this.logger.warn(`[IMAGE] Falha ao classificar produto identificado: ${classifyError.message}`);
+    }
 
     // Deduzir crédito APÓS identificação bem-sucedida
     if (userId) {
@@ -994,15 +1004,15 @@ export class SearchService {
     return {
       creditsUsed,
       remainingCredits,
-      productName
-      // results: undefined - Não buscar produtos ainda
+      productName,
+      classification,
     };
   }
 
   /* ============================================
      BUSCA DE PREÇOS APÓS IDENTIFICAÇÃO
   ============================================ */
-  async searchProductPrices(productName: string, userId?: string, sortBy: string = 'BEST_MATCH'): Promise<{ 
+  async searchProductPrices(productName: string, userId?: string, sortBy: string = 'BEST_MATCH', classification?: any): Promise<{ 
     results: Product[]; 
     creditsUsed?: number; 
     remainingCredits?: number;
@@ -1010,9 +1020,30 @@ export class SearchService {
     const startTime = Date.now();
     let creditsUsed = 0;
     let remainingCredits: number | undefined;
-    
+
+    // Rotear para o scraper correto baseado na classificação do Python
+    const primaryScraper = classification?.scrapers?.[0]?.name || 'google_shopping';
+    this.logger.log(`[PRICES] scraper=${primaryScraper} categoria=${classification?.category || 'n/a'}`);
+
+    let results: Product[];
+    try {
+      if (primaryScraper === 'mercadolivre') {
+        const { results: r } = await this.withTimeout(this.mercadoLivreService.search(productName, 20, classification), 60000, 'MercadoLivre');
+        results = r;
+      } else if (primaryScraper === 'webmotors') {
+        const { results: r } = await this.withTimeout(this.webmotorsService.search(productName, 20, classification), 90000, 'Webmotors');
+        results = r;
+      } else if (primaryScraper === 'olx') {
+        results = await this.withTimeout(this.olxService.search(productName, 20, sortBy, classification), 120000, 'OLX');
+      } else {
+        results = await this.googleShoppingService.search(productName, 20, sortBy as any);
+      }
+    } catch (scraperError) {
+      this.logger.warn(`[PRICES] ${primaryScraper} falhou, fallback Google Shopping: ${scraperError.message}`);
+      results = await this.googleShoppingService.search(productName, 20, sortBy as any);
+    }
+
     if (userId) {
-      // Deduct 1 credit for price search
       try {
         await this.usersService.useCredit(userId, 1);
         creditsUsed = 1;
@@ -1032,9 +1063,6 @@ export class SearchService {
         this.logger.warn(`[CREDITS] Failed to deduct credits: ${creditError.message}`);
       }
     }
-
-    // Buscar no Google Shopping
-    const results = await this.googleShoppingService.search(productName, 20, sortBy as any);
 
     // Log analytics
     if (userId) {
