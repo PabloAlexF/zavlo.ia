@@ -4,7 +4,8 @@
     "outDir": "./dist",
     "noEmit": false,
     "module": "commonjs",
-    "target": "ES2021"
+    "target": "ES2021",
+    "ignoreDeprecations": "5.0"
   },
   "include": [
     "src/**/*"
