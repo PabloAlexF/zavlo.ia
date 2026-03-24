@@ -8,6 +8,13 @@ export class ClassificationService {
   private readonly logger = new Logger(ClassificationService.name);
   private readonly pythonServiceUrl: string;
 
+  private sanitizeLog(value: string): string {
+    return String(value)
+      .replace(/[\r\n\t]/g, ' ')
+      .replace(/[\x00-\x1F\x7F]/g, '')
+      .slice(0, 200);
+  }
+
   constructor(
     private configService: ConfigService,
     private firebaseService: FirebaseService,
@@ -24,7 +31,7 @@ export class ClassificationService {
    */
   async classifyQuery(query: string, context?: Record<string, any>, userId?: string): Promise<ClassificationResult> {
     try {
-      this.logger.log(`📥 Classificando query: "${query}"`);
+      this.logger.log(`📥 Classificando query: "${this.sanitizeLog(query)}"`);
 
       // 🆕 BUSCAR LOCALIZAÇÃO E PREFERÊNCIAS DO USUÁRIO SE DISPONÍVEL
       let userLocation: { city?: string; state?: string } | undefined;
@@ -37,11 +44,11 @@ export class ClassificationService {
             const userData = userDoc.data();
             if (userData?.location) {
               userLocation = { city: userData.location.city, state: userData.location.state };
-              this.logger.log(`📍 Localização do usuário: ${userLocation.city}, ${userLocation.state}`);
+              this.logger.log(`📍 Localização do usuário: ${this.sanitizeLog(userLocation.city ?? '')}, ${this.sanitizeLog(userLocation.state ?? '')}`);
             }
             if (userData?.preferences) {
               userPreferences = userData.preferences;
-              this.logger.log(`🧠 Preferências do usuário carregadas: ${JSON.stringify(userPreferences)}`);
+              this.logger.log(`🧠 Preferências do usuário carregadas: ${this.sanitizeLog(JSON.stringify(userPreferences))}`);
             }
           }
         } catch (locationError) {
@@ -93,7 +100,7 @@ export class ClassificationService {
       const result: ClassificationResult = await response.json();
 
       this.logger.log(
-        `✅ Classificação concluída: categoria="${result.category}", confiança=${result.confidence}, scrapers=${result.scrapers?.map(s => s.name).join(', ')}`
+        `✅ Classificação concluída: categoria="${this.sanitizeLog(result.category)}", confiança=${result.confidence}, scrapers=${result.scrapers?.map(s => this.sanitizeLog(s.name)).join(', ')}`
       );
 
       return result;
@@ -102,7 +109,7 @@ export class ClassificationService {
         throw error;
       }
 
-      this.logger.error(`❌ Erro ao conectar com serviço Python: ${error.message}`);
+      this.logger.error(`❌ Erro ao conectar com serviço Python: ${this.sanitizeLog(error.message)}`);
       
       // Fallback: retornar classificação padrão
       this.logger.warn('⚠️ Usando classificação fallback (Google Shopping)');

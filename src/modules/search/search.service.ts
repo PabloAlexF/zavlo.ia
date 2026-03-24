@@ -70,7 +70,7 @@ export class SearchService {
     
     // Se passou o tempo de circuit break, resetar contador
     if (timeSinceLastFailure > this.CIRCUIT_BREAK_TIME) {
-      this.logger.log(`🟢 [CIRCUIT BREAKER] ${source} reativado após ${Math.round(timeSinceLastFailure / 1000)}s`);
+      this.logger.log(`🟢 [CIRCUIT BREAKER] ${this.sanitizeForLog(source)} reativado após ${Math.round(timeSinceLastFailure / 1000)}s`);
       this.resetScraperFailures(source);
       return true;
     }
@@ -78,7 +78,7 @@ export class SearchService {
     // Se atingiu max failures e ainda está no período de break
     if (failure.count >= this.MAX_FAILURES) {
       const remainingTime = Math.round((this.CIRCUIT_BREAK_TIME - timeSinceLastFailure) / 1000);
-      this.logger.warn(`🔴 [CIRCUIT BREAKER] ${source} ainda desativado (${remainingTime}s restantes)`);
+      this.logger.warn(`🔴 [CIRCUIT BREAKER] ${this.sanitizeForLog(source)} ainda desativado (${remainingTime}s restantes)`);
       return false;
     }
     

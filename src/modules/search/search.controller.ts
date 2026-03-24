@@ -30,6 +30,13 @@ export class SearchController {
     return req.ip || req.connection.remoteAddress || 'unknown';
   }
 
+  private sanitizeLog(value: string): string {
+    return String(value)
+      .replace(/[\r\n\t]/g, ' ')
+      .replace(/[\x00-\x1F\x7F]/g, '')
+      .slice(0, 200);
+  }
+
   @Post('classify')
   @UseGuards(OptionalJwtAuthGuard)
   async classifyQuery(
@@ -204,7 +211,7 @@ export class SearchController {
     const { query, useRealScraping, limit, ...filters } = searchDto;
     const clientIp = this.getClientIp(req);
 
-    this.logger.log(`[SEARCH] query="${query}" user=${user?.id ?? 'anonymous'} ip=${clientIp}`);
+    this.logger.log(`[SEARCH] query="${this.sanitizeLog(query)}" user=${this.sanitizeLog(user?.id ?? 'anonymous')} ip=${this.sanitizeLog(clientIp)}`);
 
     // ✅ Parse classificação se fornecida
     let classification;
