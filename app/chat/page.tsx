@@ -192,10 +192,12 @@ export default function ChatPage() {
   const chatHistoryRef = useRef(chatHistory);
   const currentChatIdRef = useRef(currentChatId);
   const sortByRef = useRef(searchSession.sortBy);
+  const searchSessionRef = useRef(searchSession);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { chatHistoryRef.current = chatHistory; }, [chatHistory]);
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   useEffect(() => { sortByRef.current = searchSession.sortBy; }, [searchSession.sortBy]);
+  useEffect(() => { searchSessionRef.current = searchSession; }, [searchSession]);
 
   useEffect(() => {
     if (messages.length > 1) {
@@ -428,6 +430,8 @@ export default function ChatPage() {
       addMessage('ai', 'Imagem inválida. Por favor, selecione uma imagem válida.');
       setUploadedImage(null);
       setImageFile(null);
+      setLoading(false);
+      isProcessingRef.current = false;
       return;
     }
     isProcessingRef.current = true;
@@ -690,8 +694,25 @@ export default function ChatPage() {
     setMessages(prev => prev.filter(m => m.type !== 'question'));
   };
 
-  const handleHybridAnswer = async (answer: string) => {
+  const handleHybridAnswer = async (answer: string, fromTyping = false) => {
     dismissQuestionBubble();
+    // Adicionar mensagem do usuário no chat quando responde via chip (clique)
+    // Quando vem de handleSend (fromTyping=true), a mensagem já foi adicionada antes
+    if (!fromTyping && answer) {
+      const displayText = (() => {
+        try {
+          const parsed = JSON.parse(answer);
+          if (parsed?.value && typeof parsed.value === 'object') {
+            const { min, max } = parsed.value as { min?: number; max?: number };
+            if (typeof min === 'number' && typeof max === 'number') return `entre ${min/1000}mil e ${max/1000}mil`;
+            if (typeof max === 'number') return `até ${max/1000}mil`;
+            if (typeof min === 'number') return `acima de ${min/1000}mil`;
+          }
+        } catch {}
+        return answer;
+      })();
+      if (displayText) addMessage('user', displayText);
+    }
     const { missingFields, query, answers, classification } = searchSession;
     if (!missingFields.length) return;
     const currentField = missingFields[0];
@@ -786,7 +807,8 @@ export default function ChatPage() {
         timestamp: new Date(),
         questionType: nextField,
         questionSuggestions: nextSuggestions,
-        userLocation: updatedClassification?.user_location,
+        // user_location pode vir da classification inicial (Firestore) ou de resposta anterior
+        userLocation: updatedClassification?.user_location ?? classification?.user_location,
       };
       setMessages(prev => [...prev, qMsg]);
     } else {
@@ -797,10 +819,12 @@ export default function ChatPage() {
   };
 
   const handleHybridSkip = async () => {
-    if (searchSession.step !== 'asking' || loading) return;
+    const session = searchSessionRef.current;
+    if (session.step !== 'asking' || loading) return;
     dismissQuestionBubble();
-    const { query, classification, sortBy } = searchSession;
+    const { query, classification, sortBy } = session;
     setSearchSession(s => ({ ...s, step: 'idle', missingFields: [] }));
+    setLoading(true);
     await executeTextSearch(query, sortBy, classification);
   };
 
@@ -836,11 +860,42 @@ export default function ChatPage() {
         ? { ...prevClassification, ...data.classification }
         : prevClassification;
 
+      // Se o backend ainda quer fazer perguntas sobre campos não respondidos, continuar perguntando
+      if (data.needsQuestion && data.question && data.missingFields?.length > 0) {
+        const newMissingFields: string[] = (data.missingFields as string[]).filter(f => !(f in answers));
+        if (newMissingFields.length > 0) {
+          const nextField = newMissingFields[0];
+          const nextQ = getNextQuestion(nextField, enrichedClassification);
+          const nextText = typeof nextQ === 'object' ? nextQ.question : nextQ;
+          const nextSuggestions = typeof nextQ === 'object' ? nextQ.suggestions : undefined;
+          setSearchSession(s => ({
+            ...s,
+            query,
+            classification: enrichedClassification,
+            missingFields: newMissingFields,
+            answers,
+            step: 'asking',
+          }));
+          const qMsg: Message = {
+            id: crypto.randomUUID(),
+            type: 'question',
+            content: nextText,
+            timestamp: new Date(),
+            questionType: nextField,
+            questionSuggestions: nextSuggestions,
+            userLocation: enrichedClassification?.user_location,
+          };
+          setMessages(prev => [...prev, qMsg]);
+          return;
+        }
+      }
+
       setSearchSession(s => ({ ...s, classification: enrichedClassification, step: 'idle' }));
       await executeTextSearch(query, sortBy, enrichedClassification);
     } catch {
       // fallback: usar prevClassification já enriquecida (search_query atualizado pelo handleHybridAnswer)
       const fallbackClassification = { ...prevClassification, search_query: query };
+      setLoading(true);
       await executeTextSearch(query, sortBy, fallbackClassification);
     }
   };
@@ -868,7 +923,7 @@ export default function ChatPage() {
     // Handle hybrid question — user typed instead of clicking a button
     if (searchSession.step === 'asking') {
       dismissQuestionBubble();
-      await handleHybridAnswer(currentInput);
+      await handleHybridAnswer(currentInput, true);
       return;
     }
 
@@ -1168,7 +1223,7 @@ export default function ChatPage() {
         }
         
         setSearchSession(s => ({ ...s, query, classification: data.classification, step: 'idle' }));
-        setLoading(false);
+        setLoading(true);
         await executeTextSearch(query, sortByRef.current, data.classification);
         
       } else {
@@ -1187,9 +1242,10 @@ export default function ChatPage() {
   const sanitizeForLog = (value: string): string =>
     String(value).replace(/[\r\n\t\x00-\x1F\x7F]/g, ' ').trim();
 
-  const executeTextSearch = async (query: string, sortBy: string = 'RELEVANCE', classification?: any, isExpansion = false, replaceMsgId?: string) => {
-    const enrichedQuery = contextManager.applyContext(query);
-    const effectiveQuery = enrichedQuery !== query ? enrichedQuery : query;
+  const executeTextSearch = async (query: string, sortBy: string = 'BEST_MATCH', classification?: any, isExpansion = false, replaceMsgId?: string) => {
+    // Não aplicar contextManager quando a classification já tem search_query enriquecida
+    // (hybrid mode já acumulou query + respostas — contextManager pode corromper)
+    const effectiveQuery = classification?.search_query || query;
     const searchingMsgId = crypto.randomUUID();
     setMessages(prev => prev.filter(m => m.id !== replaceMsgId));
     setMessages(prev => [...prev, { id: searchingMsgId, type: 'ai' as const, content: 'searching_animation', timestamp: new Date() }]);

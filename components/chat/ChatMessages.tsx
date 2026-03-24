@@ -121,11 +121,11 @@ function FormattedMessage({ content, className = '' }: { content: string; classN
 
 // ── Faixa de preço formatada ──────────────────────────────────────────────────
 function formatPriceRange(range: { min?: number; max?: number; target?: number }): string {
-  if (range.min !== undefined && range.max !== undefined)
-    return `R$ ${range.min.toLocaleString('pt-BR')} – R$ ${range.max.toLocaleString('pt-BR')}`;
-  if (range.max !== undefined) return `até R$ ${range.max.toLocaleString('pt-BR')}`;
-  if (range.min !== undefined) return `acima de R$ ${range.min.toLocaleString('pt-BR')}`;
-  if (range.target !== undefined) return `aprox. R$ ${range.target.toLocaleString('pt-BR')}`;
+  const fmt = (v: number) => v.toLocaleString('pt-BR');
+  if (range.min != null && range.max != null) return `R$ ${fmt(range.min)} – R$ ${fmt(range.max)}`;
+  if (range.max != null) return `até R$ ${fmt(range.max)}`;
+  if (range.min != null) return `acima de R$ ${fmt(range.min)}`;
+  if (range.target != null) return `aprox. R$ ${fmt(range.target)}`;
   return '';
 }
 

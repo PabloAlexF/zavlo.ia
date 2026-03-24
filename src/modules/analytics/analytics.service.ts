@@ -105,10 +105,10 @@ export class AnalyticsService {
         return {
           ...data,
           timestamp: data.timestamp instanceof Date
-            ? data.timestamp.toISOString()
+            ? data.timestamp
             : (data.timestamp as any)?._seconds
-            ? new Date((data.timestamp as any)._seconds * 1000).toISOString()
-            : new Date().toISOString(),
+            ? new Date((data.timestamp as any)._seconds * 1000)
+            : new Date(),
         };
       });
     } catch (error) {

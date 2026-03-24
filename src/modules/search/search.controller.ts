@@ -41,79 +41,93 @@ export class SearchController {
       ? Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]))
       : undefined;
 
-    const classification = await this.searchService.classifyQueryOnly(query, user?.id);
-
-    // Se vieram respostas do modal, enriquecer a classification no backend (imutável)
-    if (answersStr && classification.classification) {
-      const base = { ...(prevClassification || {}), ...classification.classification } as any;
-      const enriched: Record<string, any> = {};
-
-      if (answersStr.location) {
-        const isBrazil = /^(brasil|todo(\s+o)?\s+brasil|qualquer|nacional|todo\s+o\s+pa[ií]s)$/i.test(answersStr.location.trim());
-        enriched.user_location = isBrazil ? null : this.parseLocation(answersStr.location);
-      }
-
-      if (answersStr.condition) {
-        const v = answersStr.condition.toLowerCase();
-        enriched.condition = v.includes('novo') || v.includes('new') ? 'new'
-          : v.includes('usado') || v.includes('used') ? 'used'
-          : 'unknown';
-      }
-
-      if (answersStr.price_range) {
-        enriched.price_range = this.parsePriceInput(answersStr.price_range);
-      }
-
-      if (answersStr.year) {
-        const y = parseInt(answersStr.year);
-        if (!isNaN(y)) enriched.detected_year = y;
-      }
-
-      if (answersStr.gender) enriched.detected_gender = answersStr.gender;
-      if (answersStr.size)   enriched.detected_size   = answersStr.size;
-      if (answersStr.storage) enriched.detected_storage = answersStr.storage;
-      if (answersStr.transmission && answersStr.transmission !== 'qualquer') enriched.detected_transmission = answersStr.transmission;
-      if (answersStr.fuel && answersStr.fuel !== 'qualquer') enriched.detected_fuel = answersStr.fuel;
-      if (answersStr.body_type && answersStr.body_type !== 'qualquer') enriched.detected_body_type = answersStr.body_type;
-      if (answersStr.brand && answersStr.brand !== 'qualquer') enriched.detected_brand = answersStr.brand;
-      if (answersStr.shoe_type) {
-        enriched.detected_shoe_type = answersStr.shoe_type;
-        // Injetar no last_filters para persistência
-        enriched.last_filters = { ...(base.last_filters || {}), shoe_type: answersStr.shoe_type };
-      }
-
-      // Reconstruir search_query com todos os filtros acumulados (ano, condição, cidade)
-      const finalBase = { ...base, ...enriched };
-      const sq = [
-        finalBase.normalized_query || base.normalized_query || '',
-        finalBase.detected_year ? String(finalBase.detected_year) : null,
-        finalBase.condition && finalBase.condition !== 'unknown' ? finalBase.condition : null,
-        finalBase.user_location?.city ?? null,
-      ].filter(Boolean).join(' ');
-      if (sq.trim()) enriched.search_query = sq.trim();
-
-      // Limpar missing_fields: remover campos já respondidos OU já preenchidos na base
-      const alreadyFilled = (f: string) => {
-        if (answersStr[f]) return true;
-        if (f === 'year'        && finalBase.detected_year)       return true;
-        if (f === 'condition'   && finalBase.condition !== 'unknown') return true;
-        if (f === 'location'    && finalBase.user_location)        return true;
-        if (f === 'price_range' && finalBase.price_range)          return true;
-        if (f === 'brand'       && finalBase.detected_brand)       return true;
-        if (f === 'gender'      && finalBase.detected_gender)      return true;
-        if (f === 'size'        && finalBase.detected_size)        return true;
-        if (f === 'storage'     && finalBase.detected_storage)     return true;
-        if (f === 'transmission'&& finalBase.detected_transmission)return true;
-        if (f === 'fuel'        && finalBase.detected_fuel)        return true;
-        if (f === 'body_type'   && finalBase.detected_body_type)   return true;
-        return false;
-      };
-      enriched.missing_fields = (base.missing_fields || []).filter((f: string) => !alreadyFilled(f));
-
-      classification.classification = { ...base, ...enriched };
+    // Se vieram respostas + prevClassification, usar prevClassification como base
+    // e pular reclassificação do Python para evitar missing_fields inconsistentes
+    if (answersStr && prevClassification) {
+      return this.enrichClassification(prevClassification, answersStr);
     }
 
-    return classification;
+    const result = await this.searchService.classifyQueryOnly(query, user?.id);
+
+    // Fallback: answers sem prevClassification — enriquecer sobre a nova classificação
+    if (answersStr && result.classification) {
+      return this.enrichClassification(result.classification, answersStr);
+    }
+
+    return result;
+  }
+
+  private enrichClassification(
+    base: Record<string, any>,
+    answersStr: Record<string, string>,
+  ): { classification: any; needsQuestion?: boolean; question?: any; missingFields?: string[] } {
+    const enriched: Record<string, any> = {};
+
+    if (answersStr.location) {
+      const isBrazil = /^(brasil|todo(\s+o)?\s+brasil|qualquer|nacional|todo\s+o\s+pa[ií]s)$/i.test(answersStr.location.trim());
+      enriched.user_location = isBrazil ? null : this.parseLocation(answersStr.location);
+    }
+    if (answersStr.condition) {
+      const v = answersStr.condition.toLowerCase();
+      enriched.condition = v.includes('novo') || v.includes('new') ? 'new'
+        : v.includes('usado') || v.includes('used') ? 'used'
+        : 'unknown';
+    }
+    if (answersStr.price_range) enriched.price_range = this.parsePriceInput(answersStr.price_range);
+    if (answersStr.year) {
+      const y = parseInt(answersStr.year);
+      if (!isNaN(y)) enriched.detected_year = y;
+    }
+    if (answersStr.gender)   enriched.detected_gender   = answersStr.gender;
+    if (answersStr.size)     enriched.detected_size     = answersStr.size;
+    if (answersStr.storage)  enriched.detected_storage  = answersStr.storage;
+    if (answersStr.transmission && answersStr.transmission !== 'qualquer') enriched.detected_transmission = answersStr.transmission;
+    if (answersStr.fuel      && answersStr.fuel      !== 'qualquer') enriched.detected_fuel      = answersStr.fuel;
+    if (answersStr.body_type && answersStr.body_type !== 'qualquer') enriched.detected_body_type = answersStr.body_type;
+    if (answersStr.brand     && answersStr.brand     !== 'qualquer') enriched.detected_brand     = answersStr.brand;
+    if (answersStr.shoe_type) {
+      enriched.detected_shoe_type = answersStr.shoe_type;
+      enriched.last_filters = { ...(base.last_filters || {}), shoe_type: answersStr.shoe_type };
+    }
+
+    const final = { ...base, ...enriched };
+
+    // Reconstruir search_query em português para os scrapers
+    const condLabel = final.condition === 'new' ? 'novo' : final.condition === 'used' ? 'usado' : null;
+    const sq = [
+      final.normalized_query || base.normalized_query || '',
+      final.detected_year ? String(final.detected_year) : null,
+      condLabel,
+      final.user_location?.city ?? null,
+    ].filter(Boolean).join(' ');
+    if (sq.trim()) enriched.search_query = sq.trim();
+
+    // Limpar missing_fields: remover campos já respondidos ou já preenchidos
+    const alreadyFilled = (f: string) => {
+      if (answersStr[f] !== undefined)                              return true;
+      if (f === 'year'         && final.detected_year)              return true;
+      if (f === 'condition'    && final.condition !== 'unknown')    return true;
+      if (f === 'location'     && final.user_location !== undefined) return true;
+      if (f === 'price_range'  && final.price_range)                return true;
+      if (f === 'brand'        && final.detected_brand)             return true;
+      if (f === 'gender'       && final.detected_gender)            return true;
+      if (f === 'size'         && final.detected_size)              return true;
+      if (f === 'storage'      && final.detected_storage)           return true;
+      if (f === 'transmission' && final.detected_transmission)      return true;
+      if (f === 'fuel'         && final.detected_fuel)              return true;
+      if (f === 'body_type'    && final.detected_body_type)         return true;
+      return false;
+    };
+    enriched.missing_fields = (base.missing_fields || []).filter((f: string) => !alreadyFilled(f));
+
+    const finalClassification = { ...base, ...enriched };
+    const stillNeedsQuestion = enriched.missing_fields.length > 0;
+    return {
+      classification: finalClassification,
+      needsQuestion: stillNeedsQuestion || undefined,
+      question: stillNeedsQuestion ? finalClassification.suggested_question : undefined,
+      missingFields: stillNeedsQuestion ? enriched.missing_fields : undefined,
+    };
   }
 
   private parseLocation(value: string): { city: string; state: string } {
