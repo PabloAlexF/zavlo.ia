@@ -410,9 +410,8 @@ export class SearchService {
       // Deduzir crédito apenas se o cache hit retornou resultados
       if (userId && filteredResults.length > 0) {
         try {
-          await this.usersService.useCredit(userId, 1);
+          await this.usersService.useCreditAndIncrementUsage(userId, 'text', 1);
           creditsUsed = 1;
-          await this.usersService.incrementUsage(userId, 'text');
           const user = await this.usersService.findById(userId);
           remainingCredits = user?.credits || 0;
         } catch (creditError: any) {
@@ -672,9 +671,8 @@ export class SearchService {
     // ✅ PROBLEMA 2 CORRIGIDO: Deduzir créditos APENAS após sucesso
     if (userId && products.length > 0) {
       try {
-        await this.usersService.useCredit(userId, 1);
+        await this.usersService.useCreditAndIncrementUsage(userId, 'text', 1);
         creditsUsed = 1;
-        await this.usersService.incrementUsage(userId, 'text');
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
         this.logger.log(`✅ [CREDITS] Deducted 1 credit after successful search. Remaining: ${remainingCredits}`);
@@ -991,9 +989,8 @@ export class SearchService {
     // Deduzir crédito APÓS identificação bem-sucedida
     if (userId) {
       try {
-        await this.usersService.useCredit(userId, 1);
+        await this.usersService.useCreditAndIncrementUsage(userId, 'image', 1);
         creditsUsed = 1;
-        await this.usersService.incrementUsage(userId, 'image');
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
         this.logger.log(`[CREDITS] Deducted 1 credit for image identification. Remaining: ${remainingCredits}`);
@@ -1070,9 +1067,8 @@ export class SearchService {
 
     if (userId) {
       try {
-        await this.usersService.useCredit(userId, 1);
+        await this.usersService.useCreditAndIncrementUsage(userId, 'image', 1);
         creditsUsed = 1;
-        await this.usersService.incrementUsage(userId, 'image');
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
         this.logger.log(`[CREDITS] Deducted 1 credit for price search. Remaining: ${remainingCredits}`);

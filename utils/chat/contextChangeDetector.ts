@@ -116,6 +116,9 @@ function extractProductFromCorrection(message: string): {
     .replace(/\b(mudei de ideia|mudei|esquece|deixa|cancela)\b/gi, '')
     .replace(/\b(comprar|buscar|procurar|encontrar|ver)\b/gi, '')
     .replace(/\b(um|uma|uns|umas|o|a|os|as)\b/gi, '')
+    // #8: remover preposições soltas que ficam após limpeza
+    .replace(/\b(de|para|com|por|sobre|entre|sem|até|desde|durante)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
     .trim();
   
   // Extrai condição
@@ -153,19 +156,21 @@ function extractProductFromCorrection(message: string): {
     }
   }
   
-  // O que sobrou é o produto
   const product = cleaned.trim() || undefined;
   
   return { product, brand, condition, location };
 }
 
 // Calcula similaridade entre duas strings (0-1)
+// #7: threshold 0.25 era muito baixo — usado apenas internamente, caller decide o threshold
 function calculateSimilarity(str1: string, str2: string): number {
-  const words1 = new Set(str1.split(/\s+/));
-  const words2 = new Set(str2.split(/\s+/));
-  
+  const words1 = new Set(str1.split(/\s+/).filter(w => w.length > 2));
+  const words2 = new Set(str2.split(/\s+/).filter(w => w.length > 2));
+
+  if (words1.size === 0 || words2.size === 0) return 0;
+
   const intersection = new Set([...words1].filter(x => words2.has(x)));
   const union = new Set([...words1, ...words2]);
-  
+
   return intersection.size / union.size;
 }

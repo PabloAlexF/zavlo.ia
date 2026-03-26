@@ -469,7 +469,8 @@ export default function ChatPage() {
 
       const userData = JSON.parse(user);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
+      // #10: Google Lens pode demorar até 120s — usar 130s para dar margem
+      const timeout = setTimeout(() => controller.abort(), 130000);
 
       let response: Response;
       try {

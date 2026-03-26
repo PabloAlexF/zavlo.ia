@@ -14,31 +14,28 @@ export class UsageResetService {
     try {
       const firestore = this.firebaseService.getFirestore();
       const today = new Date().toISOString().split('T')[0];
-      
-      const usersSnapshot = await firestore.collection('users').get();
-      let resetCount = 0;
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+      // #6: filtrar apenas usuários que usaram ontem — evita full scan
+      const usersSnapshot = await firestore
+        .collection('users')
+        .where('lastUsageDate', '==', yesterday)
+        .get();
+
+      if (usersSnapshot.empty) return;
 
       const batch = firestore.batch();
-
       usersSnapshot.docs.forEach(doc => {
-        const userData = doc.data();
-        
-        // Reset apenas se não foi resetado hoje
-        if (userData.lastUsageDate !== today) {
-          batch.update(doc.ref, {
-            textSearchesToday: 0,
-            imageSearchesToday: 0,
-            lastUsageDate: today,
-            updatedAt: new Date(),
-          });
-          resetCount++;
-        }
+        batch.update(doc.ref, {
+          textSearchesToday: 0,
+          imageSearchesToday: 0,
+          lastUsageDate: today,
+          updatedAt: new Date(),
+        });
       });
 
-      if (resetCount > 0) {
-        await batch.commit();
-        this.logger.log(`✅ Reset diário: ${resetCount} usuários`);
-      }
+      await batch.commit();
+      this.logger.log(`✅ Reset diário: ${usersSnapshot.size} usuários`);
     } catch (error) {
       this.logger.error('❌ Erro no reset diário:', error);
     }

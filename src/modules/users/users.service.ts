@@ -73,51 +73,35 @@ export class UsersService {
   }
 
   async setCredits(userId: string, credits: number) {
+    // #3: update() já lança erro se documento não existe — get() prévio é desnecessário
     const firestore = this.firebaseService.getFirestore();
-    const userDoc = await firestore.collection('users').doc(userId).get();
-    
-    if (!userDoc.exists) {
-      throw new BadRequestException('User not found');
-    }
-    
     await firestore.collection('users').doc(userId).update({
       credits,
       updatedAt: new Date(),
     });
-
     return this.findById(userId);
   }
 
   async checkUsageLimit(userId: string, type: 'text' | 'image'): Promise<boolean> {
+    // #1: leitura pura — não precisa de transação
     const firestore = this.firebaseService.getFirestore();
-    const userRef = firestore.collection('users').doc(userId);
+    const userDoc = await firestore.collection('users').doc(userId).get();
+    if (!userDoc.exists) return false;
 
-    let allowed = false;
+    const userData = userDoc.data();
+    const plan = userData?.plan || PlanType.FREE;
+    const credits = userData?.credits || 0;
 
-    await firestore.runTransaction(async (tx) => {
-      const userDoc = await tx.get(userRef);
-      if (!userDoc.exists) return;
+    const isPaidUser = plan !== PlanType.FREE || credits > 0;
+    if (isPaidUser) return true;
 
-      const userData = userDoc.data();
-      const plan = userData?.plan || PlanType.FREE;
-      const credits = userData?.credits || 0;
+    const limits = PLAN_LIMITS[PlanType.FREE];
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const monthlyUsageKey = type === 'text' ? 'textSearchesThisMonth' : 'imageSearchesThisMonth';
+    const monthlyUsage = userData?.lastMonthKey === monthKey ? (userData?.[monthlyUsageKey] || 0) : 0;
+    const monthlyLimit = type === 'text' ? limits.textSearchesPerMonth : limits.imageSearchesPerMonth;
 
-      // Usuário pago = tem plano ativo OU tem créditos avulsos
-      // Nesse caso, o limite mensal não se aplica — useCredit() controla o acesso
-      const isPaidUser = plan !== PlanType.FREE || credits > 0;
-      if (isPaidUser) { allowed = true; return; }
-
-      // Usuário free sem créditos: aplicar limite mensal
-      const limits = PLAN_LIMITS[PlanType.FREE];
-      const monthKey = new Date().toISOString().slice(0, 7);
-      const monthlyUsageKey = type === 'text' ? 'textSearchesThisMonth' : 'imageSearchesThisMonth';
-      const monthlyUsage = userData?.lastMonthKey === monthKey ? (userData?.[monthlyUsageKey] || 0) : 0;
-      const monthlyLimit = type === 'text' ? limits.textSearchesPerMonth : limits.imageSearchesPerMonth;
-
-      allowed = monthlyUsage < (monthlyLimit || 0);
-    });
-
-    return allowed;
+    return monthlyUsage < (monthlyLimit || 0);
   }
 
   async incrementUsage(userId: string, type: 'text' | 'image') {
@@ -175,6 +159,50 @@ export class UsersService {
         updatedAt: new Date(),
       };
 
+      if (!freeTrialUsed) update.freeTrialUsed = true;
+
+      tx.update(userRef, update);
+    });
+  }
+
+  // #2: useCredit + incrementUsage em uma única transação atômica
+  async useCreditAndIncrementUsage(userId: string, type: 'text' | 'image', amount: number = 1) {
+    const firestore = this.firebaseService.getFirestore();
+    const userRef = firestore.collection('users').doc(userId);
+
+    await firestore.runTransaction(async (tx) => {
+      const userDoc = await tx.get(userRef);
+      if (!userDoc.exists) throw new BadRequestException('User not found');
+
+      const userData = userDoc.data();
+      const currentCredits = userData?.credits || 0;
+      const freeTrialUsed = userData?.freeTrialUsed || false;
+
+      if (currentCredits < amount) {
+        throw new BadRequestException({
+          error: 'INSUFFICIENT_CREDITS',
+          message: 'Insufficient credits',
+          currentCredits,
+          requiredCredits: amount,
+          action: 'buy_credits',
+        });
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const monthKey = new Date().toISOString().slice(0, 7);
+      const usageKey = type === 'text' ? 'textSearchesToday' : 'imageSearchesToday';
+      const monthlyUsageKey = type === 'text' ? 'textSearchesThisMonth' : 'imageSearchesThisMonth';
+      const currentUsage = userData?.lastUsageDate === today ? (userData?.[usageKey] || 0) : 0;
+      const monthlyUsage = userData?.lastMonthKey === monthKey ? (userData?.[monthlyUsageKey] || 0) : 0;
+
+      const update: Record<string, any> = {
+        credits: currentCredits - amount,
+        [usageKey]: currentUsage + 1,
+        [monthlyUsageKey]: monthlyUsage + 1,
+        lastUsageDate: today,
+        lastMonthKey: monthKey,
+        updatedAt: new Date(),
+      };
       if (!freeTrialUsed) update.freeTrialUsed = true;
 
       tx.update(userRef, update);

@@ -41,12 +41,14 @@ export class PlanExpirationService {
         
         this.logger.log(`📋 [CRON] Processing user ${userId} - Plan: ${userData.plan}`);
         
-        // Downgrade para plano FREE
+        // #4: resetar créditos ao fazer downgrade para FREE
+        // (créditos avulsos não devem persistir após expiração do plano)
         await firestore.collection('users').doc(userId).update({
           plan: PlanType.FREE,
           billingCycle: null,
           planStartedAt: null,
           planExpiresAt: null,
+          credits: 0,
           updatedAt: new Date(),
         });
         
@@ -75,12 +77,12 @@ export class PlanExpirationService {
       const threeDaysFromNow = new Date();
       threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
       
-      // Buscar usuários com planos que expiram em 3 dias
+      // #5: Firestore não suporta != combinado com range no mesmo campo diferente.
+      // Buscar apenas pelo range de data e filtrar plan=FREE em memória.
       const usersSnapshot = await firestore
         .collection('users')
         .where('planExpiresAt', '>=', now)
         .where('planExpiresAt', '<=', threeDaysFromNow)
-        .where('plan', '!=', PlanType.FREE)
         .get();
 
       if (usersSnapshot.empty) {
@@ -88,9 +90,17 @@ export class PlanExpirationService {
         return;
       }
 
-      this.logger.log(`⚠️ [CRON] Found ${usersSnapshot.size} expiring plans`);
+      // Filtrar usuários FREE em memória (evita erro de índice composto com !=)
+      const nonFreeDocs = usersSnapshot.docs.filter(doc => doc.data().plan !== PlanType.FREE);
 
-      for (const doc of usersSnapshot.docs) {
+      if (nonFreeDocs.length === 0) {
+        this.logger.log('✅ [CRON] No expiring plans found');
+        return;
+      }
+
+      this.logger.log(`⚠️ [CRON] Found ${nonFreeDocs.length} expiring plans`);
+
+      for (const doc of nonFreeDocs) {
         const userId = doc.id;
         const userData = doc.data();
         const expiresAt = userData.planExpiresAt.toDate();
@@ -102,7 +112,7 @@ export class PlanExpirationService {
         // await this.emailService.sendPlanExpiringNotification(userId, userData.email, daysLeft);
       }
 
-      this.logger.log(`✅ [CRON] Notified ${usersSnapshot.size} users`);
+      this.logger.log(`✅ [CRON] Notified ${nonFreeDocs.length} users`);
     } catch (error) {
       this.logger.error('❌ [CRON] Error notifying expiring plans:', error);
     }
