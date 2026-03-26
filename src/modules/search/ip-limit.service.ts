@@ -264,12 +264,17 @@ export class IpLimitService {
 
   /**
    * Reseta contadores diários de todos os IPs
+   * #3: implementação real usando hGetAll + hDel
    */
   async resetDailyCounts(): Promise<number> {
-    // Em produção, isso seria feito com uma chave diferente por dia
-    // Por simplicidade, aqui apenas logamos
-    this.logger.log(`[IP_LIMIT] Reset diário solicitado`);
-    return 0;
+    const allCounts = await this.redisService.hGetAll('free_search:daily_counts');
+    if (!allCounts) return 0;
+    const ips = Object.keys(allCounts);
+    for (const ip of ips) {
+      await this.redisService.hDel('free_search:daily_counts', ip);
+    }
+    this.logger.log(`[IP_LIMIT] Reset diário: ${ips.length} IPs resetados`);
+    return ips.length;
   }
 
   /* ============================================

@@ -63,6 +63,8 @@ export class ClassificationService {
           location: userLocation,
           last_filters: userPreferences.last_filters ?? {},
           last_category: userPreferences.last_category ?? null,
+          // #7: passar campos já preenchidos pelas preferências para o Python não perguntar de novo
+          prefilled_fields: Object.keys(userPreferences.last_filters ?? {}),
         },
       };
 
@@ -170,37 +172,4 @@ export class ClassificationService {
     }
   }
 
-  /**
-   * Mapeia scrapers recomendados para IDs de actors Apify
-   */
-  getApifyActorIds(scrapers: string[]): string[] {
-    const actorMap: Record<string, string> = {
-      google_shopping: 'burbn~google-shopping-scraper',
-      webmotors: 'webmotors-scraper',
-      mercadolivre: 'karamelo~mercadolivre-scraper-brasil-portugues',
-      olx: 'olx-scraper',
-    };
-
-    return scrapers
-      .map(scraper => actorMap[scraper])
-      .filter(Boolean);
-  }
-
-  /**
-   * Determina prioridade de execução dos scrapers
-   */
-  getScraperPriority(category: string, condition: string): string[] {
-    // Carros e motos → Webmotors + MercadoLivre
-    if (category === 'car' || category === 'motorcycle') {
-      return ['webmotors', 'mercadolivre'];
-    }
-
-    // Produtos usados → OLX primeiro
-    if (condition === 'used' || category === 'marketplace_used') {
-      return ['olx', 'google_shopping'];
-    }
-
-    // Produtos novos → Google Shopping primeiro
-    return ['google_shopping', 'olx'];
-  }
 }

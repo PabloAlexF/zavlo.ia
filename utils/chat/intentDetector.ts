@@ -63,7 +63,7 @@ const PRODUCT_KEYWORDS = [
   'celulares?', 'smartphones?', 'telefones?',
   'tvs?', 'televisoes?', 'smart tvs?',
   'fones?', 'headphones?', 'airpods', 'earbuds',
-  'tenis', 'sapatos?', 'botas?',
+  'tenis', 'sapatos?', 'botas?', 'sandálias?', 'sandalias?',
   'carros?', 'motos?', 'veiculos?',
   'casas?', 'apartamentos?', 'imoveis?',
   'computadores?', 'pcs?', 'desktops?',
@@ -71,7 +71,12 @@ const PRODUCT_KEYWORDS = [
   'consoles?', 'playstations?', 'xboxs?', 'nintendos?',
   'cameras?', 'gopros?',
   'relogios?', 'smartwatchs?',
-  'geladeiras?', 'fogoes?', 'microondas', 'lavadoras?'
+  'geladeiras?', 'fogoes?', 'microondas', 'lavadoras?', 'maquinas? de lavar',
+  'colchoes?', 'colchao', 'sofas?', 'sofá', 'camas?', 'guarda-roupas?', 'estantes?',
+  'ar condicionado', 'ventiladores?', 'aquecedores?',
+  'bicicletas?', 'patinetes?', 'skates?',
+  'impressoras?', 'monitores?', 'teclados?', 'mouses?',
+  'cadeiras?', 'mesas?', 'escrivaninhas?',
 ];
 
 // ✅ Pré-compilar regex de produtos (performance)
@@ -257,24 +262,26 @@ function extractUserName(query: string): string | undefined {
 // ✅ Nova função: extrair localização (validação melhorada)
 function extractLocation(query: string): string | undefined {
   const normalized = normalize(query);
-  
-  // Padrões: "em BH", "em São Paulo", "perto de mim", "aqui em"
+
   const patterns = [
     /\b(?:em|de|perto de|aqui em)\s+([a-z]{2,}(?:\s+[a-z]{2,})?)/i,
-    /\b(bh|sp|rj|mg|ba|pr|sc|rs|df|go|mt|ms|pa|am|ro|ac|rr|ap|to|ma|pi|ce|rn|pb|pe|al|se)\b/i, // Siglas UF
+    /\b(bh|sp|rj|mg|ba|pr|sc|rs|df|go|mt|ms|pa|am|ro|ac|rr|ap|to|ma|pi|ce|rn|pb|pe|al|se)\b/i,
+  ];
+
+  // #2: expandir lista de palavras comuns que não são localizações
+  const commonWords = [
+    'promocao', 'oferta', 'venda', 'compra', 'novo', 'usado', 'ate', 'por',
+    'estoque', 'pronta', 'entrega', 'desconto', 'preco', 'valor', 'custo',
+    'qualidade', 'garantia', 'original', 'importado', 'nacional', 'atacado',
+    'varejo', 'loja', 'site', 'online', 'delivery', 'frete', 'gratis',
   ];
 
   for (const pattern of patterns) {
     const match = normalized.match(pattern);
     if (match && match[1]) {
       const location = match[1].trim();
-      // ✅ Validação: mínimo 3 caracteres (evita "em", "de")
-      if (location.length >= 3) {
-        // ✅ Evitar falsos positivos: não pode ser palavra comum
-        const commonWords = ['promocao', 'oferta', 'venda', 'compra', 'novo', 'usado', 'ate', 'por'];
-        if (!commonWords.includes(location)) {
-          return location;
-        }
+      if (location.length >= 3 && !commonWords.includes(location)) {
+        return location;
       }
     }
   }

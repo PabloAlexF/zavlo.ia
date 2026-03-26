@@ -11,7 +11,7 @@ interface PriceSuggestion { label: string; min?: number; max?: number; value?: s
 
 interface Message {
   id: string;
-  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question' | 'question' | 'expansion';
+  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question' | 'query_confirm' | 'question' | 'expansion';
   content: string;
   products?: any[];
   timestamp: Date;
@@ -40,6 +40,8 @@ interface ChatMessagesProps {
   onQuestionAnswer: (answer: string) => void;
   onQuestionSkip: () => void;
   onExpandSearch: (source: string) => void;
+  onExecuteTextSort: (sortBy: string) => void;
+  onQueryConfirm: (finalQuery: string, sortBy: string) => void;
   messagesEndRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -228,7 +230,46 @@ const QuestionChip = ({ onClick, children }: { onClick: () => void; children: Re
   </motion.button>
 );
 
-export function ChatMessages({
+// ── Query confirm bubble (editable final query before search) ───────────────
+function QueryConfirmBubble({ message, onConfirm }: {
+  message: Message & { queryConfirmSortBy?: string };
+  onConfirm: (finalQuery: string, sortBy: string) => void;
+}) {
+  const [value, setValue] = useState(message.content);
+  const sortBy = (message as any).queryConfirmSortBy || 'BEST_MATCH';
+  const sortLabels: Record<string, string> = {
+    BEST_MATCH: 'mais relevante', LOWEST_PRICE: 'menor preço',
+    HIGHEST_PRICE: 'maior preço', TOP_RATED: 'mais avaliados',
+  };
+  return (
+    <AIBubble>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Busca final • {sortLabels[sortBy] || sortBy}</p>
+      <p className="mb-3 text-xs text-slate-400">Confirme ou edite o texto antes de buscar</p>
+      <div className="relative mb-4">
+        <input
+          type="text"
+          value={value}
+          maxLength={150}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && value.trim()) onConfirm(value.trim(), sortBy); }}
+          className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 pr-9 text-sm text-slate-100 outline-none transition-colors focus:border-violet-500/50"
+        />
+        <Edit2 className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+      </div>
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
+        disabled={!value.trim()}
+        onClick={() => value.trim() && onConfirm(value.trim(), sortBy)}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-all hover:shadow-violet-500/35 disabled:opacity-40"
+      >
+        🔍 Buscar agora
+      </motion.button>
+    </AIBubble>
+  );
+}
+
+
   messages,
   loading,
   userCredits,
@@ -240,6 +281,8 @@ export function ChatMessages({
   onQuestionAnswer,
   onQuestionSkip,
   onExpandSearch,
+  onExecuteTextSort,
+  onQueryConfirm,
   messagesEndRef,
 }: ChatMessagesProps) {
   return (
@@ -490,7 +533,16 @@ export function ChatMessages({
                 </div>
               )}
 
-              {/* ── Pergunta de ordenação (imagem) ── */}
+              {/* ── Query confirm (editable final query) ── */}
+              {message.type === 'query_confirm' && (
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <AIAvatar />
+                  <div className="max-w-[88%] sm:max-w-[80%]">
+                    <QueryConfirmBubble message={message as any} onConfirm={onQueryConfirm} />
+                  </div>
+                </div>
+              )}
+
               {message.type === 'sort_question' && (
                 <div className="flex items-start gap-2 sm:gap-3">
                   <AIAvatar />
@@ -511,7 +563,11 @@ export function ChatMessages({
                             transition={{ delay: i * 0.07 }}
                             whileHover={{ y: -2, scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={() => onExecuteImageSearch(option.value)}
+                            onClick={() =>
+                              (message as any).isImageSort
+                                ? onExecuteImageSearch(option.value)
+                                : onExecuteTextSort(option.value)
+                            }
                             className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-slate-200 transition-all hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-white"
                           >
                             {option.label}

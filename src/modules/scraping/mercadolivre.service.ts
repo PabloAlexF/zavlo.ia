@@ -1,14 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as crypto from 'crypto';
 
 @Injectable()
 export class MercadoLivreService {
   private readonly logger = new Logger(MercadoLivreService.name);
   private readonly apiToken: string;
   private readonly actorId = 'karamelo~mercadolivre-scraper-brasil-portugues';
-  private readonly cache = new Map<string, { data: any[]; expiresAt: number }>();
-  private readonly CACHE_TTL_MS = 5 * 60 * 1000;
 
   constructor(private configService: ConfigService) {
     this.apiToken = this.configService.get('APIFY_API_KEY');
@@ -42,13 +39,6 @@ export class MercadoLivreService {
 
       const safeQuery = this.sanitizeForLog(searchQuery);
       this.logger.log(`🛒 [MERCADOLIVRE] Buscando: "${safeQuery}" (limit: ${limit})`);
-
-      const cacheKey = crypto.createHash('md5').update(`ml:${searchQuery}:${limit}`).digest('hex');
-      const cached = this.cache.get(cacheKey);
-      if (cached && cached.expiresAt > Date.now()) {
-        this.logger.log(`⚡ [MERCADOLIVRE] Cache hit: ${cacheKey}`);
-        return { results: cached.data.slice(0, limit), searchedNationally: false };
-      }
 
       const input = {
         keyword: searchQuery,
@@ -118,7 +108,6 @@ export class MercadoLivreService {
         };
       });
 
-      this.cache.set(cacheKey, { data: mapped, expiresAt: Date.now() + this.CACHE_TTL_MS });
       return { results: mapped.slice(0, limit), searchedNationally: false };
     } catch (error) {
       this.logger.error(`❌ [MERCADOLIVRE] Erro: ${error.message}`);
@@ -128,39 +117,46 @@ export class MercadoLivreService {
 
   /** Enriquece a query com filtros da classificação para produtos gerais */
   private buildEnrichedQuery(query: string, classification: any): string {
+    // #8 (mesmo padrão do Google Shopping): usar search_query se já enriquecida
+    if (classification.search_query && classification.search_query.trim()) {
+      return classification.search_query.trim();
+    }
+
     const parts: string[] = [query];
     const cat = classification.category;
+    const base = query.toLowerCase();
+    const addIfAbsent = (token: string) => {
+      if (token && !base.includes(token.toLowerCase())) parts.push(token);
+    };
 
-    if (classification.condition === 'new') parts.push('novo');
-    else if (classification.condition === 'used') parts.push('usado');
+    if (classification.condition === 'new') addIfAbsent('novo');
+    else if (classification.condition === 'used') addIfAbsent('usado');
 
     if (cat === 'fashion') {
-      if (classification.detected_gender) parts.push(classification.detected_gender);
-      if (classification.detected_size)   parts.push(classification.detected_size);
-      if (classification.detected_shoe_type) parts.push(classification.detected_shoe_type);
+      if (classification.detected_gender) addIfAbsent(classification.detected_gender);
+      if (classification.detected_size)   addIfAbsent(classification.detected_size);
+      if (classification.detected_shoe_type) addIfAbsent(classification.detected_shoe_type);
     }
 
-    if (cat === 'smartphone' && classification.detected_storage) {
-      parts.push(classification.detected_storage);
+    // #4: adicionar size/gender para categoria general também (ex: colchão casal)
+    if (cat === 'general' || cat === 'furniture' || cat === 'appliance') {
+      if (classification.detected_size)   addIfAbsent(classification.detected_size);
+      if (classification.detected_gender) addIfAbsent(classification.detected_gender);
     }
 
-    if (cat === 'electronics' && classification.detected_storage) {
-      parts.push(classification.detected_storage);
-    }
-
-    if (classification.detected_brand && !query.toLowerCase().includes(classification.detected_brand)) {
-      parts.push(classification.detected_brand);
-    }
+    if (classification.detected_storage) addIfAbsent(classification.detected_storage);
+    if (classification.detected_brand)   addIfAbsent(classification.detected_brand);
 
     return parts.filter(Boolean).join(' ');
   }
 
   /** Infere condição pelo título do produto */
-  private inferCondition(title: string): 'new' | 'used' | undefined {
+  private inferCondition(title: string): 'new' | 'used' {
     const t = title.toLowerCase();
     if (/recondicionado|usado|seminovo|semi novo|semi-novo|segunda.?m[aã]o|com detalhe|bateria\s*\d+%/.test(t)) return 'used';
     if (/novo|lacrado|0\s*km|na caixa|caixa aberta|caixa fechada|lacrada/.test(t)) return 'new';
-    return undefined;
+    // #5: retornar 'new' como padrão em vez de undefined para não ser filtrado fora
+    return 'new';
   }
 
   private parsePrice(value: string | undefined): number {

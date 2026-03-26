@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as crypto from 'crypto';
 
 const KNOWN_BRANDS = ['honda','toyota','chevrolet','volkswagen','fiat','ford','hyundai','nissan','renault','jeep','mitsubishi','kia','bmw','mercedes','audi','yamaha','kawasaki','suzuki'];
 
@@ -9,8 +8,6 @@ export class WebmotorsService {
   private readonly logger = new Logger(WebmotorsService.name);
   private readonly apiToken: string;
   private readonly actorId = 'ribtools~webmotors-scraper';
-  private readonly cache = new Map<string, { data: any[]; expiresAt: number }>();
-  private readonly CACHE_TTL_MS = 5 * 60 * 1000;
 
   constructor(private configService: ConfigService) {
     this.apiToken = this.configService.get('APIFY_API_KEY');
@@ -26,13 +23,6 @@ export class WebmotorsService {
       this.logger.log(`🚙 [WEBMOTORS] Buscando: "${safeQuery}" (limit: ${limit})`);
 
       const searchUrl = this.buildSearchUrl(query, classification);
-
-      const cacheKey = crypto.createHash('md5').update(searchUrl).digest('hex');
-      const cached = this.cache.get(cacheKey);
-      if (cached && cached.expiresAt > Date.now()) {
-        this.logger.log(`⚡ [WEBMOTORS] Cache hit: ${cacheKey}`);
-        return { results: cached.data.slice(0, limit), searchedNationally: false };
-      }
 
       let results = await this.runApify(searchUrl, limit);
       let searchedNationally = false;
@@ -90,7 +80,6 @@ export class WebmotorsService {
       }));
 
       const ranked = this.rankResults(mapped, classification);
-      this.cache.set(cacheKey, { data: ranked, expiresAt: Date.now() + this.CACHE_TTL_MS });
       return { results: ranked.slice(0, limit), searchedNationally };
     } catch (error) {
       this.logger.error(`❌ [WEBMOTORS] Erro: ${error.message}`);
@@ -277,8 +266,8 @@ export class WebmotorsService {
       return `${stateSlug}-${slug}`;
     }
 
-    // Sem localização: usar SP como padrão (maior mercado)
-    return 'sp';
+    // Sem localização: retornar string vazia (busca nacional sem forçar SP)
+    return '';
   }
 
   /** Extrai marca conhecida da query como fallback quando classification não tem detected_brand */

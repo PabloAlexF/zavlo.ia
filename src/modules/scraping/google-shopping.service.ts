@@ -164,29 +164,47 @@ export class GoogleShoppingService {
   /** Enriquece a query com filtros extraídos da classificação */
   private buildEnrichedQuery(query: string, classification?: any): string {
     if (!classification) return query;
+
+    // #8: se search_query já foi enriquecida pelo backend, usar diretamente
+    // sem adicionar tokens duplicados
+    if (classification.search_query && classification.search_query.trim()) {
+      return classification.search_query.trim();
+    }
+
     const parts: string[] = [query];
     const cat = classification.category;
+    const base = query.toLowerCase();
 
-    // Condição
-    if (classification.condition === 'new') parts.push('novo');
-    else if (classification.condition === 'used') parts.push('usado');
+    const addIfAbsent = (token: string) => {
+      if (token && !base.includes(token.toLowerCase())) parts.push(token);
+    };
 
-    // Moda: gênero + tamanho
+    if (cat === 'car' || cat === 'motorcycle') {
+      if (classification.detected_year) addIfAbsent(String(classification.detected_year));
+      if (classification.condition === 'new') addIfAbsent('novo');
+      else if (classification.condition === 'used') addIfAbsent('usado');
+      if (classification.detected_transmission && classification.detected_transmission !== 'qualquer')
+        addIfAbsent(classification.detected_transmission);
+      if (classification.detected_fuel && classification.detected_fuel !== 'qualquer')
+        addIfAbsent(classification.detected_fuel);
+      if (classification.detected_body_type && classification.detected_body_type !== 'qualquer')
+        addIfAbsent(classification.detected_body_type);
+      return parts.filter(Boolean).join(' ');
+    }
+
+    if (classification.condition === 'new') addIfAbsent('novo');
+    else if (classification.condition === 'used') addIfAbsent('usado');
+
     if (cat === 'fashion') {
-      if (classification.detected_gender) parts.push(classification.detected_gender);
-      if (classification.detected_size)   parts.push(classification.detected_size);
+      if (classification.detected_gender) addIfAbsent(classification.detected_gender);
+      if (classification.detected_size)   addIfAbsent(classification.detected_size);
     }
 
-    // Smartphone: armazenamento
     if (cat === 'smartphone' && classification.detected_storage) {
-      parts.push(classification.detected_storage);
+      addIfAbsent(classification.detected_storage);
     }
 
-    // Faixa de preço: não adicionar na query (Google Shopping filtra por parâmetro)
-    // Marca (se não estiver já na query)
-    if (classification.detected_brand && !query.toLowerCase().includes(classification.detected_brand)) {
-      parts.push(classification.detected_brand);
-    }
+    if (classification.detected_brand) addIfAbsent(classification.detected_brand);
 
     return parts.filter(Boolean).join(' ');
   }
@@ -227,16 +245,5 @@ export class GoogleShoppingService {
            shipping.includes('free') || 
            shippingPrice === '0' || 
            shippingPrice === 'R$ 0,00';
-  }
-  
-  private calculateDiscount(currentPrice: string, originalPrice: string): number {
-    if (!currentPrice || !originalPrice) return 0;
-    
-    const current = this.parsePrice(currentPrice);
-    const original = this.parsePrice(originalPrice);
-    
-    if (original <= current) return 0;
-    
-    return Math.round(((original - current) / original) * 100);
   }
 }

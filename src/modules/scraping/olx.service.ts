@@ -70,9 +70,9 @@ export class OlxService {
       if (!runId) throw new Error('OLX Apify: runId não retornado');
       this.logger.log(`🚀 [OLX] Run iniciado: ${runId}`);
 
-      // Polling até SUCCEEDED ou FAILED (max 110s, intervalo 5s)
+      // #7: MAX_WAIT reduzido para 100s para dar margem ao timeout de 120s do service
       const POLL_INTERVAL = 5000;
-      const MAX_WAIT = 110000;
+      const MAX_WAIT = 100000;
       const deadline = Date.now() + MAX_WAIT;
       let status = 'RUNNING';
 
@@ -117,7 +117,11 @@ export class OlxService {
         sourceUrl: item.url,
         location: item.location ? `${item.location.city}, ${item.location.region}` : null,
         dealerLocation: item.location?.city || null,
-        condition: 'used',
+        // #6: usar 'new' como fallback quando condition é 'unknown'/undefined
+        // para não filtrar fora produtos OLX em buscas sem condição especificada
+        condition: classification?.condition === 'new' ? 'new'
+          : classification?.condition === 'used' ? 'used'
+          : 'new',
         category: 'marketplace',
         scrapedAt: new Date().toISOString(),
         postedAt: item.postedAt,

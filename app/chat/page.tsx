@@ -29,7 +29,7 @@ function apiUrl(path: string): string {
 
 interface Message {
   id: string;
-  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question' | 'question' | 'expansion';
+  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question' | 'query_confirm' | 'question' | 'expansion';
   content: string;
   products?: any[];
   timestamp: Date;
@@ -156,7 +156,7 @@ export default function ChatPage() {
     classification: any;
     missingFields: string[];
     answers: Record<string, string>;
-    step: 'idle' | 'asking';
+    step: 'idle' | 'asking' | 'sort' | 'confirm';
     expansionSources: string[];
     primarySource: string;
     sortBy: string;
@@ -191,12 +191,10 @@ export default function ChatPage() {
   const messagesRef = useRef(messages);
   const chatHistoryRef = useRef(chatHistory);
   const currentChatIdRef = useRef(currentChatId);
-  const sortByRef = useRef(searchSession.sortBy);
   const searchSessionRef = useRef(searchSession);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { chatHistoryRef.current = chatHistory; }, [chatHistory]);
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
-  useEffect(() => { sortByRef.current = searchSession.sortBy; }, [searchSession.sortBy]);
   useEffect(() => { searchSessionRef.current = searchSession; }, [searchSession]);
 
   useEffect(() => {
@@ -366,6 +364,7 @@ export default function ChatPage() {
     setDetectedProductName('');
     setAwaitingImageConfirmation(false);
     setAwaitingImageSort(false);
+    isProcessingRef.current = false;
     setSearchSession({
       query: '',
       classification: null,
@@ -555,16 +554,18 @@ export default function ChatPage() {
 
   const handleImagePriceSearch = () => {
     setMessages(prev => prev.filter(m => m.type !== 'image_confirmation'));
-    
     const sortMessage: Message = {
       id: crypto.randomUUID(),
       type: 'sort_question',
       content: 'Como deseja ordenar os resultados?',
       timestamp: new Date(),
-    };
+      isImageSort: true,
+    } as any;
     setMessages(prev => [...prev, sortMessage]);
     setAwaitingImageConfirmation(false);
     setAwaitingImageSort(true);
+    // #6: unificar guard — step='sort' cobre ambos os fluxos
+    setSearchSession(s => ({ ...s, step: 'sort' }));
   };
 
   const executeImageSearch = async (sortBy: string) => {
@@ -594,7 +595,7 @@ export default function ChatPage() {
           'Authorization': `Bearer ${userData.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ productName: detectedProductName, sortBy, classification: searchSession.classification }),
+        body: JSON.stringify({ productName: detectedProductName, sortBy, classification: searchSessionRef.current.classification }),
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -663,7 +664,8 @@ export default function ChatPage() {
   const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
   const handleExpandSearch = async (source: string) => {
-    const { query, classification, sortBy } = searchSession;
+    // #2: usar ref para evitar stale closure
+    const { query, classification, sortBy } = searchSessionRef.current;
     const sourceLabel: Record<string, string> = {
       olx: 'OLX',
       webmotors: 'Webmotors',
@@ -696,8 +698,6 @@ export default function ChatPage() {
 
   const handleHybridAnswer = async (answer: string, fromTyping = false) => {
     dismissQuestionBubble();
-    // Adicionar mensagem do usuário no chat quando responde via chip (clique)
-    // Quando vem de handleSend (fromTyping=true), a mensagem já foi adicionada antes
     if (!fromTyping && answer) {
       const displayText = (() => {
         try {
@@ -713,7 +713,8 @@ export default function ChatPage() {
       })();
       if (displayText) addMessage('user', displayText);
     }
-    const { missingFields, query, answers, classification } = searchSession;
+    // #2: usar ref para evitar stale closure
+    const { missingFields, query, answers, classification } = searchSessionRef.current;
     if (!missingFields.length) return;
     const currentField = missingFields[0];
     
@@ -812,27 +813,26 @@ export default function ChatPage() {
       };
       setMessages(prev => [...prev, qMsg]);
     } else {
-      const currentSortBy = searchSession.sortBy;
       setSearchSession(s => ({ ...s, query: enrichedQuery, classification: updatedClassification, answers: updatedAnswers, step: 'idle' }));
-      await classifyWithAnswers(enrichedQuery, updatedAnswers, updatedClassification, currentSortBy);
+      await classifyWithAnswers(enrichedQuery, updatedAnswers, updatedClassification);
     }
   };
 
-  const handleHybridSkip = async () => {
+  const handleHybridSkip = () => {
     const session = searchSessionRef.current;
     if (session.step !== 'asking' || loading) return;
     dismissQuestionBubble();
-    const { query, classification, sortBy } = session;
-    setSearchSession(s => ({ ...s, step: 'idle', missingFields: [] }));
-    setLoading(true);
-    await executeTextSearch(query, sortBy, classification);
+    const { query, classification } = session;
+    setSearchSession(s => ({ ...s, step: 'sort', missingFields: [] }));
+    askSortThenSearch(query, classification);
   };
 
   // Reenvia ao backend com as respostas para enriquecer a classification lá
   // Recebe sortBy como parâmetro para evitar stale closure
-  const classifyWithAnswers = async (query: string, answers: Record<string, string>, prevClassification: any, sortBy: string) => {
+  const classifyWithAnswers = async (query: string, answers: Record<string, string>, prevClassification: any) => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    // #8: 20s > 15s do backend para dar margem ao fallback interno do backend
+    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) { router.push('/auth'); return; }
@@ -856,8 +856,10 @@ export default function ChatPage() {
       if (!response.ok) throw new Error(`classify failed: ${response.status}`);
       const data = await response.json();
       // Mesclar enrichedClassification com prevClassification para preservar filtros acumulados
+      // Mesclar: data.classification é a base (Python enriqueceu), prevClassification sobrepõe
+      // para preservar respostas do usuário que o Python não deve sobrescrever
       const enrichedClassification = data.classification
-        ? { ...prevClassification, ...data.classification }
+        ? { ...data.classification, ...prevClassification }
         : prevClassification;
 
       // Se o backend ainda quer fazer perguntas sobre campos não respondidos, continuar perguntando
@@ -891,12 +893,12 @@ export default function ChatPage() {
       }
 
       setSearchSession(s => ({ ...s, classification: enrichedClassification, step: 'idle' }));
-      await executeTextSearch(query, sortBy, enrichedClassification);
+      askSortThenSearch(query, enrichedClassification);
     } catch {
-      // fallback: usar prevClassification já enriquecida (search_query atualizado pelo handleHybridAnswer)
       const fallbackClassification = { ...prevClassification, search_query: query };
-      setLoading(true);
-      await executeTextSearch(query, sortBy, fallbackClassification);
+      // #5: garantir step='idle' antes de askSortThenSearch
+      setSearchSession(s => ({ ...s, step: 'idle' }));
+      askSortThenSearch(query, fallbackClassification);
     }
   };
 
@@ -927,9 +929,17 @@ export default function ChatPage() {
       return;
     }
 
-    // Handle image sort — orientar o usuário em vez de ignorar silenciosamente
-    if (awaitingImageSort) {
+    // #7: guard unificado via step='sort' — awaitingImageSort redundante
+    if (awaitingImageSort && searchSessionRef.current.step !== 'sort') {
       addMessage('ai', '⏳ Selecione uma opção de ordenação acima para continuar.');
+      setLoading(false);
+      return;
+    }
+
+    // Guard: sort_question ou query_confirm de texto pendente
+    const sessionSnap = searchSessionRef.current;
+    if (sessionSnap.step === 'sort' || sessionSnap.step === 'confirm') {
+      addMessage('ai', '⏳ Confirme a busca acima antes de continuar.');
       setLoading(false);
       return;
     }
@@ -1065,6 +1075,18 @@ export default function ChatPage() {
         return;
       }
 
+      if (intent.type === 'offer') {
+        addMessage('ai', '💬 Para fazer uma oferta, entre em contato diretamente com o vendedor pelo anúncio!\n\nQuer que eu busque mais opções com preço menor?');
+        setLoading(false);
+        return;
+      }
+
+      if (intent.type === 'other') {
+        addMessage('ai', '🤔 Não entendi. Digite o nome do produto que você procura!');
+        setLoading(false);
+        return;
+      }
+
       if (intent.type !== 'search' && intent.type !== 'buy') {
         // ✅ Bug Medium #2: validar query antes de chamar API (evita chamadas desnecessárias)
         const trimmed = currentInput.trim();
@@ -1095,11 +1117,7 @@ export default function ChatPage() {
       const userData = JSON.parse(user);
       
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-
-      let response: Response;
-      try {
-        response = await fetch(apiUrl('/search/classify'), {
+      const timeout = setTimeout(() => controller.abort(), 20000); // #8: 20s > 15s do backend
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${userData.token}`,
@@ -1223,8 +1241,8 @@ export default function ChatPage() {
         }
         
         setSearchSession(s => ({ ...s, query, classification: data.classification, step: 'idle' }));
-        setLoading(true);
-        await executeTextSearch(query, sortByRef.current, data.classification);
+        setLoading(false);
+        askSortThenSearch(query, data.classification);
         
       } else {
         addMessage('ai', 'Erro ao processar. Tente novamente.');
@@ -1241,6 +1259,60 @@ export default function ChatPage() {
 
   const sanitizeForLog = (value: string): string =>
     String(value).replace(/[\r\n\t\x00-\x1F\x7F]/g, ' ').trim();
+
+  // Mostra bolha de ordenação e aguarda escolha do usuário antes de buscar
+  const executeTextSort = (sortBy: string) => {
+    if (isProcessingRef.current) return;
+    const { query, classification } = searchSessionRef.current;
+    setMessages(prev => prev.filter(m => m.type !== 'sort_question'));
+    const cl = classification;
+    // #2: usar search_query (enriquecida pelo backend) em vez de normalized_query
+    const parts: string[] = [cl?.search_query || cl?.normalized_query || query];
+    // evitar duplicar tokens já presentes no search_query
+    const base = (cl?.search_query || '').toLowerCase();
+    if (cl?.detected_year && !base.includes(String(cl.detected_year))) parts.push(String(cl.detected_year));
+    if (cl?.condition === 'new'  && !base.includes('novo'))  parts.push('novo');
+    if (cl?.condition === 'used' && !base.includes('usado')) parts.push('usado');
+    if (cl?.user_location?.city && !base.includes(cl.user_location.city.toLowerCase())) parts.push(`em ${cl.user_location.city}`);
+    const finalQueryText = parts.join(' ').trim();
+    setSearchSession(s => ({ ...s, step: 'confirm', sortBy }));
+    const confirmMsg: Message = {
+      id: crypto.randomUUID(),
+      type: 'query_confirm',
+      content: finalQueryText,
+      timestamp: new Date(),
+      queryConfirmSortBy: sortBy,
+    } as any;
+    setMessages(prev => [...prev, confirmMsg]);
+  };
+
+  const handleQueryConfirm = async (finalQuery: string, sortBy: string) => {
+    // #6: guard contra duplo clique
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+    setMessages(prev => prev.filter(m => m.type !== 'query_confirm'));
+    const { classification } = searchSessionRef.current;
+    // #3: quando usuário edita, limpar filtros derivados para não conflitar com o texto editado
+    const updatedClassification = { ...classification, search_query: finalQuery };
+    // #7: atualizar query no session para expansões futuras usarem o texto correto
+    setSearchSession(s => ({ ...s, query: finalQuery, classification: updatedClassification, step: 'idle', sortBy }));
+    setLoading(true);
+    await executeTextSearch(finalQuery, sortBy, updatedClassification);
+    isProcessingRef.current = false;
+  };
+
+  const askSortThenSearch = (query: string, classification: any) => {
+    // #1: resetar awaitingImageSort ao entrar no fluxo de texto
+    setAwaitingImageSort(false);
+    const sortMsg: Message = {
+      id: crypto.randomUUID(),
+      type: 'sort_question',
+      content: 'Como deseja ordenar os resultados?',
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, sortMsg]);
+    setSearchSession(s => ({ ...s, query, classification, step: 'sort' }));
+  };
 
   const executeTextSearch = async (query: string, sortBy: string = 'BEST_MATCH', classification?: any, isExpansion = false, replaceMsgId?: string) => {
     // Não aplicar contextManager quando a classification já tem search_query enriquecida
@@ -1376,7 +1448,8 @@ export default function ChatPage() {
             priceRangeApplied: data.priceRangeApplied,
           };
           setMessages(prev => [...prev, productsMessage]);
-          contextManager.update({ lastResults: products, lastProduct: query });
+          // #5: atualizar contexto com effectiveQuery (enriquecida) não query original
+          contextManager.update({ lastResults: products, lastProduct: effectiveQuery });
 
           // Perguntar se os resultados satisfizeram (apenas na busca primária, não em expansões)
           if (!isExpansion && data.canExpandSearch && data.expansionSources?.length > 0) {
@@ -1405,6 +1478,9 @@ export default function ChatPage() {
               isVehicle,
             };
             setMessages(prev => [...prev, expansionMsg]);
+          } else {
+            // #4: resetar step e limpar expansionSources quando não há expansão
+            setSearchSession(s => ({ ...s, step: 'idle', expansionSources: [] }));
           }
 
           setLoading(false);
@@ -1415,6 +1491,8 @@ export default function ChatPage() {
     } catch (error: any) {
       clearTimeout(timeout);
       setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
+      // #8: limpar expansionSources em caso de erro
+      setSearchSession(s => ({ ...s, step: 'idle', expansionSources: [] }));
       const msg = error?.name === 'AbortError'
         ? '⏱️ A busca demorou demais. Tente novamente.'
         : 'Erro ao processar busca. Tente novamente.';
@@ -1513,6 +1591,8 @@ export default function ChatPage() {
             onQuestionAnswer={handleHybridAnswer}
             onQuestionSkip={handleHybridSkip}
             onExpandSearch={handleExpandSearch}
+            onExecuteTextSort={executeTextSort}
+            onQueryConfirm={handleQueryConfirm}
             messagesEndRef={messagesEndRef}
           />
         )}

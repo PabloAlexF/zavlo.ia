@@ -17,19 +17,21 @@ def extract_price_range(normalized: str) -> dict | None:
     """
     
     def parse_value(value_str: str) -> int:
-        """Converte string de preço em número inteiro"""
+        """Converte string de preço em número (suporta decimais)"""
         value_str = value_str.replace(" ", "").lower()
         
         # "50mil" ou "50k" → 50000
         if "mil" in value_str or "k" in value_str:
-            nums = re.findall(r'\d+', value_str)
+            nums = re.findall(r'\d+(?:[.,]\d+)?', value_str)
             if nums:
-                return int(nums[0]) * 1000
+                return int(float(nums[0].replace(',', '.')) * 1000)
         
-        # "50000" ou "R$ 50000"
-        nums = re.findall(r'\d+', value_str)
+        # "50000" ou "R$ 50000" ou "50.000" (ponto de milhar BR)
+        # Remover ponto de milhar antes de converter
+        clean = re.sub(r'(\d)\.(\d{3})(?!\d)', r'\1\2', value_str)
+        nums = re.findall(r'\d+(?:[.,]\d+)?', clean)
         if nums:
-            return int(nums[0])
+            return int(float(nums[0].replace(',', '.')))
         
         return 0
     
@@ -83,7 +85,7 @@ def extract_price_range(normalized: str) -> dict | None:
             "target_price": value
         }
     
-    # 5️⃣ VALOR SOLTO (50mil, 50k, 50.000)
+    # 5️⃣ VALOR SOLTO (50mil, 50k) — deve vir antes do ponto de milhar
     match = re.search(r'\b(\d+)\s*(mil|k)\b', normalized)
     if match:
         if not re.search(r'(ate|entre|acima|abaixo|mais|menos)', normalized):

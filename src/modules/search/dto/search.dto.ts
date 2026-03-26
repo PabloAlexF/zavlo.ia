@@ -12,31 +12,10 @@ export class SearchTextDto {
 
   @IsOptional()
   @IsString()
-  state?: string;
-
-  @IsOptional()
-  @IsString()
-  city?: string;
-
-  @IsOptional()
-  @IsString()
-  category?: string;
-
-  @IsOptional()
-  @IsString()
   useRealScraping?: string;
 }
 
 export class SearchImageDto {
   @IsString()
   imageUrl: string;
-
-  @IsOptional()
-  @IsString()
-  state?: string;
-
-  @IsOptional()
-  @IsString()
-  city?: string;
 }
-

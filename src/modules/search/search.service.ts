@@ -440,7 +440,9 @@ export class SearchService {
         searchedNationally: cachedResult.searchedNationally ?? undefined,
         originalCity: cachedResult.originalCity ?? undefined,
         cityFilterApplied: cachedResult.cityFilterApplied ?? undefined,
-        relaxedFilters: cachedResult.relaxedFilters ?? undefined,
+        relaxedFilters: filteredResults.length === 0
+          ? [...(cachedResult.relaxedFilters ?? []), 'price']
+          : cachedResult.relaxedFilters ?? undefined,
       };
       }
     }
@@ -637,9 +639,32 @@ export class SearchService {
         1800,
       );
 
+      // Cobrar crédito se Firebase retornou resultados
+      if (userId && fallback.results.length > 0) {
+        try {
+          await this.usersService.useCredit(userId, 1);
+          creditsUsed = 1;
+          await this.usersService.incrementUsage(userId, 'text');
+          const user = await this.usersService.findById(userId);
+          remainingCredits = user?.credits || 0;
+        } catch (creditError: any) {
+          if (creditError.response?.error === 'INSUFFICIENT_CREDITS') {
+            throw new BadRequestException({
+              error: 'INSUFFICIENT_CREDITS',
+              message: 'Créditos insuficientes',
+              currentCredits: creditError.response.currentCredits || 0,
+              action: 'buy_credits',
+            });
+          }
+        }
+      } else if (userId) {
+        const user = await this.usersService.findById(userId);
+        remainingCredits = user?.credits || 0;
+      }
+
       return {
         ...fallback,
-        creditsUsed: 0, // ✅ Não cobrar se não encontrou nada
+        creditsUsed,
         remainingCredits: userId ? (await this.usersService.findById(userId))?.credits : undefined
       };
     }
@@ -1047,6 +1072,7 @@ export class SearchService {
       try {
         await this.usersService.useCredit(userId, 1);
         creditsUsed = 1;
+        await this.usersService.incrementUsage(userId, 'image');
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
         this.logger.log(`[CREDITS] Deducted 1 credit for price search. Remaining: ${remainingCredits}`);

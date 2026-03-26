@@ -98,10 +98,11 @@ async def classify_query(request: ClassifyRequest):
         if context.get('location'):
             logger.info(f"📍 Localização do usuário: {context['location']}")
         
-        # 🎓 APRENDIZADO AUTOMÁTICO: Registrar busca
+        # 🎓 APRENDIZADO AUTOMÁTICO: Registrar busca com query normalizada
         if not result.get('is_question') and not result.get('is_greeting'):
+            normalized_query = result.get('normalized_query') or query
             learner.record_search(
-                query=query,
+                query=normalized_query,
                 category=result['category'],
                 confidence=result['confidence']
             )

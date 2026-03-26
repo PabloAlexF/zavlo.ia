@@ -75,12 +75,12 @@ export function detectContextChange(
   }
   
   // Verifica se é uma nova busca (sem relação com anterior)
-  // Threshold 0.15: permissivo o suficiente para não resetar refinamentos
+  // Threshold 0.25: equilibrado entre não resetar refinamentos e detectar nova busca
   if (conversationHistory.length > 0) {
     const lastMessage = conversationHistory[conversationHistory.length - 1];
     const similarity = calculateSimilarity(normalized, lastMessage.toLowerCase());
     
-    if (similarity < 0.15) {
+    if (similarity < 0.25) {
       const extracted = extractProductFromCorrection(currentMessage);
       return {
         hasChange: true,

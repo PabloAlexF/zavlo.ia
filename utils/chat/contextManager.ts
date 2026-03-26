@@ -405,6 +405,4 @@ class ContextManager {
 
 export { ContextManager };
 // Singleton legado mantido para compatibilidade com imports existentes fora do chat
-export const contextManager = typeof window !== 'undefined'
-  ? new ContextManager()
-  : new ContextManager();
+export const contextManager = new ContextManager();

@@ -105,6 +105,13 @@ export class SearchController {
       final.normalized_query || base.normalized_query || '',
       final.detected_year ? String(final.detected_year) : null,
       condLabel,
+      final.detected_brand     && final.detected_brand     !== 'qualquer' ? final.detected_brand     : null,
+      final.detected_gender    && final.detected_gender    !== 'qualquer' ? final.detected_gender    : null,
+      final.detected_size      && final.detected_size      !== 'qualquer' ? final.detected_size      : null,
+      final.detected_storage   && final.detected_storage   !== 'qualquer' ? final.detected_storage   : null,
+      final.detected_transmission && final.detected_transmission !== 'qualquer' ? final.detected_transmission : null,
+      final.detected_fuel      && final.detected_fuel      !== 'qualquer' ? final.detected_fuel      : null,
+      final.detected_body_type && final.detected_body_type !== 'qualquer' ? final.detected_body_type : null,
       final.user_location?.city ?? null,
     ].filter(Boolean).join(' ');
     if (sq.trim()) enriched.search_query = sq.trim();
@@ -129,10 +136,19 @@ export class SearchController {
 
     const finalClassification = { ...base, ...enriched };
     const stillNeedsQuestion = enriched.missing_fields.length > 0;
+    // Retornar a pergunta do próximo campo faltante, não a do campo original
+    let nextQuestion: any = undefined;
+    if (stillNeedsQuestion) {
+      const nextField = enriched.missing_fields[0];
+      // Tentar obter pergunta específica do campo via suggested_question do Python
+      // (só usar se o campo bater com o próximo faltante)
+      const pythonQ = finalClassification.suggested_question;
+      nextQuestion = pythonQ ?? nextField;
+    }
     return {
       classification: finalClassification,
       needsQuestion: stillNeedsQuestion || undefined,
-      question: stillNeedsQuestion ? finalClassification.suggested_question : undefined,
+      question: nextQuestion,
       missingFields: stillNeedsQuestion ? enriched.missing_fields : undefined,
     };
   }
@@ -226,7 +242,7 @@ export class SearchController {
     // Adiciona sortBy e filtros de preço
     const searchFilters = {
       ...filters,
-      sortBy: sortBy || 'RELEVANCE',
+      sortBy: sortBy || 'BEST_MATCH',
       minPrice: minPrice ? Number(minPrice) : undefined,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       providedClassification: classification // ✅ Passar para service
