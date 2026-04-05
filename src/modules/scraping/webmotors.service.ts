@@ -8,6 +8,7 @@ export class WebmotorsService {
   private readonly logger = new Logger(WebmotorsService.name);
   private readonly apiToken: string;
   private readonly actorId = 'ribtools~webmotors-scraper';
+  private readonly DEFAULT_MAX_REQUESTS = 10;
 
   constructor(private configService: ConfigService) {
     this.apiToken = this.configService.get('APIFY_API_KEY');
@@ -24,14 +25,17 @@ export class WebmotorsService {
 
       const searchUrl = this.buildSearchUrl(query, classification);
 
-      let results = await this.runApify(searchUrl, limit);
+      const maxRequests = this.resolveMaxRequests(classification);
+      const sellerDataAddon = Boolean(classification?.webmotors_seller_data_addon);
+
+      let results = await this.runApify(searchUrl, limit, maxRequests, sellerDataAddon);
       let searchedNationally = false;
 
       // Fallback nacional se busca com cidade retornou vazio
       if (results.length === 0 && classification?.user_location?.city) {
         this.logger.warn(`⚠️ [WEBMOTORS] 0 resultados em ${this.sanitizeForLog(classification.user_location.city)} — tentando busca nacional`);
         const nationalUrl = this.buildSearchUrl(query, { ...classification, user_location: null });
-        results = await this.runApify(nationalUrl, limit);
+        results = await this.runApify(nationalUrl, limit, maxRequests, sellerDataAddon);
         if (results.length > 0) searchedNationally = true;
       }
 
@@ -87,18 +91,25 @@ export class WebmotorsService {
     }
   }
 
-  private async runApify(searchUrl: string, limit: number): Promise<any[]> {
+  private resolveMaxRequests(classification?: any): number {
+    const parsed = Number(classification?.webmotors_max_requests ?? this.DEFAULT_MAX_REQUESTS);
+    if (!Number.isFinite(parsed)) return this.DEFAULT_MAX_REQUESTS;
+    return Math.min(Math.max(parsed, 1), 30);
+  }
+
+  private async runApify(searchUrl: string, limit: number, maxRequests: number, sellerDataAddon: boolean): Promise<any[]> {
     const input = {
       startUrls: [{ url: searchUrl }],
-      proxy: {
+      proxyConfig: {
         useApifyProxy: true,
         apifyProxyGroups: ['RESIDENTIAL'],
         apifyProxyCountry: 'BR',
       },
-      maxItems: limit,
+      maxRequests,
+      sellerDataAddon,
     };
 
-    this.logger.log(`📤 [WEBMOTORS] URL: ${searchUrl}`);
+    this.logger.log(`📤 [WEBMOTORS] URL: ${searchUrl} | maxRequests=${maxRequests} | sellerDataAddon=${sellerDataAddon}`);
 
     const response = await fetch(
       `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=90`,
@@ -116,7 +127,7 @@ export class WebmotorsService {
     }
 
     const results = await response.json();
-    return Array.isArray(results) ? results : [];
+    return Array.isArray(results) ? results.slice(0, limit) : [];
   }
 
   private rankResults(results: any[], classification?: any): any[] {
@@ -156,13 +167,17 @@ export class WebmotorsService {
     // Regra: quando há marca+modelo, sempre usar path /carros/{local}/{marca}/{modelo}
     // com tipoveiculo=carros|carros-novos|carros-usados conforme condição.
     // O path base é sempre /carros (não /carros-novos) quando há filtro de marca.
-    const vehicleWord = isMoto ? 'motos' : 'carros';
+    const baseVehicleWord = isMoto ? 'motos' : 'carros';
+    const conditionedVehicleWord = isMoto
+      ? (c.condition === 'new' ? 'motos-novas' : c.condition === 'used' ? 'motos-usadas' : 'motos')
+      : (c.condition === 'new' ? 'carros-novos' : c.condition === 'used' ? 'carros-usados' : 'carros');
     // Sem cidade = busca nacional, omitir slug de localização
     const locationSlug = city ? this.buildLocationSlug(city, state) : '';
 
     const params = new URLSearchParams();
-    params.set('tipoveiculo', vehicleWord);
+    params.set('tipoveiculo', conditionedVehicleWord);
     params.set('lkid', '1000');
+    params.set('page', '1');
 
     let pathBase: string;
     // Mapas de transmissão e combustível para parâmetros Webmotors
@@ -172,7 +187,7 @@ export class WebmotorsService {
 
     if (brand && model) {
       const locPart = locationSlug ? `/${locationSlug}` : '';
-      pathBase = `https://www.webmotors.com.br/${vehicleWord}${locPart}/${brand.toLowerCase()}/${model.toLowerCase()}`;
+      pathBase = `https://www.webmotors.com.br/${baseVehicleWord}${locPart}/${brand.toLowerCase()}/${model.toLowerCase()}`;
       params.set('marca1',  brand.toUpperCase());
       params.set('modelo1', model.toUpperCase());
       if (c.detected_year) {
@@ -189,12 +204,12 @@ export class WebmotorsService {
       if (bodyType) params.set('carroceria', bodyType);
     } else if (brand) {
       const locPart = locationSlug ? `/${locationSlug}` : '';
-      pathBase = `https://www.webmotors.com.br/${vehicleWord}${locPart}/${brand.toLowerCase()}`;
+      pathBase = `https://www.webmotors.com.br/${baseVehicleWord}${locPart}/${brand.toLowerCase()}`;
       params.set('marca1', brand.toUpperCase());
     } else {
       pathBase = locationSlug
-        ? `https://www.webmotors.com.br/${vehicleWord}/${locationSlug}`
-        : `https://www.webmotors.com.br/${vehicleWord}`;
+        ? `https://www.webmotors.com.br/${conditionedVehicleWord}/${locationSlug}`
+        : `https://www.webmotors.com.br/${conditionedVehicleWord}`;
     }
 
     if (city) params.set('estadocidade', this.normalizeCityName(city));

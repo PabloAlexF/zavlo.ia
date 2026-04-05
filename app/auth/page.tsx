@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Eye, EyeOff, Mail, Lock, User, MapPin, Sparkles, CheckCircle } from 'lucide-react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuthInstance } from '@/lib/firebase';
 
 export default function Auth() {
   const router = useRouter();
@@ -45,17 +47,38 @@ export default function Auth() {
     setMessage(null);
     
     try {
-      const endpoint = isLogin ? '/auth/login' : '/auth/register';
-      const body = isLogin 
-        ? { email, password }
-        : { email, password, name, location: { cep, city, state } };
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      const response = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      let response: Response;
+
+      if (isLogin) {
+        const auth = getAuthInstance();
+        if (!auth) {
+          throw new Error('Firebase não inicializado no cliente');
+        }
+
+        try {
+          const credential = await signInWithEmailAndPassword(auth, email, password);
+          const idToken = await credential.user.getIdToken(true);
+          response = await fetch(`${API_URL}/auth/firebase-login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+          });
+        } catch (firebaseError) {
+          response = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+        }
+      } else {
+        response = await fetch(`${API_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name, location: { cep, city, state } }),
+        });
+      }
 
       const data = await response.json();
 

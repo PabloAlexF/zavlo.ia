@@ -15,21 +15,96 @@ export class MercadoLivreService {
     return String(value).replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
   }
 
-  async search(query: string, limit = 20, classification?: any): Promise<{ results: any[]; searchedNationally: boolean }> {
+  private normalizeText(value: string): string {
+    return String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private mapSortByLabel(sortBy: string): string {
+    const map: Record<string, string> = {
+      RELEVANCE: 'Mais relevante',
+      BEST_MATCH: 'Mais relevante',
+      LOWEST_PRICE: 'Menor preço',
+      HIGHEST_PRICE: 'Maior preço',
+      TOP_RATED: 'Mais avaliados',
+    };
+
+    return map[sortBy] || map.BEST_MATCH;
+  }
+
+  private parseRating(value: string | number | undefined): number {
+    if (typeof value === 'number') return value;
+    if (!value) return 0;
+    const normalized = String(value).replace(',', '.').match(/\d+(\.\d+)?/);
+    return normalized ? parseFloat(normalized[0]) : 0;
+  }
+
+  private applyLocalSort(results: any[], sortBy: string): any[] {
+    if (!Array.isArray(results) || results.length === 0) return results;
+
+    if (sortBy === 'LOWEST_PRICE') {
+      return [...results].sort((a, b) => (a.price || 0) - (b.price || 0));
+    }
+
+    if (sortBy === 'HIGHEST_PRICE') {
+      return [...results].sort((a, b) => (b.price || 0) - (a.price || 0));
+    }
+
+    if (sortBy === 'TOP_RATED') {
+      return [...results].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+
+    return results;
+  }
+
+  async search(
+    query: string,
+    limit = 20,
+    sortBy: 'BEST_MATCH' | 'RELEVANCE' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | 'TOP_RATED' = 'BEST_MATCH',
+    classification?: any,
+  ): Promise<{ results: any[]; searchedNationally: boolean }> {
     try {
       const isVehicle = classification?.category === 'car' || classification?.category === 'motorcycle';
+      const sortLabel = this.mapSortByLabel(sortBy);
 
       // Para veículos: construir query específica para evitar retornar peças
       let searchQuery = query;
+      let fallbackQueries: string[] = [];
       if (isVehicle && classification) {
         const brand = classification.detected_brand || '';
         const model = classification.detected_model || '';
         const year  = classification.detected_year  || '';
-        const cond  = classification.condition === 'used' ? 'usado' : classification.condition === 'new' ? '0km' : '';
-        const parts = [brand, model, year, cond].filter(Boolean);
+        const transmission = classification.detected_transmission || '';
+        const queryNormalized = this.normalizeText(query);
+        const currentYear = new Date().getFullYear();
+        const isOldYear = Number(year) > 0 && Number(year) < currentYear - 1;
+        const cond = classification.condition === 'used'
+          ? 'usado'
+          : classification.condition === 'new' && !isOldYear
+            ? '0km'
+            : '';
+
+        const manualToken = /(\bmanual\b)/.test(queryNormalized) ? 'manual' : '';
+        const automaticToken = /(\bautomatico\b|\bautomatica\b|\bauto\b|\bcvt\b)/.test(queryNormalized) ? 'automatico' : '';
+        const transmissionToken = transmission || manualToken || automaticToken;
+
+        const parts = [brand, model, year, transmissionToken, cond].filter(Boolean);
         if (parts.length >= 2) {
           searchQuery = parts.join(' ');
           this.logger.log(`🚗 [MERCADOLIVRE] Query de veículo construída: "${searchQuery}"`);
+
+          const withoutTransmission = [brand, model, year, cond].filter(Boolean).join(' ');
+          const withoutYear = [brand, model, transmissionToken, cond].filter(Boolean).join(' ');
+          const compact = [brand, model, cond].filter(Boolean).join(' ');
+
+          fallbackQueries = [withoutTransmission, withoutYear, compact]
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0 && value !== searchQuery);
         }
       } else if (classification) {
         // Produtos gerais: enriquecer query com filtros
@@ -38,35 +113,59 @@ export class MercadoLivreService {
       }
 
       const safeQuery = this.sanitizeForLog(searchQuery);
-      this.logger.log(`🛒 [MERCADOLIVRE] Buscando: "${safeQuery}" (limit: ${limit})`);
+      this.logger.log(`🛒 [MERCADOLIVRE] Buscando: "${safeQuery}" (limit: ${limit}, sortBy: ${sortBy} -> ${sortLabel})`);
+
+      const scrapeOfertas = Boolean((classification as any)?.ml_scrape_ofertas);
+      const includePromoted = Boolean((classification as any)?.ml_promoted);
 
       const input = {
-        keyword: searchQuery,
+        ...(scrapeOfertas ? {} : { keyword: searchQuery }),
         maxPages: 1, // 1 página = ~48 itens, limitamos no slice
         maxPagesOfertas: 1,
-        promoted: false,
-        scrapeOfertas: false,
+        promoted: includePromoted,
+        scrapeOfertas,
       };
 
-      this.logger.log(`📤 [MERCADOLIVRE] Input: keyword="${safeQuery}", maxPages=${input.maxPages}`);
+      this.logger.log(`📤 [MERCADOLIVRE] Input: keyword="${scrapeOfertas ? '(ofertas-mode)' : safeQuery}", maxPages=${input.maxPages}, maxPagesOfertas=${input.maxPagesOfertas}, promoted=${input.promoted}, scrapeOfertas=${input.scrapeOfertas}`);
 
-      const response = await fetch(
-        `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=60`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(input),
+      const fetchItems = async (keyword: string): Promise<any[]> => {
+        const requestInput = {
+          ...input,
+          ...(scrapeOfertas ? {} : { keyword }),
+        };
+
+        const response = await fetch(
+          `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=60`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestInput),
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          this.logger.error(`❌ [MERCADOLIVRE] Apify API error ${response.status}: ${errorText}`);
+          throw new Error(`MercadoLivre Apify API error: ${response.status}`);
         }
-      );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error(`❌ [MERCADOLIVRE] Apify API error ${response.status}: ${errorText}`);
-        throw new Error(`MercadoLivre Apify API error: ${response.status}`);
+        const raw: any[] = await response.json();
+        return Array.isArray(raw) ? raw : [];
+      };
+
+      let items = await fetchItems(searchQuery);
+
+      if (!scrapeOfertas && items.length === 0 && fallbackQueries.length > 0) {
+        for (const fallback of fallbackQueries) {
+          const safeFallback = this.sanitizeForLog(fallback);
+          this.logger.warn(`🔁 [MERCADOLIVRE] 0 resultados com "${safeQuery}". Tentando fallback: "${safeFallback}"`);
+          items = await fetchItems(fallback);
+          if (items.length > 0) {
+            this.logger.log(`✅ [MERCADOLIVRE] Fallback funcionou com "${safeFallback}" (${items.length} itens brutos)`);
+            break;
+          }
+        }
       }
-
-      const raw: any[] = await response.json();
-      const items = Array.isArray(raw) ? raw : [];
 
       if (items.length === 0) {
         this.logger.warn(`⚠️ [MERCADOLIVRE] Nenhum resultado para: "${safeQuery}"`);
@@ -103,12 +202,14 @@ export class MercadoLivreService {
           shippedFrom: item.enviadoDe || null,
           highlight,
           installments: item.installments || null,
+          rating: this.parseRating(item.produtoReviews),
           sku: item.SKU || null,
           scrapedAt: item.Tempo || new Date().toISOString(),
         };
       });
 
-      return { results: mapped.slice(0, limit), searchedNationally: false };
+      const sorted = this.applyLocalSort(mapped, sortBy);
+      return { results: sorted.slice(0, limit), searchedNationally: false };
     } catch (error) {
       this.logger.error(`❌ [MERCADOLIVRE] Erro: ${error.message}`);
       return { results: [], searchedNationally: false };

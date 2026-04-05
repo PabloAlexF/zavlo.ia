@@ -8,6 +8,8 @@ import { SearchTextDto, SearchImageDto } from './dto/search.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { ClassificationData, ClassifyQueryRequest, ClassifyQueryResponse } from '@shared/contracts/classification.contract';
+import { orderQuestionFields, filterMissingFieldsByScraper, getQuestionForField } from '@shared/chat/questionRules';
 
 @Controller('search')
 export class SearchController {
@@ -40,9 +42,9 @@ export class SearchController {
   @Post('classify')
   @UseGuards(OptionalJwtAuthGuard)
   async classifyQuery(
-    @Body() body: { query: string; answers?: Record<string, string | { value: any }>; prevClassification?: any },
+    @Body() body: ClassifyQueryRequest,
     @CurrentUser() user?: any,
-  ) {
+  ): Promise<ClassifyQueryResponse> {
     const { query, answers, prevClassification } = body;
     const answersStr = answers
       ? Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]))
@@ -56,6 +58,17 @@ export class SearchController {
 
     const result = await this.searchService.classifyQueryOnly(query, user?.id);
 
+    if (result.classification?.missing_fields?.length) {
+      const orderedFields = orderQuestionFields(result.classification.missing_fields, result.classification);
+      const compatibleFields = filterMissingFieldsByScraper(orderedFields, result.classification);
+      result.classification.missing_fields = compatibleFields;
+      result.missingFields = compatibleFields;
+      result.question = compatibleFields.length > 0
+        ? getQuestionForField(compatibleFields[0], result.classification, result.classification.suggested_question)
+        : undefined;
+      result.needsQuestion = compatibleFields.length > 0;
+    }
+
     // Fallback: answers sem prevClassification — enriquecer sobre a nova classificação
     if (answersStr && result.classification) {
       return this.enrichClassification(result.classification, answersStr);
@@ -65,9 +78,9 @@ export class SearchController {
   }
 
   private enrichClassification(
-    base: Record<string, any>,
+    base: ClassificationData,
     answersStr: Record<string, string>,
-  ): { classification: any; needsQuestion?: boolean; question?: any; missingFields?: string[] } {
+  ): ClassifyQueryResponse {
     const enriched: Record<string, any> = {};
 
     if (answersStr.location) {
@@ -95,6 +108,127 @@ export class SearchController {
     if (answersStr.shoe_type) {
       enriched.detected_shoe_type = answersStr.shoe_type;
       enriched.last_filters = { ...(base.last_filters || {}), shoe_type: answersStr.shoe_type };
+    }
+
+    // 🌟 Nova lógica: minimum_rating
+    if (answersStr.minimum_rating) {
+      const ratingMap: Record<string, number> = {
+        'bom': 4.0, '4': 4.0, '4.0': 4.0, '4+': 4.0,
+        'muito bom': 4.5, '4.5': 4.5, '4.5+': 4.5,
+        'excelente': 4.8, '5': 4.8, '5 estrelas': 4.8,
+      };
+      const ratingKey = answersStr.minimum_rating.toLowerCase().trim();
+      const parsed = ratingMap[ratingKey] ?? parseFloat(ratingKey);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 5) {
+        enriched.minimum_rating = parsed;
+      }
+    }
+
+    // 🚚 Nova lógica: require_free_shipping
+    if (answersStr.require_free_shipping) {
+      const freightKey = answersStr.require_free_shipping.toLowerCase().trim();
+      enriched.require_free_shipping = 
+        ['sim', 'yes', 's', 'ok', 'grátis', 'gratuito', 'frete grátis'].some(w => freightKey.includes(w));
+    }
+
+    // 💳 Nova lógica: prefer_installments (Mercadolivre parcelamento sem juros)
+    if (answersStr.prefer_installments) {
+      const installKey = answersStr.prefer_installments.toLowerCase().trim();
+      enriched.prefer_installments = 
+        ['sim', 'yes', 's', 'ok', 'parcelado', 'parcels', 'sem juros', 'parcelamento'].some(w => installKey.includes(w));
+    }
+
+    // 🎉 Nova lógica: priority_discounted (promoções/descontos)
+    if (answersStr.priority_discounted) {
+      const promoKey = answersStr.priority_discounted.toLowerCase().trim();
+      enriched.priority_discounted = 
+        ['sim', 'yes', 's', 'ok', 'promoção', 'promocao', 'oferta', 'desconto', 'off'].some(w => promoKey.includes(w));
+    }
+
+    // 📍 Nova lógica: prefer_proximity_olx (proximidade em OLX)
+    if (answersStr.prefer_proximity_olx) {
+      const proximityKey = answersStr.prefer_proximity_olx.toLowerCase().trim();
+      if (['sim', 'yes', 's', 'ok', 'perto', 'próximo', 'proximo', 'saída'].some(w => proximityKey.includes(w))) {
+        enriched.prefer_proximity_olx = 'nearby';
+      } else {
+        enriched.prefer_proximity_olx = 'any';
+      }
+    }
+
+    // 👤 Nova lógica: seller_type_preference (tipo de vendedor)
+    if (answersStr.seller_type_preference) {
+      const sellerKey = answersStr.seller_type_preference.toLowerCase().trim();
+      if (['loja', 'profissional', 'empresa', 'business', 'verificado'].some(w => sellerKey.includes(w))) {
+        enriched.seller_type_preference = 'business';
+      } else if (['particular', 'individual', 'pessoa', 'usuário', 'usuario', 'comum'].some(w => sellerKey.includes(w))) {
+        enriched.seller_type_preference = 'individual';
+      } else {
+        enriched.seller_type_preference = 'any';
+      }
+    }
+
+    // 📦 Nova lógica: availability_preference (disponibilidade)
+    if (answersStr.availability_preference) {
+      const availKey = answersStr.availability_preference.toLowerCase().trim();
+      if (['nao', 'não', 'no', 'n', 'agora', 'imediato', 'estoque'].some(w => availKey.includes(w))) {
+        enriched.availability_preference = 'in_stock';
+      } else {
+        enriched.availability_preference = 'flexible';
+      }
+    }
+
+    // 📉 Nova lógica: prefer_price_drop (priorizar produtos em queda recente)
+    if (answersStr.prefer_price_drop) {
+      const trendKey = answersStr.prefer_price_drop.toLowerCase().trim();
+      enriched.prefer_price_drop =
+        ['sim', 'yes', 's', 'ok', 'queda', 'caindo', 'oferta'].some(w => trendKey.includes(w));
+    }
+
+    if (answersStr.ml_scrape_ofertas) {
+      const key = answersStr.ml_scrape_ofertas.toLowerCase().trim();
+      enriched.ml_scrape_ofertas =
+        ['sim', 'yes', 's', 'ok', 'oferta', 'ofertas'].some((w) => key.includes(w));
+    }
+
+    if (answersStr.ml_promoted) {
+      const key = answersStr.ml_promoted.toLowerCase().trim();
+      enriched.ml_promoted =
+        ['sim', 'yes', 's', 'ok', 'patrocin', 'anúncio', 'anuncio'].some((w) => key.includes(w));
+    }
+
+    if (answersStr.olx_max_pages) {
+      const parsed = Number(answersStr.olx_max_pages);
+      if (Number.isFinite(parsed)) {
+        enriched.olx_max_pages = Math.min(Math.max(parsed, 1), 3);
+      }
+    }
+
+    if (answersStr.webmotors_seller_data_addon) {
+      const key = answersStr.webmotors_seller_data_addon.toLowerCase().trim();
+      enriched.webmotors_seller_data_addon =
+        ['sim', 'yes', 's', 'ok', 'vendedor', 'cnpj', 'telefone'].some((w) => key.includes(w));
+    }
+
+    if (answersStr.webmotors_max_requests) {
+      const parsed = Number(answersStr.webmotors_max_requests);
+      if (Number.isFinite(parsed)) {
+        enriched.webmotors_max_requests = Math.min(Math.max(parsed, 1), 30);
+      }
+    }
+
+    if (answersStr.google_country) {
+      enriched.google_country = answersStr.google_country.toLowerCase().trim().slice(0, 2);
+    }
+
+    if (answersStr.google_language) {
+      enriched.google_language = answersStr.google_language.toLowerCase().trim().slice(0, 2);
+    }
+
+    if (answersStr.google_limit) {
+      const parsed = Number(answersStr.google_limit);
+      if (Number.isFinite(parsed)) {
+        enriched.google_limit = Math.min(Math.max(parsed, 20), 100);
+      }
     }
 
     const final = { ...base, ...enriched };
@@ -130,20 +264,29 @@ export class SearchController {
       if (f === 'transmission' && final.detected_transmission)      return true;
       if (f === 'fuel'         && final.detected_fuel)              return true;
       if (f === 'body_type'    && final.detected_body_type)         return true;
+      if (f === 'ml_scrape_ofertas' && final.ml_scrape_ofertas !== undefined) return true;
+      if (f === 'ml_promoted'       && final.ml_promoted !== undefined)       return true;
+      if (f === 'olx_max_pages'     && final.olx_max_pages !== undefined)     return true;
+      if (f === 'webmotors_seller_data_addon' && final.webmotors_seller_data_addon !== undefined) return true;
+      if (f === 'webmotors_max_requests'      && final.webmotors_max_requests !== undefined)      return true;
+      if (f === 'google_country'    && final.google_country !== undefined)    return true;
+      if (f === 'google_language'   && final.google_language !== undefined)   return true;
+      if (f === 'google_limit'      && final.google_limit !== undefined)      return true;
       return false;
     };
-    enriched.missing_fields = (base.missing_fields || []).filter((f: string) => !alreadyFilled(f));
+    const orderedMissingFields = orderQuestionFields(
+      (base.missing_fields || []).filter((f: string) => !alreadyFilled(f)),
+      final as ClassificationData,
+    );
+    enriched.missing_fields = filterMissingFieldsByScraper(orderedMissingFields, final as ClassificationData);
 
     const finalClassification = { ...base, ...enriched };
     const stillNeedsQuestion = enriched.missing_fields.length > 0;
-    // Retornar a pergunta do próximo campo faltante, não a do campo original
     let nextQuestion: any = undefined;
     if (stillNeedsQuestion) {
       const nextField = enriched.missing_fields[0];
-      // Tentar obter pergunta específica do campo via suggested_question do Python
-      // (só usar se o campo bater com o próximo faltante)
       const pythonQ = finalClassification.suggested_question;
-      nextQuestion = pythonQ ?? nextField;
+      nextQuestion = getQuestionForField(nextField, finalClassification, pythonQ);
     }
     return {
       classification: finalClassification,
@@ -154,6 +297,21 @@ export class SearchController {
   }
 
   private parseLocation(value: string): { city: string; state: string } {
+    const ufSet = new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
+    const raw = value.trim();
+    const upper = raw.toUpperCase();
+    if (/^[A-Z]{2}$/.test(upper) && ufSet.has(upper)) {
+      return { city: '', state: upper };
+    }
+
+    const cityUfMatch = raw.match(/^(.+?)\s*[-/,]\s*([A-Za-z]{2})$/);
+    if (cityUfMatch) {
+      const parsedState = cityUfMatch[2].toUpperCase();
+      if (ufSet.has(parsedState)) {
+        return { city: cityUfMatch[1].trim(), state: parsedState };
+      }
+    }
+
     const cityStateMap: Record<string, string> = {
       'sao paulo': 'SP', 'são paulo': 'SP', 'rio de janeiro': 'RJ',
       'belo horizonte': 'MG', 'curitiba': 'PR', 'porto alegre': 'RS',
@@ -169,8 +327,8 @@ export class SearchController {
       'boa vista': 'RR', 'palmas': 'TO', 'rio branco': 'AC',
       'aracaju': 'SE', 'teresina': 'PI', 'belem': 'PA', 'belém': 'PA',
     };
-    const key = value.toLowerCase().trim();
-    return { city: value, state: cityStateMap[key] || '' };
+    const key = raw.toLowerCase();
+    return { city: raw, state: cityStateMap[key] || '' };
   }
 
   private parsePriceInput(value: string): { min_price?: number; max_price?: number } {
@@ -247,6 +405,15 @@ export class SearchController {
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       providedClassification: classification // ✅ Passar para service
     };
+
+    // Usuário autenticado com créditos deve seguir fluxo pago (sem freeMode)
+    if (user?.id && Number(user.credits || 0) > 0) {
+      return this.searchService.searchByText(
+        query,
+        { ...searchFilters, useRealScraping: useRealScraping === 'true', limit: limit || 50 },
+        user.id,
+      );
+    }
 
     // ============================================
     // REGRA: 1 BUSCA DE TEXTO GRATUITA POR IP

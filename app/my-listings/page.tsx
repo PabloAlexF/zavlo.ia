@@ -141,7 +141,7 @@ export default function MyListingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0B0B0F] pt-24 pb-12">
+      <div className="min-h-screen bg-[#0A0C10] pt-24 pb-12">
         <main className="max-w-6xl mx-auto px-4 animate-pulse">
           <div className="h-8 bg-white/10 rounded w-1/3 mb-8"></div>
           <div className="h-20 bg-white/5 rounded-2xl mb-8"></div>
@@ -154,24 +154,17 @@ export default function MyListingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0B0F] relative overflow-hidden">
+    <div className="min-h-screen bg-[#0A0C10]">
       <Header />
-      
-      {/* Background */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a2e12_1px,transparent_1px),linear-gradient(to_bottom,#1a1a2e12_1px,transparent_1px)] bg-[size:32px_32px]" />
-      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px]" />
 
-      <main className="relative z-10 max-w-7xl mx-auto px-4 pt-24 pb-12">
+      <main className="max-w-7xl mx-auto px-4 pt-24 pb-12">
         <motion.div 
           className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
           <div>
-            <h1 className="text-4xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
-              Meus Anúncios
-            </h1>
+            <h1 className="text-4xl font-semibold text-white mb-2">Meus Anúncios</h1>
             <p className="text-gray-400 flex items-center gap-2">
               <PackageOpen className="w-5 h-5" />
               {filteredListings.length} de {listings.length} anúncios
@@ -179,8 +172,8 @@ export default function MyListingsPage() {
           </div>
           <motion.button
             onClick={() => router.push('/sell')}
-            className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-blue-500/50 transition-all flex items-center justify-center gap-2"
-            whileHover={{ scale: 1.05 }}
+            className="w-full sm:w-auto bg-white text-black px-6 py-3 rounded-xl font-medium hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
+            whileHover={{ y: -1 }}
             whileTap={{ scale: 0.95 }}
           >
             <Plus className="w-5 h-5" />
@@ -190,7 +183,7 @@ export default function MyListingsPage() {
 
         {/* Search and Filters */}
         <motion.div 
-          className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-8 shadow-2xl"
+          className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -203,7 +196,7 @@ export default function MyListingsPage() {
                 placeholder="Buscar anúncios..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-black/50 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 transition"
+                className="w-full pl-10 pr-4 py-3 bg-black/40 border border-white/15 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition"
               />
             </div>
 
@@ -211,7 +204,7 @@ export default function MyListingsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-4 py-3 bg-black/50 border border-white/20 rounded-xl text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                className="px-4 py-3 bg-black/40 border border-white/15 rounded-xl text-white focus:outline-none focus:border-white/30 cursor-pointer"
                 style={{ colorScheme: 'dark' }}
               >
                 <option value="all" className="bg-gray-900">Todos</option>
@@ -222,7 +215,7 @@ export default function MyListingsPage() {
               <select
                 value={conditionFilter}
                 onChange={(e) => setConditionFilter(e.target.value as any)}
-                className="px-4 py-3 bg-black/50 border border-white/20 rounded-xl text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                className="px-4 py-3 bg-black/40 border border-white/15 rounded-xl text-white focus:outline-none focus:border-white/30 cursor-pointer"
                 style={{ colorScheme: 'dark' }}
               >
                 <option value="all" className="bg-gray-900">Todas</option>
@@ -296,11 +289,11 @@ export default function MyListingsPage() {
             {filteredListings.map((listing, index) => (
               <motion.div 
                 key={listing.id} 
-                className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all group"
+                className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-all group"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 + index * 0.05 }}
-                whileHover={{ y: -4, scale: 1.02 }}
+                whileHover={{ y: -2 }}
               >
                 {/* Image Section */}
                 <div className="relative aspect-square w-full bg-white/5">
@@ -328,7 +321,7 @@ export default function MyListingsPage() {
                 {/* Content Section */}
                 <div className="p-3 sm:p-4 flex flex-col flex-1">
                   <h3 className="font-semibold text-white text-sm sm:text-base line-clamp-2 mb-1">{listing.title}</h3>
-                  <p className="text-lg sm:text-xl font-bold text-green-400 mb-2">R$ {listing.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-lg sm:text-xl font-semibold text-white mb-2">R$ {listing.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   
                   <div className="flex items-center gap-3 text-[10px] sm:text-xs text-gray-400 mb-3">
                     <div className="flex items-center gap-1"><Eye className="w-3 h-3" />{listing.views}</div>
@@ -343,7 +336,7 @@ export default function MyListingsPage() {
                     <button onClick={() => toggleActive(listing.id)} className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${listing.active ? 'bg-gray-600/20 active:bg-gray-600/30 text-gray-300' : 'bg-green-600/20 active:bg-green-600/30 text-green-400'}`}>
                       <Power className="w-3 h-3" /> {listing.active ? 'Pausar' : 'Ativar'}
                     </button>
-                    <button onClick={() => router.push(`/listing/${listing.id}`)} className="flex items-center justify-center gap-1 bg-blue-600/20 active:bg-blue-600/30 text-blue-400 px-2 py-1.5 rounded text-xs font-medium transition-colors">
+                    <button onClick={() => router.push(`/listing/${listing.id}`)} className="flex items-center justify-center gap-1 bg-white/10 active:bg-white/20 text-white px-2 py-1.5 rounded text-xs font-medium transition-colors">
                       <ExternalLink className="w-3 h-3" /> Ver
                     </button>
                     <button onClick={() => setDeleteModal({ show: true, listingId: listing.id, title: listing.title })} className="flex items-center justify-center gap-1 bg-red-600/20 active:bg-red-600/30 text-red-400 px-2 py-1.5 rounded text-xs font-medium transition-colors">
@@ -368,8 +361,8 @@ export default function MyListingsPage() {
       {/* Delete Confirmation Modal */}
       {deleteModal.show && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-white mb-2">Excluir Anúncio</h3>
+          <div className="bg-[#10131A] border border-white/10 rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-semibold text-white mb-2">Excluir Anúncio</h3>
             <p className="text-gray-400 mb-1">Tem certeza que deseja excluir:</p>
             <p className="text-white font-medium mb-6">"{deleteModal.title}"?</p>
             <div className="flex gap-3">

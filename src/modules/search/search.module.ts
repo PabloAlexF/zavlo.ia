@@ -10,9 +10,10 @@ import { ScrapingModule } from '../scraping/scraping.module';
 import { UsersModule } from '../users/users.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { ClassificationModule } from '../classification/classification.module';
+import { ComparisonsModule } from '../comparisons/comparisons.module';
 
 @Module({
-  imports: [ScrapingModule, UsersModule, AnalyticsModule, ClassificationModule],
+  imports: [ScrapingModule, UsersModule, AnalyticsModule, ClassificationModule, ComparisonsModule],
   controllers: [SearchController, IpLimitAdminController],
   providers: [
     SearchService,

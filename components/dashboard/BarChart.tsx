@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Users } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 interface BarChartProps {
@@ -50,8 +50,8 @@ export default function BarChart({ title, data, labels, delay }: BarChartProps) 
 
       // Gradient for each bar
       const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
-      gradient.addColorStop(0, '#8B5CF6');
-      gradient.addColorStop(1, '#EC4899');
+      gradient.addColorStop(0, '#E5E7EB');
+      gradient.addColorStop(1, '#94A3B8');
 
       // Draw bar
       ctx.fillStyle = gradient;
@@ -66,7 +66,7 @@ export default function BarChart({ title, data, labels, delay }: BarChartProps) 
       ctx.fillText(labels[index], x + barWidth / 2, height - padding + 20);
 
       // Draw value on top of bar
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
       ctx.font = 'bold 10px sans-serif';
       ctx.fillText(value.toString(), x + barWidth / 2, y - 5);
     });
@@ -80,19 +80,14 @@ export default function BarChart({ title, data, labels, delay }: BarChartProps) 
       whileHover={{ y: -5 }}
       className="relative group"
     >
-      {/* Glow effect */}
-      <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-20 blur-xl transition-opacity rounded-2xl" />
-      
-      {/* Card */}
-      <div className="relative bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
-        {/* Header */}
+      <div className="relative bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-bold text-white mb-1">{title}</h3>
-            <p className="text-sm text-gray-400">Últimos 7 dias</p>
+            <h3 className="text-base font-semibold text-white mb-1">{title}</h3>
+            <p className="text-sm text-gray-400">Últimos dias</p>
           </div>
-          <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 bg-opacity-20">
-            <Users className="w-5 h-5 text-white" />
+          <div className="p-2 rounded-lg bg-white/[0.04] border border-white/10">
+            <BarChart3 className="w-4 h-4 text-gray-300" />
           </div>
         </div>
 

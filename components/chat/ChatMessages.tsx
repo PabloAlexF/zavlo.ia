@@ -26,6 +26,12 @@ interface Message {
   expansionSources?: string[];
   primarySource?: string;
   isVehicle?: boolean;
+  queryConfirmSortBy?: string;
+  queryConfirmCreditEstimate?: number;
+  queryConfirmNotes?: string[];
+  isImageSort?: boolean;
+  questionAnswered?: boolean;
+  questionAnswerLabel?: string;
 }
 
 interface ChatMessagesProps {
@@ -88,7 +94,7 @@ function EditableProductName({ messageId, initialValue, onUpdate }: {
 
 // ── Bubble base ───────────────────────────────────────────────────────────────
 const AIBubble = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
-  <div className={`rounded-2xl rounded-tl-sm border border-white/[0.07] bg-[#13131f] p-4 text-sm leading-relaxed text-slate-200 ${className}`}>
+  <div className={`rounded-2xl rounded-tl-sm border border-white/[0.07] bg-[#13131f] p-3.5 text-[14px] leading-relaxed text-slate-200 sm:p-5 sm:text-[15px] ${className}`}>
     {children}
   </div>
 );
@@ -185,6 +191,38 @@ function getMarketplaceConfig(source: string) {
   };
 }
 
+function getPriceTrendBadge(product: any): { text: string; className: string } | null {
+  const trend = product?.priceTrend;
+  if (!trend || typeof trend !== 'object') return null;
+
+  const dropPercent = Number(trend.dropPercent ?? 0);
+  const windowDays = Number(trend.windowDays ?? 30);
+  const status = String(trend.status ?? '').toLowerCase();
+
+  if (status === 'down' && Number.isFinite(dropPercent) && dropPercent > 0) {
+    return {
+      text: `📉 Caiu ${dropPercent}% (${windowDays}d)`,
+      className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+    };
+  }
+
+  if (status === 'stable') {
+    return {
+      text: `➖ Estável (${windowDays}d)`,
+      className: 'border-slate-500/30 bg-slate-500/10 text-slate-200',
+    };
+  }
+
+  if (status === 'up') {
+    return {
+      text: `📈 Em alta (${windowDays}d)`,
+      className: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
+    };
+  }
+
+  return null;
+}
+
 // ── Option button genérico ────────────────────────────────────────────────────
 const OptionButton = ({ onClick, children, variant = 'default' }: {
   onClick: () => void;
@@ -201,7 +239,7 @@ const OptionButton = ({ onClick, children, variant = 'default' }: {
       whileHover={{ y: -1 }}
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
-      className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 ${styles[variant]}`}
+      className={`min-h-11 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all duration-200 ${styles[variant]}`}
     >
       {children}
     </motion.button>
@@ -224,7 +262,7 @@ const QuestionChip = ({ onClick, children }: { onClick: () => void; children: Re
     whileHover={{ y: -2, scale: 1.02 }}
     whileTap={{ scale: 0.97 }}
     onClick={onClick}
-    className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-slate-200 transition-all hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-white"
+    className="min-h-11 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-slate-200 transition-all hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-white"
   >
     {children}
   </motion.button>
@@ -232,11 +270,13 @@ const QuestionChip = ({ onClick, children }: { onClick: () => void; children: Re
 
 // ── Query confirm bubble (editable final query before search) ───────────────
 function QueryConfirmBubble({ message, onConfirm }: {
-  message: Message & { queryConfirmSortBy?: string };
+  message: Message;
   onConfirm: (finalQuery: string, sortBy: string) => void;
 }) {
   const [value, setValue] = useState(message.content);
   const sortBy = (message as any).queryConfirmSortBy || 'BEST_MATCH';
+  const creditEstimate = (message as any).queryConfirmCreditEstimate as number | undefined;
+  const notes = ((message as any).queryConfirmNotes as string[] | undefined) || [];
   const sortLabels: Record<string, string> = {
     BEST_MATCH: 'mais relevante', LOWEST_PRICE: 'menor preço',
     HIGHEST_PRICE: 'maior preço', TOP_RATED: 'mais avaliados',
@@ -245,6 +285,16 @@ function QueryConfirmBubble({ message, onConfirm }: {
     <AIBubble>
       <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Busca final • {sortLabels[sortBy] || sortBy}</p>
       <p className="mb-3 text-xs text-slate-400">Confirme ou edite o texto antes de buscar</p>
+      {(creditEstimate || notes.length > 0) && (
+        <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100">
+          {creditEstimate && (
+            <p className="font-medium">⚠️ Estimativa desta busca: ~{creditEstimate} crédito{creditEstimate > 1 ? 's' : ''}</p>
+          )}
+          {notes.filter((note) => !note.includes('Esta busca deve consumir cerca de')).map((note, index) => (
+            <p key={index} className="mt-1 text-amber-100/85">• {note}</p>
+          ))}
+        </div>
+      )}
       <div className="relative mb-4">
         <input
           type="text"
@@ -270,6 +320,7 @@ function QueryConfirmBubble({ message, onConfirm }: {
 }
 
 
+export const ChatMessages = ({
   messages,
   loading,
   userCredits,
@@ -284,33 +335,47 @@ function QueryConfirmBubble({ message, onConfirm }: {
   onExecuteTextSort,
   onQueryConfirm,
   messagesEndRef,
-}: ChatMessagesProps) {
+}: ChatMessagesProps) => {
+  const formatTime = (timestamp: Date) => {
+    try {
+      return new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
   return (
     <div
-      className="flex-1 overflow-y-auto px-3 py-5 sm:px-5 sm:py-8 md:px-8 md:py-10"
+      className="chat-scroll flex-1 overflow-y-auto px-2.5 py-5 sm:px-5 sm:py-8 md:px-8 md:py-10"
       style={{ background: 'radial-gradient(ellipse at top, rgba(139,92,246,0.04) 0%, transparent 60%), #0A0A12' }}
     >
-      <div className="mx-auto max-w-3xl space-y-5">
+      <style>{`
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+        .chat-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent; }
+      `}</style>
+      <div className="mx-auto max-w-3xl space-y-5 sm:space-y-6">
         <AnimatePresence initial={false}>
           {messages.map((message, index) => (
             <motion.div
               key={message.id}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97 }}
-              transition={{ duration: 0.25, delay: index < 4 ? index * 0.04 : 0 }}
+              initial={{ opacity: 0, y: 18, scale: 0.985, filter: 'blur(3px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, scale: 0.97, y: -6 }}
+              transition={{ duration: 0.3, delay: index < 4 ? index * 0.028 : 0, ease: [0.22, 1, 0.36, 1] }}
             >
 
               {/* ── Usuário ── */}
               {message.type === 'user' && (
                 <div className="flex items-end justify-end gap-2 sm:gap-3">
-                  <div className="max-w-[82%]">
-                    <div className="rounded-2xl rounded-br-sm border border-white/[0.07] bg-[#1a1a2e]/80 px-4 py-3">
+                  <div className="max-w-[92%] sm:max-w-[84%]">
+                    <div className="rounded-2xl rounded-br-sm border border-white/[0.07] bg-[#1a1a2e]/80 px-3.5 py-3 sm:px-5 sm:py-3.5">
                       {message.imageData && (
                         <img src={message.imageData} alt="Imagem enviada" className="mb-3 max-w-[180px] rounded-xl border border-slate-700" />
                       )}
-                      <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">{message.content}</p>
+                      <p className="text-[14px] leading-relaxed text-slate-200 whitespace-pre-wrap sm:text-[15px]">{message.content}</p>
                     </div>
+                    <p className="mt-1 px-1 text-right text-[11px] text-slate-600">{formatTime(message.timestamp)}</p>
                   </div>
                   <UserAvatar />
                 </div>
@@ -320,7 +385,7 @@ function QueryConfirmBubble({ message, onConfirm }: {
               {message.type === 'ai' && (
                 <div className="flex items-start gap-2 sm:gap-3">
                   <AIAvatar />
-                  <div className="max-w-[88%] sm:max-w-[80%]">
+                  <div className="max-w-[95%] sm:max-w-[86%]">
                     <AIBubble>
                       {message.content === 'searching_animation' ? (
                         <SearchingAnimation />
@@ -342,6 +407,7 @@ function QueryConfirmBubble({ message, onConfirm }: {
                         <FormattedMessage content={message.content} className="text-slate-200" />
                       )}
                     </AIBubble>
+                    <p className="mt-1 px-1 text-[11px] text-slate-600">{formatTime(message.timestamp)}</p>
                   </div>
                 </div>
               )}
@@ -375,6 +441,15 @@ function QueryConfirmBubble({ message, onConfirm }: {
                     <AIBubble>
                       <p className="mb-1 font-medium text-white">{message.content}</p>
                       <p className="mb-4 text-xs text-slate-500">Isso ajuda a encontrar os melhores resultados</p>
+
+                      {message.questionAnswered && (
+                        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                          ✅ Resposta: {message.questionAnswerLabel || 'Respondido'}
+                        </div>
+                      )}
+
+                      {!message.questionAnswered && (
+                        <>
 
                       {/* Condição */}
                       {message.questionType === 'condition' && (
@@ -443,17 +518,16 @@ function QueryConfirmBubble({ message, onConfirm }: {
                                 📍 {message.userLocation.city}
                               </QuestionChip>
                             )}
-                            {message.userLocation?.state && (
-                              <QuestionChip onClick={() => onQuestionAnswer(message.userLocation!.state!)}>
-                                🗺️ {message.userLocation.state}
-                              </QuestionChip>
-                            )}
                             {!message.userLocation?.city && [
-                              'São Paulo', 'Rio de Janeiro', 'Belo Horizonte',
-                              'Curitiba', 'Porto Alegre', 'Brasília'
-                            ].map((city) => (
-                              <QuestionChip key={city} onClick={() => onQuestionAnswer(city)}>
-                                📍 {city}
+                              { label: 'São Paulo, SP', value: 'São Paulo, SP' },
+                              { label: 'Rio de Janeiro, RJ', value: 'Rio de Janeiro, RJ' },
+                              { label: 'Belo Horizonte, MG', value: 'Belo Horizonte, MG' },
+                              { label: 'Curitiba, PR', value: 'Curitiba, PR' },
+                              { label: 'Porto Alegre, RS', value: 'Porto Alegre, RS' },
+                              { label: 'Brasília, DF', value: 'Brasília, DF' },
+                            ].map((cityOption) => (
+                              <QuestionChip key={cityOption.value} onClick={() => onQuestionAnswer(cityOption.value)}>
+                                📍 {cityOption.label}
                               </QuestionChip>
                             ))}
                             <QuestionChip onClick={() => onQuestionAnswer('todo o brasil')}>
@@ -483,6 +557,8 @@ function QueryConfirmBubble({ message, onConfirm }: {
                           </div>
                           <SkipLink onClick={onQuestionSkip} label="Continuar sem esse filtro" />
                         </div>
+                      )}
+                        </>
                       )}
                     </AIBubble>
                   </div>
@@ -599,16 +675,27 @@ function QueryConfirmBubble({ message, onConfirm }: {
                   )}
 
                   <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3">
-                    {message.products.map((product, idx) => (
-                      <motion.div
-                        key={product.id || idx}
-                        initial={{ opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.05, duration: 0.3 }}
-                      >
-                        <ProductCard product={product} />
-                      </motion.div>
-                    ))}
+                    {message.products.map((product, idx) => {
+                      const trendBadge = getPriceTrendBadge(product);
+                      return (
+                        <motion.div
+                          key={product.id || idx}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.05, duration: 0.3 }}
+                          className="space-y-2"
+                        >
+                          {trendBadge && (
+                            <div
+                              className={`inline-flex rounded-lg border px-2.5 py-1 text-[11px] font-medium ${trendBadge.className}`}
+                            >
+                              {trendBadge.text}
+                            </div>
+                          )}
+                          <ProductCard product={product} />
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

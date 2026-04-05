@@ -1,7 +1,7 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, FirebaseLoginDto } from './dto/auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -29,6 +29,21 @@ export class AuthController {
     return {
       success: true,
       message: 'Login realizado com sucesso!',
+      data: result,
+    };
+  }
+
+  @Post('firebase-login')
+  @HttpCode(HttpStatus.OK)
+  async firebaseLogin(@Body() firebaseLoginDto: FirebaseLoginDto, @Req() req: Request) {
+    const ip =
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+      req.socket.remoteAddress ||
+      'unknown';
+    const result = await this.authService.firebaseLogin(firebaseLoginDto.idToken, ip);
+    return {
+      success: true,
+      message: 'Login Firebase realizado com sucesso!',
       data: result,
     };
   }

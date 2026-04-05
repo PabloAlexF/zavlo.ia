@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Search, Image as ImageIcon, TrendingUp, Sparkles, Tag } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 interface QuickSuggestionsProps {
   onSuggestionClick: (text: string) => void;
@@ -18,20 +18,13 @@ export function QuickSuggestions({
   onToggleMore,
   isIntroduction
 }: QuickSuggestionsProps) {
-  const suggestions = [
-    { icon: <Search className="h-4 w-4" />, title: 'Encontrar o produto mais barato', query: 'iPhone 15 Pro', isImage: false },
-    { icon: <TrendingUp className="h-4 w-4" />, title: 'Comparar preços', query: 'Notebook Gamer', isImage: false },
-    { icon: <ImageIcon className="h-4 w-4" />, title: 'Buscar por imagem', query: '', isImage: true },
-    { icon: <Tag className="h-4 w-4" />, title: 'Descobrir ofertas', query: 'Smart TV 50 polegadas', isImage: false },
-  ];
-
   return (
-    <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-6 sm:px-6 sm:py-10 md:px-8 md:py-12" style={{ background: 'radial-gradient(ellipse at top, rgba(139,92,246,0.06) 0%, transparent 55%), #0A0A12' }}>
+    <div className="flex flex-1 items-center justify-center overflow-y-auto px-3 py-6 sm:px-6 sm:py-10 md:px-8 md:py-12" style={{ background: 'radial-gradient(ellipse at top, rgba(139,92,246,0.08) 0%, transparent 55%), #0A0A12' }}>
       <div className="w-full max-w-3xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.55, ease: 'easeOut' }}
           className="mb-8 text-center sm:mb-12"
         >
           <motion.div
@@ -46,21 +39,21 @@ export function QuickSuggestions({
           <motion.h1
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="mb-2 text-2xl font-semibold tracking-tight text-white sm:mb-3 sm:text-4xl md:text-5xl"
+            transition={{ delay: 0.2, duration: 0.45, ease: 'easeOut' }}
+            className="mb-2 text-[24px] font-semibold tracking-tight text-white sm:mb-3 sm:text-4xl md:text-5xl"
           >
-            {isIntroduction ? 'Como posso te chamar?' : 'Vamos começar'}
+            {isIntroduction ? 'Como posso te chamar?' : 'Bem-vindo! 👋 Encontre o melhor preço'}
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-            className="mx-auto max-w-xl text-xs leading-relaxed text-slate-500 sm:text-sm md:text-base"
+            transition={{ delay: 0.28, duration: 0.45, ease: 'easeOut' }}
+            className="mx-auto max-w-xl text-sm leading-relaxed text-slate-500 sm:text-base"
           >
             {isIntroduction
               ? 'Me conte seu nome para começarmos nossa jornada'
-              : 'Pergunte qualquer produto, compare preços ou encontre as melhores ofertas'}
+              : 'Pesquise produtos, compare marketplaces e receba sugestões em segundos'}
           </motion.p>
         </motion.div>
 
@@ -68,28 +61,54 @@ export function QuickSuggestions({
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+            transition={{ delay: 0.35, duration: 0.5, ease: 'easeOut' }}
+            className="mx-auto max-w-2xl"
           >
-            {suggestions.map((suggestion, index) => (
-              <motion.button
-                key={index}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.45 + index * 0.07 }}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={() => suggestion.isImage && onImageSearchClick
-                  ? onImageSearchClick()
-                  : onSuggestionClick(suggestion.query)}
-                className="group flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-4 py-3.5 text-left transition-all duration-200 hover:border-violet-500/30 hover:bg-violet-500/[0.07]"
-              >
-                <span className="rounded-lg border border-white/[0.08] bg-white/[0.05] p-2 text-slate-400 transition-colors group-hover:border-violet-500/30 group-hover:bg-violet-500/10 group-hover:text-violet-300">
-                  {suggestion.icon}
-                </span>
-                <span className="text-sm font-medium text-slate-300 group-hover:text-white">{suggestion.title}</span>
-              </motion.button>
-            ))}
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.99 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: 0.4, duration: 0.45, ease: 'easeOut' }}
+              className="flex items-start gap-3 rounded-2xl border border-white/[0.07] bg-[#13131f] p-3.5 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] sm:p-5"
+            >
+              <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-600">
+                <Sparkles className="h-4 w-4 text-white" />
+              </div>
+              <div className="space-y-3">
+                <p className="text-[15px] leading-relaxed text-slate-200 sm:text-base">
+                  Olá! Eu sou a <span className="font-semibold text-white">Zavlo</span> e vou te ajudar a encontrar o melhor preço.
+                </p>
+                <div className="space-y-1.5 text-[15px] leading-relaxed text-slate-300 sm:text-base">
+                  <p>1️⃣ Você me diz o produto que quer encontrar.</p>
+                  <p>2️⃣ Eu faço perguntas rápidas para refinar sua busca.</p>
+                  <p>3️⃣ Busco no marketplace principal e te mostro os melhores resultados.</p>
+                  <p>4️⃣ Se quiser, expandimos para outras plataformas.</p>
+                </div>
+                <p className="text-sm text-slate-500">
+                  💡 Dica: inclua detalhes como marca, ano, modelo ou faixa de preço para melhorar a precisão.
+                </p>
+                <p className="text-sm text-slate-500">
+                  🚗 Veículos: se for <span className="font-medium text-slate-300">novo</span>, priorizo Mercado Livre; se for <span className="font-medium text-slate-300">usado</span>, priorizo OLX.
+                </p>
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap">
+                  <motion.button
+                    whileHover={{ y: -1, scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => onSuggestionClick('__quick_start__')}
+                    className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-95 sm:w-auto sm:py-2 sm:text-xs"
+                  >
+                    Começar agora
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ y: -1, scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => onImageSearchClick?.()}
+                    className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-300 transition-all hover:border-violet-500/30 hover:bg-violet-500/[0.07] hover:text-white sm:w-auto sm:py-2 sm:text-xs"
+                  >
+                    Buscar por imagem
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
 

@@ -61,15 +61,13 @@ export default function PieChart({ title, data, icon: Icon, delay = 0 }: PieChar
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4 }}
-      whileHover={{ y: -5, scale: 1.02 }}
-      className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 relative overflow-hidden group"
+      whileHover={{ y: -2 }}
+      className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-5 relative overflow-hidden"
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-      
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">{title}</h3>
-          <Icon className="w-6 h-6 text-purple-400" />
+          <h3 className="text-base font-semibold text-white">{title}</h3>
+          <Icon className="w-5 h-5 text-gray-300" />
         </div>
 
         <div className="flex items-center gap-6">

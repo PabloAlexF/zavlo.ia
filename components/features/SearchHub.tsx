@@ -5,11 +5,34 @@ import { useRouter } from 'next/navigation';
 import { Search, Image as ImageIcon, Smartphone, Car, Home, ShoppingBag, Zap, CheckCircle, Sparkles, Upload, Camera } from 'lucide-react';
 import TextSearchModal from '@/components/modals/TextSearchModal';
 import ProductIdentifiedModal from '@/components/modals/ProductIdentifiedModal';
+import type { ClassificationData } from '@shared/contracts/classification.contract';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
 
 interface SearchHubProps {
   onSearch?: (query: string) => void;
   onImageSearch?: (file: File) => void;
   initialValue?: string;
+}
+
+interface UserProfileResponse {
+  credits?: number;
+}
+
+interface CloudinaryUploadResponse {
+  secure_url?: string;
+}
+
+interface SearchImageResponse {
+  results?: { productName?: string }[];
+  productName?: string;
+  classification?: ClassificationData;
+  remainingCredits?: number;
+  creditsUsed?: number;
+}
+
+interface IdentifyProductResponse {
+  productName?: string;
 }
 
 export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: SearchHubProps) {
@@ -38,14 +61,13 @@ export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: Search
       if (!user) return;
       
       const userData = JSON.parse(user);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
       
       const response = await fetch(`${API_URL}/users/profile`, {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
       
       if (response.ok) {
-        const profile = await response.json();
+        const profile: UserProfileResponse = await response.json();
         setUserCredits(profile.credits || 0);
       }
     } catch (error) {
@@ -117,7 +139,7 @@ export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: Search
           throw new Error(`Cloudinary error: ${cloudinaryResponse.status}`);
         }
         
-        const cloudinaryData = await cloudinaryResponse.json();
+        const cloudinaryData: CloudinaryUploadResponse = await cloudinaryResponse.json();
         
         if (!cloudinaryData.secure_url) {
           console.error('❌ Cloudinary não retornou URL');
@@ -134,7 +156,6 @@ export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: Search
         
         // Agora enviar a URL para a API de busca por imagem
         console.log('🔍 Enviando URL para API...');
-        const API_URL = process.env.NEXT_PUBLIC_API_URL;
         const response = await fetch(`${API_URL}/search/image`, {
           method: 'POST',
           headers: { 
@@ -147,11 +168,18 @@ export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: Search
         console.log('📡 Resposta recebida:', response.status);
         
         if (response.ok) {
-          const data = await response.json();
+          const data: SearchImageResponse = await response.json();
           console.log('✅ Produto identificado:', data);
+
+          if (typeof data.remainingCredits === 'number') {
+            setUserCredits(data.remainingCredits);
+            const updatedUser = { ...userData, credits: data.remainingCredits };
+            localStorage.setItem('zavlo_user', JSON.stringify(updatedUser));
+            window.dispatchEvent(new Event('userChanged'));
+          }
           
           // Get product name from response
-          const productName = data.results?.productName || data.productName || 'Produto não identificado';
+          const productName = data.results?.[0]?.productName || data.productName || 'Produto não identificado';
           setIdentifiedProduct(productName);
           console.log('🎯 Abrindo modal com produto:', productName);
         } else {
@@ -169,7 +197,7 @@ export function SearchHub({ onSearch, onImageSearch, initialValue = '' }: Search
           });
           
           if (identifyResponse.ok) {
-            const identifyData = await identifyResponse.json();
+            const identifyData: IdentifyProductResponse = await identifyResponse.json();
             setIdentifiedProduct(identifyData.productName || 'Produto não identificado');
           } else {
             setIdentifiedProduct('Produto não identificado');

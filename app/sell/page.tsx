@@ -143,12 +143,11 @@ export default function SellPage() {
         category: formData.category,
         condition: formData.condition,
         images: formData.images,
-        source: 'zavlo',
-        sourceUrl: window.location.origin,
-        state: location?.state || 'MG',
-        city: location?.city || 'Belo Horizonte',
-        sellerName: userData.name || userData.email || 'Vendedor',
-        cep: formData.cep.replace(/\D/g, ''),
+        location: {
+          cep: formData.cep.replace(/\D/g, ''),
+          city: location?.city || 'Belo Horizonte',
+          state: location?.state || 'MG',
+        },
         contact: {
           phone: formData.phone ? formData.phone.replace(/\D/g, '') : undefined,
           whatsapp: formData.whatsapp ? formData.whatsapp.replace(/\D/g, '') : undefined,
@@ -160,7 +159,7 @@ export default function SellPage() {
       
       console.log('Sending to API:', listingData);
       
-      const response = await fetch(`${API_URL}/products`, {
+      const response = await fetch(`${API_URL}/listings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

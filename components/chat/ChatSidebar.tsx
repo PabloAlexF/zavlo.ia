@@ -94,6 +94,7 @@ export function ChatSidebar({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userName, setUserName] = useState('Usuário');
   const settingsRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -115,6 +116,19 @@ export function ChatSidebar({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [settingsOpen]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.key !== '/' || !isOpen) return;
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+      if (tagName === 'input' || tagName === 'textarea' || target?.isContentEditable) return;
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [isOpen]);
 
   const handleLogout = () => {
     localStorage.removeItem('zavlo_user');
@@ -148,7 +162,7 @@ export function ChatSidebar({
         key={chat.id}
         initial={{ opacity: 0, x: -6 }}
         animate={{ opacity: 1, x: 0 }}
-        className={`group relative cursor-pointer rounded-lg px-2.5 py-2 transition-all duration-150 ${
+        className={`group relative cursor-pointer rounded-xl px-2.5 py-2.5 transition-all duration-150 ${
           isActive
             ? 'bg-white/[0.07] text-white'
             : 'text-white/50 hover:bg-white/[0.04] hover:text-white/80'
@@ -177,20 +191,20 @@ export function ChatSidebar({
           </div>
         ) : (
           <div className="flex items-center gap-2.5" onClick={() => onLoadChat(chat.id)}>
-            <Icon className={`h-3.5 w-3.5 shrink-0 ${color} opacity-70`} />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-light">{chat.title}</span>
-            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <Icon className={`h-4 w-4 shrink-0 ${color} opacity-70`} />
+            <span className="min-w-0 flex-1 truncate text-sm font-light">{chat.title}</span>
+            <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity md:opacity-0 md:group-hover:opacity-100">
               <button
                 onClick={(e) => { e.stopPropagation(); setEditingId(chat.id); setEditTitle(chat.title); }}
-                className="rounded p-1 text-white/30 hover:text-white/80"
+                className="rounded p-1.5 text-white/30 hover:text-white/80"
               >
-                <Edit2 className="h-3 w-3" />
+                <Edit2 className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={(e) => onDeleteChat(chat.id, e)}
-                className="rounded p-1 text-white/30 hover:text-rose-400"
+                className="rounded p-1.5 text-white/30 hover:text-rose-400"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -230,7 +244,7 @@ export function ChatSidebar({
             animate={{ x: 0 }}
             exit={{ x: -288 }}
             transition={{ type: 'spring', damping: 26, stiffness: 240 }}
-            className="fixed bottom-0 left-0 top-0 z-50 flex w-72 flex-col border-r border-white/[0.05] bg-[#121212] md:relative"
+            className="fixed bottom-0 left-0 top-0 z-50 flex w-[86vw] max-w-[320px] flex-col border-r border-white/[0.05] bg-[#121212] md:relative md:w-72"
           >
             {/* ── Top: Logo + Search ── */}
             <div className="px-4 pb-3 pt-5">
@@ -245,11 +259,12 @@ export function ChatSidebar({
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/20" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar conversas..."
-                  className="h-8 w-full rounded-lg border border-white/[0.07] bg-white/[0.04] pl-8 pr-8 text-xs text-white/70 outline-none placeholder:text-white/20 focus:border-white/[0.12] focus:bg-white/[0.06]"
+                  className="h-10 w-full rounded-xl border border-white/[0.07] bg-white/[0.04] pl-8 pr-8 text-sm text-white/70 outline-none placeholder:text-white/20 focus:border-white/[0.12] focus:bg-white/[0.06]"
                 />
                 <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-white/10 px-1 text-[9px] text-white/20">/</kbd>
               </div>
@@ -261,7 +276,7 @@ export function ChatSidebar({
                 <button
                   key={label}
                   onClick={() => router.push(href)}
-                  className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-light text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white/80"
+                  className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-light text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white/80"
                 >
                   <Icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
                   {label}
@@ -277,7 +292,7 @@ export function ChatSidebar({
                 onClick={onNewChat}
                 disabled={isCreatingNewChat}
                 whileTap={{ scale: 0.98 }}
-                className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 text-xs font-semibold text-white shadow-[0_2px_12px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_2px_16px_rgba(139,92,246,0.45)] disabled:opacity-50"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 text-sm font-semibold text-white shadow-[0_2px_12px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_2px_16px_rgba(139,92,246,0.45)] disabled:opacity-50"
               >
                 <Plus className="h-3.5 w-3.5" />
                 {isCreatingNewChat ? 'Criando...' : 'Nova conversa'}
@@ -318,7 +333,7 @@ export function ChatSidebar({
             </div>
 
             {/* ── Footer ── */}
-            <div className="border-t border-white/[0.05] px-4 py-4">
+            <div className="border-t border-white/[0.05] px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               {/* Credits */}
               <div className="mb-3 flex items-center gap-1.5 px-1">
                 <Zap className="h-3 w-3 text-violet-400/70" />

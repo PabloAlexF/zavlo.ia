@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, Activity, DollarSign, Users, TrendingUp, Package, ShoppingBag, Eye, MousePointerClick, Heart, Bell, Target, Clock, Calendar, BarChart3, PieChart as PieChartIcon } from 'lucide-react';
+import { Search, Activity, DollarSign, TrendingUp, Package, ShoppingBag, Eye, MousePointerClick, Heart, Bell, Target, Clock, BarChart3 } from 'lucide-react';
 import AreaChart from '@/components/dashboard/AreaChart';
 import BarChart from '@/components/dashboard/BarChart';
 import PieChart from '@/components/dashboard/PieChart';
 import { Toast } from '@/components/ui/Toast';
+import { Header } from '@/components/layout/Header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
 
@@ -174,9 +175,9 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0B0B0F] via-[#0F0F14] to-[#0B0B0F] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0A0C10] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-400">Carregando analytics...</p>
         </div>
       </div>
@@ -184,20 +185,19 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0B0B0F] via-[#0F0F14] to-[#0B0B0F]">
+    <div className="min-h-screen bg-[#0A0C10]">
+      <Header />
       <div className="container mx-auto px-4 lg:px-8 py-12 pt-24">
         <div className="max-w-7xl mx-auto space-y-8">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-4"
+            className="space-y-3"
           >
-            <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Analytics
-            </h1>
-            <p className="text-xl text-gray-400">
-              Estatísticas e insights da sua conta
+            <h1 className="text-4xl md:text-5xl font-semibold text-white">Analytics</h1>
+            <p className="text-lg text-gray-400">
+              Estatísticas consolidadas da sua conta
             </p>
           </motion.div>
 
@@ -207,14 +207,14 @@ export default function Analytics() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.1 }}
-              className="p-6 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-xl border border-blue-500/30"
+              className="p-6 rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10"
             >
               <div className="flex items-center justify-between mb-4">
-                <Search className="w-8 h-8 text-blue-400" />
-                <TrendingUp className="w-5 h-5 text-green-400" />
+                <Search className="w-8 h-8 text-gray-200" />
+                <TrendingUp className="w-5 h-5 text-gray-400" />
               </div>
-              <p className="text-sm text-blue-200 uppercase tracking-wide mb-2">Total de Buscas</p>
-              <p className="text-4xl font-black text-white" suppressHydrationWarning>
+              <p className="text-sm text-gray-400 uppercase tracking-wide mb-2">Total de Buscas</p>
+              <p className="text-4xl font-semibold text-white" suppressHydrationWarning>
                 {data?.totalSearches || 0}
               </p>
             </motion.div>
@@ -223,14 +223,14 @@ export default function Analytics() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.15 }}
-              className="p-6 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-xl border border-purple-500/30"
+              className="p-6 rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10"
             >
               <div className="flex items-center justify-between mb-4">
-                <Heart className="w-8 h-8 text-purple-400" />
-                <TrendingUp className="w-5 h-5 text-green-400" />
+                <Heart className="w-8 h-8 text-gray-200" />
+                <TrendingUp className="w-5 h-5 text-gray-400" />
               </div>
-              <p className="text-sm text-purple-200 uppercase tracking-wide mb-2">Favoritos</p>
-              <p className="text-4xl font-black text-white" suppressHydrationWarning>
+              <p className="text-sm text-gray-400 uppercase tracking-wide mb-2">Favoritos</p>
+              <p className="text-4xl font-semibold text-white" suppressHydrationWarning>
                 {data?.totalFavorites || 0}
               </p>
             </motion.div>
@@ -239,14 +239,14 @@ export default function Analytics() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
-              className="p-6 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-500/30"
+              className="p-6 rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10"
             >
               <div className="flex items-center justify-between mb-4">
-                <ShoppingBag className="w-8 h-8 text-green-400" />
-                <TrendingUp className="w-5 h-5 text-green-400" />
+                <ShoppingBag className="w-8 h-8 text-gray-200" />
+                <TrendingUp className="w-5 h-5 text-gray-400" />
               </div>
-              <p className="text-sm text-green-200 uppercase tracking-wide mb-2">Anúncios</p>
-              <p className="text-4xl font-black text-white" suppressHydrationWarning>
+              <p className="text-sm text-gray-400 uppercase tracking-wide mb-2">Anúncios</p>
+              <p className="text-4xl font-semibold text-white" suppressHydrationWarning>
                 {data?.totalListings || 0}
               </p>
             </motion.div>
@@ -255,14 +255,14 @@ export default function Analytics() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.25 }}
-              className="p-6 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 backdrop-blur-xl border border-yellow-500/30"
+              className="p-6 rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10"
             >
               <div className="flex items-center justify-between mb-4">
-                <Bell className="w-8 h-8 text-yellow-400" />
-                <TrendingUp className="w-5 h-5 text-green-400" />
+                <Bell className="w-8 h-8 text-gray-200" />
+                <TrendingUp className="w-5 h-5 text-gray-400" />
               </div>
-              <p className="text-sm text-yellow-200 uppercase tracking-wide mb-2">Alertas Ativos</p>
-              <p className="text-4xl font-black text-white" suppressHydrationWarning>
+              <p className="text-sm text-gray-400 uppercase tracking-wide mb-2">Alertas Ativos</p>
+              <p className="text-4xl font-semibold text-white" suppressHydrationWarning>
                 {data?.activeAlerts || 0}
               </p>
             </motion.div>
@@ -311,10 +311,10 @@ export default function Analytics() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8"
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8"
             >
-              <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                <ShoppingBag className="w-6 h-6 text-purple-400" />
+              <h2 className="text-2xl font-semibold text-white mb-6 flex items-center gap-3">
+                <ShoppingBag className="w-6 h-6 text-gray-300" />
                 Performance dos Anúncios
               </h2>
               
@@ -368,31 +368,31 @@ export default function Analytics() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.55 }}
-              className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-500/30 rounded-2xl p-8"
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8"
             >
-              <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                <DollarSign className="w-6 h-6 text-green-400" />
+              <h2 className="text-2xl font-semibold text-white mb-6 flex items-center gap-3">
+                <DollarSign className="w-6 h-6 text-gray-300" />
                 Economia com Alertas
               </h2>
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 <div className="text-center">
-                  <p className="text-sm text-green-200 uppercase tracking-wide mb-2">Economia Total</p>
-                  <p className="text-4xl font-black text-green-400" suppressHydrationWarning>
+                  <p className="text-sm text-gray-400 uppercase tracking-wide mb-2">Economia Total</p>
+                  <p className="text-4xl font-semibold text-white" suppressHydrationWarning>
                     R$ {data.totalSavings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
 
                 <div className="text-center">
-                  <p className="text-sm text-green-200 uppercase tracking-wide mb-2">Alertas Ativos</p>
-                  <p className="text-4xl font-black text-white" suppressHydrationWarning>
+                  <p className="text-sm text-gray-400 uppercase tracking-wide mb-2">Alertas Ativos</p>
+                  <p className="text-4xl font-semibold text-white" suppressHydrationWarning>
                     {data.activeAlerts}
                   </p>
                 </div>
 
                 <div className="text-center">
-                  <p className="text-sm text-green-200 uppercase tracking-wide mb-2">Taxa de Sucesso</p>
-                  <p className="text-4xl font-black text-white" suppressHydrationWarning>
+                  <p className="text-sm text-gray-400 uppercase tracking-wide mb-2">Taxa de Sucesso</p>
+                  <p className="text-4xl font-semibold text-white" suppressHydrationWarning>
                     {data.successRate}%
                   </p>
                 </div>
@@ -405,10 +405,10 @@ export default function Analytics() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
-            className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8"
+            className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8"
           >
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-              <BarChart3 className="w-6 h-6 text-blue-400" />
+            <h2 className="text-2xl font-semibold text-white mb-6 flex items-center gap-3">
+              <BarChart3 className="w-6 h-6 text-gray-300" />
               Estatísticas Gerais
             </h2>
             

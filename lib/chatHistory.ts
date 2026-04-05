@@ -3,7 +3,7 @@ import { collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, l
 
 export interface ChatMessage {
   id: string;
-  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question';
+  type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question' | 'question' | 'query_confirm' | 'expansion';
   content: string;
   products?: any[];
   timestamp: Date;
@@ -11,11 +11,21 @@ export interface ChatMessage {
   creditCost?: number;
   imageData?: string;
   detectedProduct?: string;
+  questionType?: string;
+  questionSuggestions?: { label: string; min?: number; max?: number; value?: string }[];
+  userLocation?: { city?: string; state?: string };
+  expansionSources?: string[];
+  primarySource?: string;
+  isVehicle?: boolean;
   priceRangeApplied?: {
     min?: number;
     max?: number;
     target?: number;
   };
+  queryConfirmSortBy?: string;
+  queryConfirmCreditEstimate?: number;
+  queryConfirmNotes?: string[];
+  isImageSort?: boolean;
 }
 
 export interface ChatHistory {
@@ -38,18 +48,35 @@ export const chatHistoryService = {
         chatId,
         title: title.slice(0, 50),
         messages: messages.slice(-50).map(m => {
+          const parsedTimestamp = m.timestamp instanceof Date
+            ? m.timestamp
+            : new Date(m.timestamp as unknown as string);
+          const safeTimestamp = Number.isFinite(parsedTimestamp.getTime())
+            ? parsedTimestamp
+            : new Date();
+
           const msg: any = {
             id: m.id,
             type: m.type,
             content: m.content,
-            timestamp: m.timestamp.toISOString()
+            timestamp: safeTimestamp.toISOString()
           };
           if (m.products) msg.products = m.products.slice(0, 6);
           if (m.searchType) msg.searchType = m.searchType;
           if (m.creditCost !== undefined) msg.creditCost = m.creditCost;
           if (m.imageData) msg.imageData = m.imageData;
           if (m.detectedProduct) msg.detectedProduct = m.detectedProduct;
+          if (m.questionType) msg.questionType = m.questionType;
+          if (m.questionSuggestions) msg.questionSuggestions = m.questionSuggestions;
+          if (m.userLocation) msg.userLocation = m.userLocation;
+          if (m.expansionSources) msg.expansionSources = m.expansionSources;
+          if (m.primarySource) msg.primarySource = m.primarySource;
+          if (m.isVehicle !== undefined) msg.isVehicle = m.isVehicle;
           if (m.priceRangeApplied) msg.priceRangeApplied = m.priceRangeApplied;
+          if (m.queryConfirmSortBy) msg.queryConfirmSortBy = m.queryConfirmSortBy;
+          if (m.queryConfirmCreditEstimate !== undefined) msg.queryConfirmCreditEstimate = m.queryConfirmCreditEstimate;
+          if (m.queryConfirmNotes) msg.queryConfirmNotes = m.queryConfirmNotes;
+          if (m.isImageSort !== undefined) msg.isImageSort = m.isImageSort;
           return msg;
         }),
         updatedAt: new Date().toISOString()
@@ -89,16 +116,20 @@ export const chatHistoryService = {
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => {
         const data = doc.data();
+        const parseDate = (value: any) => {
+          const d = value instanceof Date ? value : new Date(value);
+          return Number.isFinite(d.getTime()) ? d : new Date();
+        };
         return {
           id: data.chatId,
           userId: data.userId,
           title: data.title,
           messages: data.messages.map((m: any) => ({
             ...m,
-            timestamp: new Date(m.timestamp)
+            timestamp: parseDate(m.timestamp)
           })),
-          createdAt: new Date(data.createdAt),
-          updatedAt: new Date(data.updatedAt)
+          createdAt: parseDate(data.createdAt),
+          updatedAt: parseDate(data.updatedAt)
         };
       });
     } catch (error) {

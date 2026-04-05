@@ -2,20 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Toast } from '@/components/ui/Toast';
-import { Search, Heart, Tag, Activity, Bell, Zap, Award, AlertCircle, Image as ImageIcon, Type, CheckCircle, XCircle, Eye, MousePointerClick, DollarSign, Target, ShoppingBag, TrendingUp } from 'lucide-react';
+import { Search, Heart, Tag, Activity, Bell, Zap, Award, AlertCircle, Image as ImageIcon, Type, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import MobileSidebar from '@/components/dashboard/MobileSidebar';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import StatsCard from '@/components/dashboard/StatsCard';
-import WelcomeCard from '@/components/dashboard/WelcomeCard';
 import AreaChart from '@/components/dashboard/AreaChart';
 import BarChart from '@/components/dashboard/BarChart';
 import PieChart from '@/components/dashboard/PieChart';
-import PerformanceCard from '@/components/dashboard/PerformanceCard';
 import RecentList from '@/components/dashboard/RecentList';
-import SavingsCard from '@/components/dashboard/SavingsCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
 
@@ -30,7 +26,6 @@ interface UserStats {
   favoritesCount: number;
   listingsCount: number;
   alertsCount: number;
-  notificationsCount: number;
   plan: string;
   credits: number;
   planExpiresAt?: string;
@@ -92,12 +87,6 @@ interface PriceAlert {
   isActive: boolean;
 }
 
-interface AlertStats {
-  total: number;
-  active: number;
-  withTarget: number;
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -107,10 +96,8 @@ export default function DashboardPage() {
   const [listings, setListings] = useState<UserListing[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
-  const [alertStats, setAlertStats] = useState<AlertStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('Usuário');
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -158,8 +145,6 @@ export default function DashboardPage() {
         favoritesData,
         userListings,
         alertsData,
-        alertStatsData,
-        notifications,
         planStatusData,
         metricsData,
         historyData,
@@ -169,8 +154,6 @@ export default function DashboardPage() {
         safeFetch(`${API_URL}/favorites`),
         safeFetch(`${API_URL}/listings/my`),
         safeFetch(`${API_URL}/price-alerts`),
-        safeFetch(`${API_URL}/price-alerts/stats`),
-        safeFetch(`${API_URL}/notifications`),
         safeFetch(`${API_URL}/users/plan-status`),
         safeFetch(`${API_URL}/analytics/metrics?days=30`),
         safeFetch(`${API_URL}/analytics/history?limit=10`),
@@ -182,12 +165,10 @@ export default function DashboardPage() {
         const favCount = favoritesData?.length || 0;
         const listCount = userListings?.length || 0;
         const alertCount = alertsData?.length || 0;
-        const notifCount = notifications ? notifications.filter((n: any) => !n.read).length : 0;
 
         if (favoritesData) setFavorites(favoritesData.slice(0, 5));
         if (userListings) setListings(userListings.slice(0, 5));
         if (alertsData) setAlerts(alertsData.slice(0, 5));
-        if (alertStatsData) setAlertStats(alertStatsData);
         if (planStatusData) setPlanStatus(planStatusData);
         if (metricsData) setMetrics(metricsData);
         if (historyData) setHistory(historyData);
@@ -199,11 +180,10 @@ export default function DashboardPage() {
           imageSearchesToday: usage.imageToday || 0,
           textSearchesMonth: usage.textMonth || 0,
           imageSearchesMonth: usage.imageMonth || 0,
-          totalSearches: (usage.textToday || 0) + (usage.imageToday || 0),
+          totalSearches: metricsData?.totalSearches || (usage.textMonth || 0) + (usage.imageMonth || 0),
           favoritesCount: favCount,
           listingsCount: listCount,
           alertsCount: alertCount,
-          notificationsCount: notifCount,
           plan: userProfile.plan || 'free',
           credits: userProfile.credits || 0,
           planExpiresAt: userProfile.planExpiresAt,
@@ -338,23 +318,6 @@ export default function DashboardPage() {
     { label: 'Imagem', value: metrics?.imageSearches || stats?.imageSearchesMonth || 32, color: '#A855F7' },
   ];
 
-  // Cálculos de performance de anúncios
-  const totalViews = listings.reduce((sum, l) => sum + (l.views || 0), 0);
-  const totalClicks = listings.reduce((sum, l) => sum + (l.clicks || 0), 0);
-  const ctr = totalViews > 0 ? ((totalClicks / totalViews) * 100).toFixed(1) : '0.0';
-  const totalListingsValue = listings.reduce((sum, l) => sum + (l.price || 0), 0);
-
-  // Cálculos de economia com alertas
-  const totalSavings = alerts.reduce((sum, alert) => {
-    const savings = alert.currentPrice - alert.lastCheckedPrice;
-    return sum + (savings > 0 ? savings : 0);
-  }, 0);
-  const alertsReached = alerts.filter(a => a.targetPrice && a.lastCheckedPrice <= a.targetPrice).length;
-  const biggestDrop = alerts.reduce((max, alert) => {
-    const drop = ((alert.currentPrice - alert.lastCheckedPrice) / alert.currentPrice) * 100;
-    return Math.max(max, Math.abs(drop));
-  }, 0);
-
   // Formatar favoritos para RecentList
   const recentFavorites = favorites.map(fav => ({
     id: fav.id,
@@ -404,19 +367,42 @@ export default function DashboardPage() {
   ) : 8.2;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0B0B0F] via-[#0F0F14] to-[#0B0B0F] flex">
+    <div className="min-h-screen bg-[#0A0C10] flex">
       <DashboardSidebar />
       <MobileSidebar />
 
       <div className="flex-1 lg:ml-64 w-full">
         <DashboardHeader userName={userName} />
 
-        <main className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+        <main className="p-5 sm:p-7 lg:p-10 space-y-6 sm:space-y-7">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 sm:p-7"
+          >
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+              <div>
+                <p className="text-sm sm:text-base text-gray-400 mb-2">Dashboard</p>
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-white leading-tight">
+                  Visão geral da sua conta
+                </h1>
+                <p className="text-sm sm:text-base text-gray-400 mt-3 max-w-2xl">
+                  Resumo objetivo de buscas, histórico, alertas, favoritos e anúncios.
+                </p>
+              </div>
+              <div className="text-left lg:text-right">
+                <p className="text-sm text-gray-400">Créditos disponíveis</p>
+                <p className="text-3xl sm:text-4xl font-bold text-white" suppressHydrationWarning>{stats?.credits || 0}</p>
+              </div>
+            </div>
+          </motion.div>
+
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5"
           >
             <StatsCard
               icon={Search}
@@ -424,7 +410,7 @@ export default function DashboardPage() {
               value={stats?.totalSearches || 0}
               trend={searchesTrend}
               trendLabel="vs ontem"
-              color="from-blue-500 to-cyan-500"
+              color="from-slate-600 to-slate-500"
               delay={0}
             />
             <StatsCard
@@ -433,7 +419,7 @@ export default function DashboardPage() {
               value={(stats?.textSearchesMonth || 0) + (stats?.imageSearchesMonth || 0)}
               trend={monthlyTrend}
               trendLabel="este mês"
-              color="from-purple-500 to-pink-500"
+              color="from-slate-700 to-slate-600"
               delay={0.05}
             />
             <StatsCard
@@ -442,7 +428,7 @@ export default function DashboardPage() {
               value={stats?.favoritesCount || 0}
               trend={stats?.favoritesCount ? 5 : 0}
               trendLabel="salvos"
-              color="from-red-500 to-orange-500"
+              color="from-slate-700 to-slate-600"
               delay={0.1}
             />
             <StatsCard
@@ -451,55 +437,32 @@ export default function DashboardPage() {
               value={stats?.listingsCount || 0}
               trend={stats?.listingsCount ? 10 : 0}
               trendLabel="ativos"
-              color="from-green-500 to-emerald-500"
+              color="from-slate-600 to-slate-500"
               delay={0.15}
-            />
-            <StatsCard
-              icon={AlertCircle}
-              title="Alertas"
-              value={stats?.alertsCount || 0}
-              trend={stats?.alertsCount ? 8 : 0}
-              trendLabel="monitorando"
-              color="from-yellow-500 to-orange-500"
-              delay={0.2}
-            />
-            <StatsCard
-              icon={Bell}
-              title="Notificações"
-              value={stats?.notificationsCount || 0}
-              trend={0}
-              trendLabel="não lidas"
-              color="from-pink-500 to-rose-500"
-              delay={0.25}
             />
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3, duration: 0.4 }}
-              whileHover={{ y: -5, scale: 1.02 }}
-              className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 backdrop-blur-xl border border-yellow-500/30 rounded-2xl p-6 relative overflow-hidden group cursor-pointer"
+              whileHover={{ y: -2 }}
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-6 relative overflow-hidden group cursor-pointer"
               onClick={() => router.push('/plans')}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-white/[0.03] opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-yellow-200 uppercase tracking-wide mb-2">Créditos Disponíveis</h3>
-                    <p className="text-5xl font-black text-yellow-400" suppressHydrationWarning>{stats?.credits || 0}</p>
-                    <p className="text-xs text-yellow-300 mt-2">1 crédito = 1 busca</p>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Créditos</h3>
+                    <p className="text-4xl sm:text-5xl font-bold text-white" suppressHydrationWarning>{stats?.credits || 0}</p>
+                    <p className="text-sm text-gray-400 mt-2">1 crédito = 1 busca</p>
                   </div>
-                  <motion.div
-                    animate={{ rotate: [0, 10, -10, 0] }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                  >
-                    <Zap className="w-16 h-16 text-yellow-400 opacity-50" />
-                  </motion.div>
+                  <Zap className="w-12 h-12 text-gray-500 opacity-60" />
                 </div>
-                <div className="flex items-center gap-2 text-sm text-yellow-300">
-                  <TrendingUp className="w-4 h-4" />
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <Clock className="w-4 h-4" />
                   <span>Clique para comprar mais créditos</span>
                 </div>
               </div>
@@ -509,33 +472,31 @@ export default function DashboardPage() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.35, duration: 0.4 }}
-              whileHover={{ y: -5, scale: 1.02 }}
-              className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6 relative overflow-hidden group cursor-pointer"
+              whileHover={{ y: -2 }}
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-6 relative overflow-hidden group cursor-pointer"
               onClick={() => router.push('/plans')}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-white/[0.03] opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-purple-200 uppercase tracking-wide mb-2">Plano Atual</h3>
-                    <p className="text-4xl font-black text-purple-400 capitalize">{stats?.plan || 'gratuito'}</p>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Plano Atual</h3>
+                    <p className="text-4xl sm:text-5xl font-bold text-white capitalize">{stats?.plan || 'gratuito'}</p>
                     {planStatus && planStatus.daysLeft !== null && (
-                      <p className="text-xs text-purple-300 mt-2">
+                      <p className="text-sm text-gray-400 mt-2">
                         {planStatus.isExpired ? '⚠️ Expirado' : `✓ ${planStatus.daysLeft} dias restantes`}
                       </p>
                     )}
                   </div>
-                  <Award className="w-16 h-16 text-purple-400 opacity-50" />
+                  <Award className="w-12 h-12 text-gray-500 opacity-60" />
                 </div>
-                <div className="flex items-center gap-2 text-sm text-purple-300">
-                  <TrendingUp className="w-4 h-4" />
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <Clock className="w-4 h-4" />
                   <span>Clique para fazer upgrade</span>
                 </div>
               </div>
             </motion.div>
           </div>
-
-          <WelcomeCard userName={userName} delay={0.4} />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <AreaChart
@@ -563,115 +524,51 @@ export default function DashboardPage() {
             />
           )}
 
-          {/* Seção: Performance de Anúncios */}
-          {listings.length > 0 && (
-            <>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.1 }}
-              >
-                <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                  <ShoppingBag className="w-6 h-6 text-purple-400" />
-                  Performance dos Anúncios
-                </h2>
-              </motion.div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
+            <div className="xl:col-span-2 space-y-4 sm:space-y-6">
+              <RecentList
+                title="Histórico de Alertas"
+                items={recentAlerts}
+                icon={AlertCircle}
+                emptyMessage="Nenhum alerta configurado"
+                delay={1.05}
+              />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                <PerformanceCard
-                  title="Total de Visualizações"
-                  value={totalViews}
-                  icon={Eye}
-                  trend={totalViews > 0 ? 15 : 0}
-                  trendLabel="esta semana"
-                  color="from-blue-500/20 to-cyan-500/20"
-                  delay={1.15}
-                />
+              <RecentList
+                title="Favoritos Recentes"
+                items={recentFavorites}
+                icon={Heart}
+                emptyMessage="Você ainda não tem favoritos"
+                delay={1.1}
+                onItemClick={(item) => window.open(item.url, '_blank')}
+              />
+            </div>
 
-                <PerformanceCard
-                  title="Total de Cliques"
-                  value={totalClicks}
-                  icon={MousePointerClick}
-                  trend={totalClicks > 0 ? 12 : 0}
-                  trendLabel="esta semana"
-                  color="from-purple-500/20 to-pink-500/20"
-                  delay={1.2}
-                />
-
-                <PerformanceCard
-                  title="Taxa de Conversão"
-                  value={`${ctr}%`}
-                  subtitle="CTR (Click-Through Rate)"
-                  icon={Target}
-                  color="from-green-500/20 to-emerald-500/20"
-                  delay={1.25}
-                />
-
-                <PerformanceCard
-                  title="Valor Total"
-                  value={`R$ ${totalListingsValue.toLocaleString('pt-BR')}`}
-                  subtitle="Soma de todos os anúncios"
-                  icon={DollarSign}
-                  color="from-yellow-500/20 to-orange-500/20"
-                  delay={1.3}
-                  onClick={() => router.push('/my-listings')}
-                />
-              </div>
-
+            <div className="space-y-4 sm:space-y-6">
               <RecentList
                 title="Meus Anúncios"
                 items={recentListings}
                 icon={Tag}
                 emptyMessage="Você ainda não tem anúncios"
-                delay={1.35}
+                delay={1.15}
                 onItemClick={(item) => router.push(`/listing/${item.id}`)}
               />
-            </>
-          )}
 
-          {/* Seção: Economia com Alertas */}
-          {alerts.length > 0 && (
-            <>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.4 }}
+                transition={{ delay: 1.2 }}
+                className="bg-white/[0.03] border border-white/10 rounded-2xl p-5"
               >
-                <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                  <Bell className="w-6 h-6 text-green-400" />
-                  Alertas de Preço
-                </h2>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-400">Resumo rápido</p>
+                  <Bell className="w-4 h-4 text-gray-500" />
+                </div>
+                <p className="text-2xl font-semibold text-white">{stats?.alertsCount || 0}</p>
+                <p className="text-sm text-gray-400 mt-1">alertas monitorando preço</p>
               </motion.div>
-
-              <SavingsCard
-                totalSavings={totalSavings}
-                activeAlerts={alertStats?.active || alerts.filter(a => a.isActive).length}
-                alertsReached={alertsReached}
-                biggestDrop={Math.round(biggestDrop)}
-                delay={1.45}
-              />
-
-              <RecentList
-                title="Alertas Ativos"
-                items={recentAlerts}
-                icon={AlertCircle}
-                emptyMessage="Nenhum alerta configurado"
-                delay={1.5}
-              />
-            </>
-          )}
-
-          {/* Seção: Favoritos Recentes */}
-          {favorites.length > 0 && (
-            <RecentList
-              title="Favoritos Recentes"
-              items={recentFavorites}
-              icon={Heart}
-              emptyMessage="Você ainda não tem favoritos"
-              delay={1.55}
-              onItemClick={(item) => window.open(item.url, '_blank')}
-            />
-          )}
+            </div>
+          </div>
 
 
 
@@ -680,10 +577,10 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.0 }}
-              className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6"
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-6"
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-white">Atividade Recente</h3>
+                <h3 className="text-lg font-semibold text-white">Atividade Recente</h3>
                 <span className="text-sm text-gray-400">{history.length} buscas</span>
               </div>
               <div className="space-y-3">
@@ -704,7 +601,7 @@ export default function DashboardPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 1.0 + index * 0.05 }}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all group"
+                      className="flex items-center justify-between p-3 bg-white/[0.03] border border-white/10 rounded-xl hover:bg-white/[0.06] transition-all group"
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className={`p-2 rounded-lg border ${item.type === 'image' ? 'bg-purple-500/10 border-purple-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
@@ -744,13 +641,6 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
     </div>
   );
 }

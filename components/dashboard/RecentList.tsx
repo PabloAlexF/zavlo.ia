@@ -39,16 +39,16 @@ export default function RecentList({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4 }}
-      className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6"
+      className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-5"
     >
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl">
-            <Icon className="w-5 h-5 text-purple-400" />
+          <div className="p-2 bg-white/[0.04] rounded-xl border border-white/10">
+            <Icon className="w-4 h-4 text-gray-300" />
           </div>
-          <h3 className="text-lg font-bold text-white">{title}</h3>
+          <h3 className="text-base font-semibold text-white">{title}</h3>
         </div>
-        <span className="text-sm text-gray-400">{items.length} itens</span>
+        <span className="text-sm text-gray-500">{items.length} itens</span>
       </div>
 
       {items.length === 0 ? (
@@ -64,7 +64,7 @@ export default function RecentList({
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: delay + index * 0.05 }}
               onClick={() => onItemClick?.(item)}
-              className={`flex items-center gap-4 p-4 bg-white/5 rounded-xl hover:bg-white/10 transition-all group ${
+              className={`flex items-center gap-4 p-3.5 bg-white/[0.03] border border-white/8 rounded-xl hover:bg-white/[0.05] transition-all group ${
                 onItemClick ? 'cursor-pointer' : ''
               }`}
             >
@@ -85,7 +85,7 @@ export default function RecentList({
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <h4 className="text-sm font-semibold text-white truncate group-hover:text-purple-400 transition-colors">
+                  <h4 className="text-sm font-semibold text-white truncate transition-colors">
                     {item.title}
                   </h4>
                   {item.active !== undefined && (
@@ -107,7 +107,7 @@ export default function RecentList({
 
                 <div className="flex items-center gap-4 text-xs text-gray-400">
                   {item.price !== undefined && (
-                    <span className="font-bold text-green-400" suppressHydrationWarning>
+                    <span className="font-semibold text-gray-200" suppressHydrationWarning>
                       R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   )}

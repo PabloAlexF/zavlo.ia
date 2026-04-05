@@ -77,6 +77,36 @@ export class AnalyticsService {
         metrics.successRate = (logs.filter(log => log.success).length / logs.length) * 100;
       }
 
+      const groupedByDay = new Map<string, { date: string; searches: number; text: number; image: number }>();
+      for (let offset = days - 1; offset >= 0; offset -= 1) {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - offset);
+        const key = date.toISOString().slice(0, 10);
+        groupedByDay.set(key, { date: key, searches: 0, text: 0, image: 0 });
+      }
+
+      logs.forEach((log) => {
+        const rawTimestamp: any = log.timestamp;
+        const date = rawTimestamp instanceof Date
+          ? rawTimestamp
+          : rawTimestamp?._seconds
+          ? new Date(rawTimestamp._seconds * 1000)
+          : new Date(rawTimestamp);
+
+        if (Number.isNaN(date.getTime())) return;
+
+        const key = date.toISOString().slice(0, 10);
+        const bucket = groupedByDay.get(key);
+        if (!bucket) return;
+
+        bucket.searches += 1;
+        if (log.type === 'text') bucket.text += 1;
+        if (log.type === 'image') bucket.image += 1;
+      });
+
+      metrics.dailyStats = Array.from(groupedByDay.values());
+
       // Top sources
       logs.forEach(log => {
         log.sources.forEach(source => {

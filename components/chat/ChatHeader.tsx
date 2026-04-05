@@ -13,14 +13,14 @@ interface ChatHeaderProps {
 
 export function ChatHeader({ sidebarOpen, onToggleSidebar, userCredits, onClearChat, onOpenSettings }: ChatHeaderProps) {
   return (
-    <header className="h-14 flex-shrink-0 border-b border-white/[0.06] bg-[#0D0D14]/90 px-3 backdrop-blur-md sm:h-16 sm:px-5 md:px-8">
+    <header className="h-16 flex-shrink-0 border-b border-white/[0.06] bg-[#0D0D14]/90 px-2.5 backdrop-blur-md sm:h-16 sm:px-5 md:px-8">
       <div className="flex h-full w-full items-center justify-between gap-2">
         <div className="flex items-center gap-2 sm:gap-4">
           <motion.button
             onClick={onToggleSidebar}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="rounded-lg border border-white/[0.08] bg-white/[0.04] p-2 text-slate-400 transition-all hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-300"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-slate-400 transition-all hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-300"
             aria-label="Toggle sidebar"
           >
             {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -31,24 +31,30 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar, userCredits, onClearC
               <Sparkles className="h-3.5 w-3.5 text-white sm:h-4 sm:w-4" />
             </div>
             <div className="hidden sm:block">
-              <h1 className="text-sm font-semibold text-white">Zavlo</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-semibold text-white">Zavlo</h1>
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  online
+                </span>
+              </div>
               <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Assistente de Compras</p>
             </div>
-            <h1 className="text-sm font-semibold text-white sm:hidden">Zavlo</h1>
+            <h1 className="text-base font-semibold text-white sm:hidden">Zavlo</h1>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <div className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-1 text-xs font-medium text-violet-300 sm:px-3">
+          <div className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 py-1.5 text-xs font-semibold text-violet-200 sm:px-3">
             <span className="hidden sm:inline">{userCredits} créditos</span>
-            <span className="sm:hidden">{userCredits}</span>
+            <span className="sm:hidden">⚡ {userCredits}</span>
           </div>
 
           <motion.button
             onClick={onClearChat}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="rounded-lg border border-white/[0.08] bg-white/[0.04] p-2 text-slate-400 transition-all hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-slate-400 transition-all hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
             title="Limpar conversa"
           >
             <Trash2 className="h-4 w-4" />

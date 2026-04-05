@@ -111,7 +111,7 @@ export class GoogleLensService {
       this.logger.log(`Apify run started: ${runId}`);
 
       let finalResults = null;
-      const maxAttempts = 60; // 2 minutos (60 * 2s)
+      const maxAttempts = 60;
       
       for (let i = 0; i < maxAttempts; i++) {
         await new Promise(resolve => setTimeout(resolve, 2000));

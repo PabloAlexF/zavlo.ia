@@ -24,7 +24,15 @@ export class GoogleShoppingService {
       this.logger.log(`Query enriquecida: "${this.sanitizeForLog(enrichedQuery)}"`);
 
       // ✅ Limite mínimo 20, máximo 100 (conforme API)
-      const maxLimit = Math.max(20, Math.min(limit, 100));
+      const requestedLimit = Number((classification as any)?.google_limit);
+      const maxLimit = Number.isFinite(requestedLimit)
+        ? Math.max(20, Math.min(requestedLimit, 100))
+        : Math.max(20, Math.min(limit, 100));
+
+      const requestedCountry = String((classification as any)?.google_country || 'br').toLowerCase().trim();
+      const requestedLanguage = String((classification as any)?.google_language || 'pt').toLowerCase().trim();
+      const country = /^[a-z]{2}$/.test(requestedCountry) ? requestedCountry : 'br';
+      const language = /^[a-z]{2}$/.test(requestedLanguage) ? requestedLanguage : 'pt';
 
       // ✅ Mapear sortBy para valores aceitos pela API
       const sortByMap: Record<string, string> = {
@@ -36,8 +44,8 @@ export class GoogleShoppingService {
       };
 
       const input = {
-        country: 'BR',
-        language: 'pt-BR',
+        country,
+        language,
         limit: maxLimit,
         searchQuery: enrichedQuery,
         sortBy: sortByMap[sortBy] || 'BEST_MATCH',

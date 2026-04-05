@@ -7,6 +7,7 @@ import { Toast } from '@/components/ui/Toast';
 import { Search, SlidersHorizontal, X, MessageSquare, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import type { ClassificationData } from '@shared/contracts/classification.contract';
 
 interface Product {
   id: string;
@@ -15,11 +16,26 @@ interface Product {
   image?: string;
   source: string;
   url: string;
-  location?: any;
+  location?: unknown;
   condition: 'new' | 'used';
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+interface SearchApiError {
+  error?: string;
+  message?: string;
+  currentCredits?: number;
+  requiredCredits?: number;
+}
+
+interface SearchApiResponse {
+  results?: Product[];
+  productName?: string;
+  classification?: ClassificationData;
+  remainingCredits?: number;
+  creditsUsed?: number;
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -99,31 +115,47 @@ function SearchContent() {
       const user = localStorage.getItem('zavlo_user');
       const userData = user ? JSON.parse(user) : null;
 
-      const endpoint = type === 'image'
+      const isLegacyImagePriceSearch = type === 'image' && !!imageUrl && !!query && !query.startsWith('data:image/');
+
+      const endpoint = isLegacyImagePriceSearch
+        ? `${API_URL}/search/prices`
+        : type === 'image'
         ? `${API_URL}/search/image`
         : `${API_URL}/search/text`;
 
-      const body = type === 'image' && imageUrl
-        ? { imageData: imageUrl }
+      const body = isLegacyImagePriceSearch
+        ? { productName: query, sortBy: 'BEST_MATCH' }
+        : type === 'image' && imageUrl
+        ? { imageUrl: imageUrl }
         : type === 'image'
         ? { imageData: query }
         : undefined;
 
-      const fetchUrl = type === 'image'
+      const fetchUrl = (type === 'image' || isLegacyImagePriceSearch)
         ? endpoint
         : `${endpoint}?query=${encodeURIComponent(query)}&sortBy=RELEVANCE`;
 
       const response = await fetch(fetchUrl, {
-        method: type === 'image' ? 'POST' : 'GET',
+        method: (type === 'image' || isLegacyImagePriceSearch) ? 'POST' : 'GET',
         headers: {
           'Content-Type': 'application/json',
           ...(userData?.token && { 'Authorization': `Bearer ${userData.token}` }),
         },
-        ...(type === 'image' && body ? { body: JSON.stringify(body) } : {}),
+        ...((type === 'image' || isLegacyImagePriceSearch) && body ? { body: JSON.stringify(body) } : {}),
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error: SearchApiError = await response.json();
+        if (error.error === 'FREE_LIMIT_EXCEEDED') {
+          setToast({ message: 'Você já usou sua busca gratuita. Faça login ou assine um plano para continuar.', type: 'error' });
+          setTimeout(() => router.push('/auth'), 1500);
+          return;
+        }
+        if (error.error === 'FEATURE_NOT_AVAILABLE') {
+          setToast({ message: error.message || 'Recurso disponível apenas para planos pagos.', type: 'error' });
+          setTimeout(() => router.push('/plans'), 1500);
+          return;
+        }
         if (error.error === 'LIMIT_EXCEEDED') {
           setToast({ message: 'Limite de comparações atingido.', type: 'error' });
           return;
@@ -139,7 +171,7 @@ function SearchContent() {
         throw new Error('Search failed');
       }
 
-      const data = await response.json();
+      const data: SearchApiResponse = await response.json();
       const products = type === 'image' ? data.results || [] : data.results || [];
       
       if (userData && typeof data.remainingCredits === 'number') {

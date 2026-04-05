@@ -7,9 +7,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class NotificationsController {
   constructor(private notificationsService: NotificationsService) {}
 
+  private resolveUserId(user: any): string | undefined {
+    return user?.userId || user?.id;
+  }
+
   @Get()
   async getUserNotifications(@Request() req) {
-    return this.notificationsService.getUserNotifications(req.user.id);
+    return this.notificationsService.getUserNotifications(this.resolveUserId(req.user));
   }
 
   @Post(':id/read')

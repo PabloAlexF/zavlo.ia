@@ -20,6 +20,24 @@ export class OlxService {
     return String(v).replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
   }
 
+  private clamp(value: number, min: number, max: number): number {
+    if (!Number.isFinite(value)) return min;
+    return Math.min(Math.max(value, min), max);
+  }
+
+  private resolveOlxSort(sortBy: string): 'newest' | 'cheapest' | 'expensive' | 'relevance' {
+    const sortByMap: Record<string, 'newest' | 'cheapest' | 'expensive' | 'relevance'> = {
+      RELEVANCE: 'relevance',
+      BEST_MATCH: 'relevance',
+      LOWEST_PRICE: 'cheapest',
+      HIGHEST_PRICE: 'expensive',
+      TOP_RATED: 'relevance',
+      NEWEST: 'newest',
+    };
+
+    return sortByMap[sortBy] || 'newest';
+  }
+
   async search(query: string, limit = 20, sortBy: string = 'RELEVANCE', classification?: any): Promise<any[]> {
     try {
       const searchQuery = classification
@@ -27,27 +45,30 @@ export class OlxService {
         : query;
       this.logger.log(`🛒 [OLX] Buscando: "${this.sanitizeForLog(searchQuery)}" (limit: ${limit}, sortBy: ${sortBy})`);
 
-      // Mapear sortBy do Google Shopping para OLX
-      const sortByMap: Record<string, string> = {
-        'RELEVANCE': 'relevance',
-        'BEST_MATCH': 'relevance',
-        'LOWEST_PRICE': 'cheapest',
-        'HIGHEST_PRICE': 'expensive',
-        'TOP_RATED': 'relevance',
-      };
-
-      const olxSortBy = sortByMap[sortBy] || 'newest';
+      const olxSortBy = this.resolveOlxSort(sortBy);
+      const requestedPages = Number((classification as any)?.olx_max_pages);
+      const maxPages = Number.isFinite(requestedPages)
+        ? this.clamp(requestedPages, 1, 50)
+        : this.clamp(Math.ceil(limit / 50), 1, 50);
+      const requestedMaxRequests = Number((classification as any)?.olx_max_requests);
+      const maxRequestsPerCrawl = Number.isFinite(requestedMaxRequests)
+        ? this.clamp(requestedMaxRequests, 20, 1000)
+        : 100;
 
       const input = {
         searchQuery: searchQuery,
+        olxDomain: 'olx.com.br',
         sortBy: olxSortBy,
-        maxPages: Math.ceil(limit / 50),
+        maxPages,
+        maxRequestsPerCrawl,
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL'],
           apifyProxyCountry: 'BR',
         },
       };
+
+      this.logger.log(`📤 [OLX] Input: query="${this.sanitizeForLog(searchQuery)}", domain=${input.olxDomain}, sortBy=${input.sortBy}, maxPages=${input.maxPages}, maxRequests=${input.maxRequestsPerCrawl}, proxy=RESIDENTIAL`);
 
       // Disparar run assíncrono (evita timeout de 30s do Render Free)
       const runRes = await fetch(

@@ -192,11 +192,11 @@ export default function ProductDetails() {
             'Authorization': `Bearer ${userData.token}`,
           },
           body: JSON.stringify({
-            productId: product.id,
-            productTitle: product.title,
-            productPrice: product.price,
-            productImage: product.images?.[0] || '',
-            productUrl: `/product/${product.id}`,
+            id: product.id,
+            title: product.title,
+            price: product.price,
+            image: product.images?.[0] || '',
+            url: `/product/${product.id}`,
             source: product.source,
           }),
         });

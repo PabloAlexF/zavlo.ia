@@ -47,8 +47,8 @@ export default function AreaChart({ title, data, labels, delay }: AreaChartProps
 
     // Draw gradient fill
     const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
-    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
-    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.05)');
+    gradient.addColorStop(0, 'rgba(148, 163, 184, 0.28)');
+    gradient.addColorStop(1, 'rgba(148, 163, 184, 0.02)');
 
     ctx.beginPath();
     ctx.moveTo(points[0].x, height - padding);
@@ -68,8 +68,8 @@ export default function AreaChart({ title, data, labels, delay }: AreaChartProps
 
     // Draw line
     const lineGradient = ctx.createLinearGradient(0, 0, width, 0);
-    lineGradient.addColorStop(0, '#3B82F6');
-    lineGradient.addColorStop(1, '#8B5CF6');
+    lineGradient.addColorStop(0, '#E5E7EB');
+    lineGradient.addColorStop(1, '#94A3B8');
 
     ctx.beginPath();
     points.forEach((point, index) => {
@@ -89,9 +89,9 @@ export default function AreaChart({ title, data, labels, delay }: AreaChartProps
     points.forEach((point) => {
       ctx.beginPath();
       ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#3B82F6';
+      ctx.fillStyle = '#F8FAFC';
       ctx.fill();
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = '#0F172A';
       ctx.lineWidth = 2;
       ctx.stroke();
     });
@@ -116,19 +116,15 @@ export default function AreaChart({ title, data, labels, delay }: AreaChartProps
       className="relative group"
     >
       {/* Glow effect */}
-      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-20 blur-xl transition-opacity rounded-2xl" />
-      
-      {/* Card */}
-      <div className="relative bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6">
-        {/* Header */}
+      <div className="relative bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-bold text-white mb-1">{title}</h3>
-            <p className="text-sm text-gray-400">Últimos 12 meses</p>
+            <h3 className="text-base font-semibold text-white mb-1">{title}</h3>
+            <p className="text-sm text-gray-400">Último período</p>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 rounded-lg">
-            <TrendingUp className="w-4 h-4 text-green-400" />
-            <span className="text-sm font-bold text-green-400">+12.5%</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.04] border border-white/10 rounded-lg">
+            <TrendingUp className="w-4 h-4 text-gray-300" />
+            <span className="text-sm font-medium text-gray-300">atividade</span>
           </div>
         </div>
 

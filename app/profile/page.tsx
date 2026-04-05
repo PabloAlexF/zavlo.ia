@@ -8,9 +8,9 @@ import { Header } from '@/components/layout/Header';
 import { transactionService, Transaction } from '@/lib/transactions';
 import { getPlanLimits } from '@/lib/plans';
 import { motion } from 'framer-motion';
-import { 
-  User, Mail, Calendar, Crown, Zap, TrendingUp, ShoppingCart, 
-  BarChart3, LogOut, Sparkles, ArrowUpRight, Clock, CreditCard,
+import {
+  Mail, Calendar, Crown, Zap, TrendingUp, ShoppingCart,
+  BarChart3, LogOut, ArrowUpRight, Clock, CreditCard,
   Package, Eye, MousePointerClick
 } from 'lucide-react';
 
@@ -25,7 +25,7 @@ export default function Profile() {
   useEffect(() => {
     if (!user?.userId) return;
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
     const token = user.token;
 
     transactionService.getHistory(user.userId, 10).then(setTransactions);
@@ -85,7 +85,7 @@ export default function Profile() {
     if (!user?.token) return;
     
     setLoadingLocation(true);
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://zavlo-ia.onrender.com/api/v1';
 
     try {
       const response = await fetch(`${API_URL}/users/profile`, {
@@ -137,10 +137,10 @@ export default function Profile() {
   }
 
   const planDetails: Record<string, { name: string; color: string; icon: any }> = {
-    free: { name: 'Gratuito', color: 'from-gray-500 to-gray-600', icon: Package },
-    basic: { name: 'Básico', color: 'from-blue-500 to-cyan-500', icon: Zap },
-    pro: { name: 'Pro', color: 'from-purple-500 to-pink-500', icon: Crown },
-    business: { name: 'Empresarial', color: 'from-orange-500 to-red-500', icon: Sparkles },
+    free: { name: 'Gratuito', color: 'from-gray-600 to-gray-700', icon: Package },
+    basic: { name: 'Básico', color: 'from-gray-500 to-gray-600', icon: Zap },
+    pro: { name: 'Pro', color: 'from-gray-500 to-gray-600', icon: Crown },
+    business: { name: 'Empresarial', color: 'from-gray-500 to-gray-600', icon: Crown },
   };
 
   const currentPlan = planDetails[user.plan || 'free'] || planDetails.free;
@@ -148,15 +148,10 @@ export default function Profile() {
   const PlanIcon = currentPlan.icon;
 
   return (
-    <div className="min-h-screen bg-[#0B0B0F] relative overflow-hidden">
+    <div className="min-h-screen bg-[#0A0C10]">
       <Header />
-      
-      {/* Background */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a2e12_1px,transparent_1px),linear-gradient(to_bottom,#1a1a2e12_1px,transparent_1px)] bg-[size:32px_32px]" />
-      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px]" />
 
-      <main className="relative z-10 container mx-auto px-4 pt-24 pb-12 max-w-7xl">
+      <main className="container mx-auto px-4 pt-24 pb-12 max-w-7xl">
         {/* Header */}
         <motion.div 
           className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8"
@@ -169,8 +164,8 @@ export default function Profile() {
           </div>
           <motion.button 
             onClick={handleLogout}
-            className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 transition-all"
-            whileHover={{ scale: 1.05 }}
+            className="flex items-center gap-2 px-6 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-white hover:bg-white/[0.06] transition-all"
+            whileHover={{ y: -1 }}
             whileTap={{ scale: 0.95 }}
           >
             <LogOut className="w-5 h-5" />
@@ -183,17 +178,17 @@ export default function Profile() {
           <div className="lg:col-span-2 space-y-6">
             {/* User Card */}
             <motion.div 
-              className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8"
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
               <div className="flex items-center gap-6">
-                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-4xl font-black text-white shadow-lg">
+                <div className="w-24 h-24 rounded-2xl bg-white/[0.08] border border-white/10 flex items-center justify-center text-4xl font-semibold text-white">
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-3xl font-black text-white mb-2">{user.name}</h2>
+                  <h2 className="text-3xl font-semibold text-white mb-2">{user.name}</h2>
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-2 text-gray-400">
                       <Mail className="w-4 h-4" />
@@ -214,13 +209,13 @@ export default function Profile() {
 
             {/* Location Card */}
             <motion.div 
-              className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8"
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                <h3 className="text-xl font-semibold text-white flex items-center gap-2">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -229,8 +224,8 @@ export default function Profile() {
                 </h3>
                 <motion.button
                   onClick={() => setIsEditingLocation(!isEditingLocation)}
-                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-semibold text-white hover:bg-white/10 transition-all"
-                  whileHover={{ scale: 1.05 }}
+                  className="px-4 py-2 bg-white/[0.03] border border-white/10 rounded-xl text-sm font-medium text-white hover:bg-white/[0.06] transition-all"
+                  whileHover={{ y: -1 }}
                   whileTap={{ scale: 0.95 }}
                 >
                   {isEditingLocation ? 'Cancelar' : 'Editar'}
@@ -293,7 +288,7 @@ export default function Profile() {
                   <motion.button
                     onClick={handleUpdateLocation}
                     disabled={loadingLocation}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl text-white font-semibold hover:shadow-lg hover:shadow-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full px-6 py-3 bg-white text-black rounded-xl font-medium hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     whileHover={{ scale: loadingLocation ? 1 : 1.02 }}
                     whileTap={{ scale: loadingLocation ? 1 : 0.98 }}
                   >
@@ -313,16 +308,16 @@ export default function Profile() {
               ].map((stat, i) => (
                 <motion.div
                   key={stat.label}
-                  className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6"
+                  className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-6"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 + i * 0.05 }}
-                  whileHover={{ scale: 1.05, y: -4 }}
+                  whileHover={{ y: -2 }}
                 >
                   <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center mb-3`}>
                     <stat.icon className="w-5 h-5 text-white" />
                   </div>
-                  <p className="text-3xl font-black text-white mb-1">{stat.value}</p>
+                  <p className="text-3xl font-semibold text-white mb-1">{stat.value}</p>
                   <p className="text-xs text-gray-400">{stat.label}</p>
                 </motion.div>
               ))}
@@ -330,12 +325,12 @@ export default function Profile() {
 
             {/* Usage Progress */}
             <motion.div 
-              className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8"
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2">
+              <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
                 <BarChart3 className="w-6 h-6" />
                 Uso Este Mês
               </h3>
@@ -388,12 +383,12 @@ export default function Profile() {
 
             {/* Transaction History */}
             <motion.div 
-              className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8"
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
             >
-              <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2">
+              <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
                 <Clock className="w-6 h-6" />
                 Histórico de Créditos
               </h3>
@@ -444,17 +439,17 @@ export default function Profile() {
           <div className="space-y-6">
             {/* Plan Card */}
             <motion.div 
-              className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8"
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-black text-white">Plano Atual</h3>
+                <h3 className="text-lg font-semibold text-white">Plano Atual</h3>
                 <Link href="/plans">
                   <motion.button 
-                    className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-semibold text-white hover:bg-white/10 transition-all"
-                    whileHover={{ scale: 1.05 }}
+                    className="px-4 py-2 bg-white/[0.03] border border-white/10 rounded-xl text-sm font-medium text-white hover:bg-white/[0.06] transition-all"
+                    whileHover={{ y: -1 }}
                     whileTap={{ scale: 0.95 }}
                   >
                     Mudar
@@ -478,8 +473,8 @@ export default function Profile() {
                 </div>
                 <div className="flex items-center justify-between py-3">
                   <span className="text-sm text-gray-400">Status</span>
-                  <span className="flex items-center gap-2 text-sm font-semibold text-green-400">
-                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                  <span className="flex items-center gap-2 text-sm font-medium text-gray-200">
+                    <span className="w-2 h-2 bg-gray-200 rounded-full" />
                     Ativo
                   </span>
                 </div>
@@ -495,54 +490,54 @@ export default function Profile() {
             >
               <Link href="/plans">
                 <motion.div 
-                  className="p-6 bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-xl border border-purple-500/30 rounded-2xl hover:scale-105 transition-all group"
-                  whileHover={{ y: -4 }}
+                  className="p-6 bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl transition-all group"
+                  whileHover={{ y: -2 }}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-black text-white mb-1 flex items-center gap-2">
+                      <h4 className="font-semibold text-white mb-1 flex items-center gap-2">
                         <Crown className="w-5 h-5" />
                         Fazer Upgrade
                       </h4>
                       <p className="text-sm text-gray-300">Desbloqueie recursos premium</p>
                     </div>
-                    <ArrowUpRight className="w-6 h-6 text-purple-400 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    <ArrowUpRight className="w-6 h-6 text-gray-400 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
                   </div>
                 </motion.div>
               </Link>
 
               <Link href="/plans">
                 <motion.div 
-                  className="p-6 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-xl border border-blue-500/30 rounded-2xl hover:scale-105 transition-all group"
-                  whileHover={{ y: -4 }}
+                  className="p-6 bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl transition-all group"
+                  whileHover={{ y: -2 }}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-black text-white mb-1 flex items-center gap-2">
+                      <h4 className="font-semibold text-white mb-1 flex items-center gap-2">
                         <ShoppingCart className="w-5 h-5" />
                         Comprar Créditos
                       </h4>
                       <p className="text-sm text-gray-300">Adicione mais créditos</p>
                     </div>
-                    <ArrowUpRight className="w-6 h-6 text-blue-400 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    <ArrowUpRight className="w-6 h-6 text-gray-400 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
                   </div>
                 </motion.div>
               </Link>
 
               <Link href="/analytics">
                 <motion.div 
-                  className="p-6 bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-500/30 rounded-2xl hover:scale-105 transition-all group"
-                  whileHover={{ y: -4 }}
+                  className="p-6 bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl transition-all group"
+                  whileHover={{ y: -2 }}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-black text-white mb-1 flex items-center gap-2">
+                      <h4 className="font-semibold text-white mb-1 flex items-center gap-2">
                         <TrendingUp className="w-5 h-5" />
                         Ver Relatórios
                       </h4>
                       <p className="text-sm text-gray-300">Análise de uso detalhada</p>
                     </div>
-                    <ArrowUpRight className="w-6 h-6 text-green-400 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    <ArrowUpRight className="w-6 h-6 text-gray-400 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
                   </div>
                 </motion.div>
               </Link>

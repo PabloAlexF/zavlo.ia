@@ -36,3 +36,9 @@ export class LoginDto {
   @IsNotEmpty()
   password: string;
 }
+
+export class FirebaseLoginDto {
+  @IsString()
+  @IsNotEmpty()
+  idToken: string;
+}

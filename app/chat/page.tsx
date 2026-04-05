@@ -9,9 +9,23 @@ import { ChatMessages } from '@/components/chat/ChatMessages';
 import { QuickSuggestions } from '@/components/chat/QuickSuggestions';
 
 import { detectIntent } from '@/utils/chat/intentDetector';
-import { ContextManager } from '@/utils/chat/contextManager';
+import { ContextManager, type SearchResult } from '@/utils/chat/contextManager';
+import { parseClassifyQueryResponse } from '@/utils/chat/classifyResponseGuard';
+import {
+  orderQuestionFields,
+  isScraperSpecificField,
+  getVehiclePrimaryScraperByCondition,
+  filterMissingFieldsByScraper,
+  getQuestionForField,
+  resolveQuestionForField as sharedResolveQuestionForField,
+  getMercadoLivreQuestionFields,
+  getOlxQuestionFields,
+  getGoogleShoppingQuestionFields,
+  getWebmotorsQuestionFields,
+} from '@shared/chat/questionRules';
 import { chatHistoryService } from '@/lib/chatHistory';
 import { PLAN_PRICES, PLAN_CREDITS } from '@/lib/plans';
+import type { ClassificationData, ClassificationQuestion, ClassifyQueryResponse } from '@shared/contracts/classification.contract';
 
 const API_BASE = (() => {
   const raw = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
@@ -31,7 +45,7 @@ interface Message {
   id: string;
   type: 'user' | 'ai' | 'products' | 'image_confirmation' | 'sort_question' | 'query_confirm' | 'question' | 'expansion';
   content: string;
-  products?: any[];
+  products?: unknown[];
   timestamp: Date;
   creditCost?: number;
   imageData?: string;
@@ -43,7 +57,239 @@ interface Message {
   expansionSources?: string[];
   primarySource?: string;
   isVehicle?: boolean;
+  queryConfirmSortBy?: string;
+  queryConfirmCreditEstimate?: number;
+  queryConfirmNotes?: string[];
+  isImageSort?: boolean;
+  questionAnswered?: boolean;
+  questionAnswerLabel?: string;
 }
+
+interface UserSession {
+  token: string;
+  userId?: string;
+  credits?: number;
+  [key: string]: unknown;
+}
+
+interface UserProfileResponse {
+  credits?: number;
+}
+
+interface SearchImageResponse {
+  results?: unknown[];
+  productName?: string;
+  classification?: ClassificationData;
+  remainingCredits?: number;
+  creditsUsed?: number;
+}
+
+interface SearchPricesResponse {
+  results?: unknown[];
+  remainingCredits?: number;
+  creditsUsed?: number;
+}
+
+interface SearchTextResponse {
+  results?: unknown[];
+  error?: string;
+  remainingCredits?: number;
+  creditsUsed?: number;
+  originalCity?: string;
+  searchedNationally?: boolean;
+  cityFilterApplied?: boolean;
+  relaxedFilters?: string[];
+  canExpandSearch?: boolean;
+  expansionSources?: string[];
+  primarySource?: string;
+  priceRangeApplied?: { min?: number; max?: number; target?: number };
+}
+
+interface ApiErrorResponse {
+  error?: string;
+  message?: string;
+}
+
+const toNumericPrice = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === 'string') {
+    const normalized = value.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+};
+
+const getBestPricedProduct = (products: unknown[]): (Record<string, unknown> & { price: number }) | null => {
+  const candidates = products
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => {
+      const price = toNumericPrice(item.price);
+      return price ? { ...item, price } : null;
+    })
+    .filter((item): item is Record<string, unknown> & { price: number } => item !== null);
+
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, current) => (current.price < best.price ? current : best));
+};
+
+const getTopPricedProducts = (products: unknown[], limit = 3): (Record<string, unknown> & { price: number })[] => {
+  const candidates = products
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => {
+      const price = toNumericPrice(item.price);
+      return price ? { ...item, price } : null;
+    })
+    .filter((item): item is Record<string, unknown> & { price: number } => item !== null)
+    .sort((a, b) => a.price - b.price);
+
+  const unique: (Record<string, unknown> & { price: number })[] = [];
+  const seen = new Set<string>();
+  for (const item of candidates) {
+    const title = String(item.title ?? '').trim().toLowerCase();
+    const source = String(item.source ?? item.marketplace ?? '').trim().toLowerCase();
+    const key = `${title}|${source}|${item.price}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+    if (unique.length >= limit) break;
+  }
+
+  return unique;
+};
+
+const formatBRL = (value: number): string =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+const collectProductsFromMessages = (messages: Message[]): unknown[] =>
+  messages.filter((m) => m.type === 'products').flatMap((m) => m.products ?? []);
+
+const ESTIMATION_USD_TO_BRL = 5;
+const ESTIMATION_MAX_COST_PER_CREDIT_BRL = Math.min(29.9 / 10, 59.9 / 20, 149 / 50, 14.9 / 5, 39.9 / 15, 84.9 / 35) * 0.35;
+const ESTIMATION_WEBMOTORS_DEFAULT_REQUESTS = 10;
+const ESTIMATION_WEBMOTORS_SELLER_ADDON_MULTIPLIER = 1.5;
+
+const estimateCreditsForConfirmation = (classification?: ClassificationData | null): number | undefined => {
+  if (!classification) return undefined;
+
+  const rawScrapers = (classification as any)?.scrapers;
+  const scraperNames = Array.isArray(rawScrapers)
+    ? rawScrapers
+        .map((item: any) => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object' && typeof item.name === 'string') return item.name;
+          return null;
+        })
+        .filter((name: string | null): name is string => !!name)
+        .map((name) => name.toLowerCase())
+    : [];
+
+  const category = (classification as any)?.category;
+  const condition = String((classification as any)?.condition || '').toLowerCase();
+  const defaultVehiclePrimary = condition === 'new' ? 'mercadolivre' : 'olx';
+  const primaryScraper = scraperNames[0]
+    || ((category === 'car' || category === 'motorcycle') ? defaultVehiclePrimary : 'google_shopping');
+
+  const ceilCredits = (costBrl: number) => Math.max(1, Math.ceil(costBrl / ESTIMATION_MAX_COST_PER_CREDIT_BRL));
+
+  if (primaryScraper === 'google_shopping') {
+    const requestedResults = Number((classification as any)?.google_limit || (classification as any)?.result_limit || 20);
+    const costBrl = (20 / 1000) * Math.max(20, Math.min(requestedResults, 100)) * ESTIMATION_USD_TO_BRL;
+    return ceilCredits(costBrl);
+  }
+
+  if (primaryScraper === 'olx') {
+    const pages = Math.max(1, Math.min(Number((classification as any)?.olx_max_pages || 1), 3));
+    const estimatedResults = pages * 50;
+    const baseCostBrl = (10 / 1000) * estimatedResults * ESTIMATION_USD_TO_BRL;
+    return ceilCredits(baseCostBrl) + Math.max(0, pages - 1);
+  }
+
+  if (primaryScraper === 'mercadolivre') {
+    const requestedResults = Number((classification as any)?.result_limit || 20);
+    const costBrl = (2 / 1000) * Math.max(10, Math.min(requestedResults, 50)) * ESTIMATION_USD_TO_BRL;
+    return ceilCredits(costBrl);
+  }
+
+  if (primaryScraper === 'webmotors') {
+    const classificationAny = classification as any;
+    const maxRequests = Math.max(1, Math.min(Number(classificationAny?.webmotors_max_requests || ESTIMATION_WEBMOTORS_DEFAULT_REQUESTS), 30));
+    const requestMultiplier = Math.max(1, maxRequests / ESTIMATION_WEBMOTORS_DEFAULT_REQUESTS);
+    const sellerAddonMultiplier = classificationAny?.webmotors_seller_data_addon
+      ? ESTIMATION_WEBMOTORS_SELLER_ADDON_MULTIPLIER
+      : 1;
+    return ceilCredits(0.30 * requestMultiplier * sellerAddonMultiplier * ESTIMATION_USD_TO_BRL);
+  }
+
+  return undefined;
+};
+
+const parseSortByFromText = (text: string): 'BEST_MATCH' | 'LOWEST_PRICE' | 'HIGHEST_PRICE' | 'TOP_RATED' | null => {
+  const lower = text.toLowerCase();
+  if (/(menor\s*pre[cç]o|mais\s*barato|barat)/.test(lower)) return 'LOWEST_PRICE';
+  if (/(maior\s*pre[cç]o|mais\s*caro)/.test(lower)) return 'HIGHEST_PRICE';
+  if (/(mais\s*avaliad|melhor\s*avaliad|top\s*rated|estrel)/.test(lower)) return 'TOP_RATED';
+  if (/(relev|melhor\s*match|mais\s*relevante|padr[aã]o)/.test(lower)) return 'BEST_MATCH';
+  return null;
+};
+
+const isAbortError = (error: unknown): boolean =>
+  error instanceof Error && error.name === 'AbortError';
+
+const parseCityStateFromInput = (rawInput: string): { city?: string; state?: string } => {
+  const normalized = String(rawInput || '').trim();
+  if (!normalized || /todo\s+o\s+brasil/i.test(normalized)) return {};
+
+  const cleaned = normalized
+    .replace(/^em\s+/i, '')
+    .replace(/\s*[-–—]\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const byComma = cleaned.split(',').map((part) => part.trim()).filter(Boolean);
+  const rawCity = byComma[0] || cleaned;
+  let state: string | undefined;
+
+  if (byComma.length > 1) {
+    const stateCandidate = byComma[1]
+      .replace(/[()]/g, '')
+      .trim()
+      .toUpperCase();
+    if (/^[A-Z]{2}$/.test(stateCandidate)) {
+      state = stateCandidate;
+    }
+  }
+
+  const city = rawCity
+    .replace(/^cidade\s+de\s+/i, '')
+    .replace(/^cidade\s+/i, '')
+    .trim();
+
+  return {
+    city: city || undefined,
+    state,
+  };
+};
+
+
+const toContextResults = (products: unknown[]): SearchResult[] => {
+  return products
+    .filter((item): item is { id: string; title: string; price: number; brand?: string; condition?: 'new' | 'used'; location?: string } => {
+      return !!item
+        && typeof item === 'object'
+        && typeof (item as { id?: unknown }).id === 'string'
+        && typeof (item as { title?: unknown }).title === 'string'
+        && typeof (item as { price?: unknown }).price === 'number';
+    })
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      price: item.price,
+      brand: item.brand,
+      condition: item.condition,
+      location: item.location,
+    }));
+};
 
 interface ChatHistory {
   id: string;
@@ -55,88 +301,29 @@ interface ChatHistory {
 
 function getNextQuestion(
   field: string,
-  classification: any,
-): string | { question: string; suggestions?: any[] } {
-  if (field === 'condition') return 'Você prefere novo ou usado?';
-  if (field === 'year')      return 'De qual ano? (Ex: 2020, 2018-2022)';
-  if (field === 'location')  return 'Em qual cidade você está procurando? (ou "todo o Brasil")';
-  if (field === 'price_range') {
-    const smartQ = classification?.suggested_question;
-    return (smartQ && typeof smartQ === 'object') ? smartQ : {
-      question: 'Qual sua faixa de preço?',
-      suggestions: [
-        { label: 'até 30mil', max: 30000 },
-        { label: 'até 50mil', max: 50000 },
-        { label: 'até 80mil', max: 80000 },
-        { label: 'acima de 80mil', min: 80000 },
-      ],
-    };
-  }
-  // Campos não-veículo: a pergunta e sugestões vêm do Python via classification.suggested_question
-  // Se disponível, usar; senão fallback genérico
-  if (['gender', 'size', 'storage', 'transmission', 'fuel', 'body_type', 'brand', 'shoe_type'].includes(field)) {
-    const smartQ = classification?.suggested_question;
-    if (smartQ && typeof smartQ === 'object') return smartQ;
-    const fallbacks: Record<string, { question: string; suggestions: any[] }> = {
-      gender:  { question: 'Para quem é?', suggestions: [
-        { label: '👨 Masculino', value: 'masculino' },
-        { label: '👩 Feminino',  value: 'feminino' },
-        { label: '🧒 Infantil',  value: 'infantil' },
-        { label: '🔀 Unissex',   value: 'unissex' },
-      ]},
-      size:    { question: 'Qual tamanho/número?', suggestions: [
-        { label: 'P / 36-37', value: 'P 36' },
-        { label: 'M / 38-39', value: 'M 38' },
-        { label: 'G / 40-41', value: 'G 40' },
-        { label: 'GG / 42+',  value: 'GG 42' },
-      ]},
-      storage: { question: 'Qual capacidade de armazenamento?', suggestions: [
-        { label: '64 GB',  value: '64gb' },
-        { label: '128 GB', value: '128gb' },
-        { label: '256 GB', value: '256gb' },
-        { label: '512 GB', value: '512gb' },
-      ]},
-      transmission: { question: 'Qual câmbio você prefere?', suggestions: [
-        { label: '⚙️ Manual',     value: 'manual' },
-        { label: '🤖 Automático', value: 'automatico' },
-        { label: '🔀 Tanto faz',  value: 'qualquer' },
-      ]},
-      fuel: { question: 'Qual combustível você prefere?', suggestions: [
-        { label: '⛽ Flex',      value: 'flex' },
-        { label: '🛢️ Diesel',    value: 'diesel' },
-        { label: '⚡ Elétrico',  value: 'eletrico' },
-        { label: '🔀 Tanto faz', value: 'qualquer' },
-      ]},
-      body_type: { question: 'Qual estilo de carroceria?', suggestions: [
-        { label: '🚗 Hatch',    value: 'hatch' },
-        { label: '🚙 Sedan',    value: 'sedan' },
-        { label: '🛻 SUV',      value: 'suv' },
-        { label: '🚐 Pickup',   value: 'pickup' },
-        { label: '🔀 Tanto faz', value: 'qualquer' },
-      ]},
-      brand: { question: 'Tem preferência de marca?', suggestions: [
-        { label: '🔀 Sem preferência', value: 'qualquer' },
-      ]},
-      shoe_type: { question: 'Que tipo de calçado?', suggestions: [
-        { label: '👟 Tênis',    value: 'tenis' },
-        { label: '👢 Bota',     value: 'bota' },
-        { label: '👡 Sandália', value: 'sandalia' },
-        { label: '🥿 Sapatilha', value: 'sapatilha' },
-      ]},
-    };
-    return fallbacks[field] ?? field;
-  }
-  return field;
+  classification?: ClassificationData | null,
+): string | ClassificationQuestion {
+  return getQuestionForField(field, classification, classification?.suggested_question) as string | ClassificationQuestion;
 }
+
+const resolveQuestionForField = (
+  field: string,
+  candidate: unknown,
+  classification?: ClassificationData | null,
+): string | ClassificationQuestion => {
+  return sharedResolveQuestionForField(field, candidate, classification, classification?.suggested_question) as string | ClassificationQuestion;
+};
 
 export default function ChatPage() {
   const router = useRouter();
   const contextManager = useRef(new ContextManager()).current;
+  const INTRO_MESSAGE_ID = 'intro-message';
+  const DEFAULT_INTRO_MESSAGE = 'Olá! 👋 Eu sou a **Zavlo**, sua assistente de compras inteligente.\n\n🔎 **Como funciona:**\n1️⃣ Você diz o produto (ex: "Honda Civic 2020")\n2️⃣ Eu faço perguntas rápidas para refinar\n3️⃣ Busco no marketplace principal\n4️⃣ Você pode expandir para outras plataformas\n\n🚗 Para veículos: **novo** geralmente começa no **Mercado Livre** e **usado** geralmente começa na **OLX**.\n\n💡 Dica: quanto mais detalhes você der, melhor fica o resultado.\n\nQual produto você quer encontrar agora?';
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: '1',
+      id: INTRO_MESSAGE_ID,
       type: 'ai',
-      content: 'Olá! 👋 Eu sou a Zavlo, sua assistente de compras inteligente!\n\nQue produto você está procurando?',
+      content: DEFAULT_INTRO_MESSAGE,
       timestamp: new Date(),
     }
   ]);
@@ -153,13 +340,14 @@ export default function ChatPage() {
   // Search session — estado centralizado (evita dessincronia)
   const [searchSession, setSearchSession] = useState<{
     query: string;
-    classification: any;
+    classification: ClassificationData | null;
     missingFields: string[];
     answers: Record<string, string>;
     step: 'idle' | 'asking' | 'sort' | 'confirm';
     expansionSources: string[];
     primarySource: string;
     sortBy: string;
+    scraperPlanAnnounced: boolean;
   }>({
     query: '',
     classification: null,
@@ -169,23 +357,26 @@ export default function ChatPage() {
     expansionSources: [],
     primarySource: '',
     sortBy: 'BEST_MATCH',
+    scraperPlanAnnounced: false,
   });
 
 
 
   const [userCredits, setUserCredits] = useState(0);
   const userCreditsRef = useRef(0);
+  const [inputReadyCue, setInputReadyCue] = useState(false);
   
   // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string>('');
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
+  const bestPriceRef = useRef<number | null>(null);
   
   const isProcessingRef = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Refs para evitar stale closure no saveChatToHistory
   const messagesRef = useRef(messages);
@@ -204,6 +395,23 @@ export default function ChatPage() {
       });
     }
   }, [messages.length]);
+
+  const isLikelyInvalidInput = (text: string): boolean => {
+    const normalized = text.trim();
+    if (!normalized) return true;
+
+    if (/^[^a-zA-ZÀ-ÿ0-9]+$/.test(normalized)) return true;
+    if (/(.)\1{5,}/.test(normalized)) return true;
+
+    const lettersOnly = normalized.toLowerCase().replace(/[^a-zà-ÿ]/g, '');
+    if (lettersOnly.length >= 8 && !/[aeiouáéíóúâêôãõà]/i.test(lettersOnly)) return true;
+
+    const tokens = normalized.toLowerCase().split(/\s+/).filter(Boolean);
+    const usefulTokens = tokens.filter((token) => /[a-zà-ÿ0-9]/i.test(token));
+    if (usefulTokens.length === 0) return true;
+
+    return false;
+  };
 
   useEffect(() => {
     const user = localStorage.getItem('zavlo_user');
@@ -229,7 +437,7 @@ export default function ChatPage() {
       if (!cancelled && isMountedRef.current) saveChatToHistory();
     }, 2000);
     return () => { cancelled = true; clearTimeout(timeout); };
-  }, [messages.length, currentChatId]);
+  }, [messages, currentChatId]);
 
   const loadUserCredits = async (retries = 2) => {
     try {
@@ -240,7 +448,7 @@ export default function ChatPage() {
         headers: { 'Authorization': `Bearer ${userData.token}` },
       });
       if (response.ok) {
-        const profile = await response.json();
+        const profile: UserProfileResponse = await response.json();
         const credits = profile.credits || 0;
         setUserCredits(credits);
         userCreditsRef.current = credits;
@@ -270,13 +478,41 @@ export default function ChatPage() {
         if (firestoreHistory.length > 0) {
           setChatHistory(firestoreHistory);
           localStorage.setItem(`zavlo_chat_history_${userId}`, JSON.stringify(firestoreHistory));
+        } else {
+          const saved = localStorage.getItem(`zavlo_chat_history_${userId}`);
+          if (saved) {
+            const parsedHistory = JSON.parse(saved);
+            if (Array.isArray(parsedHistory)) {
+              const normalized = parsedHistory.map((chat: any) => ({
+                ...chat,
+                createdAt: new Date(chat.createdAt),
+                updatedAt: new Date(chat.updatedAt),
+                messages: Array.isArray(chat.messages)
+                  ? chat.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+                  : [],
+              }));
+              setChatHistory(normalized);
+            }
+          }
         }
       } catch (firestoreError) {
         console.warn('Firestore indisponível, usando localStorage');
         const saved = localStorage.getItem(`zavlo_chat_history_${userId}`);
         if (saved) {
           const parsedHistory = JSON.parse(saved);
-          setChatHistory(Array.isArray(parsedHistory) ? parsedHistory : []);
+          if (Array.isArray(parsedHistory)) {
+            const normalized = parsedHistory.map((chat: any) => ({
+              ...chat,
+              createdAt: new Date(chat.createdAt),
+              updatedAt: new Date(chat.updatedAt),
+              messages: Array.isArray(chat.messages)
+                ? chat.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+                : [],
+            }));
+            setChatHistory(normalized);
+          } else {
+            setChatHistory([]);
+          }
         }
       }
     } catch (error) {
@@ -335,9 +571,14 @@ export default function ChatPage() {
   };
 
   const loadChat = (chatId: string) => {
+    if (currentChatIdRef.current && currentChatIdRef.current !== chatId && messagesRef.current.length > 1) {
+      void saveChatToHistory();
+    }
     const chat = chatHistory.find(c => c.id === chatId);
     if (chat) {
       setMessages(chat.messages);
+      const best = getBestPricedProduct(collectProductsFromMessages(chat.messages));
+      bestPriceRef.current = best?.price ?? null;
       setCurrentChatId(chatId);
       contextManager.clear();
       if (window.innerWidth < 768) setSidebarOpen(false);
@@ -354,9 +595,9 @@ export default function ChatPage() {
     const newChatId = Date.now().toString();
     setCurrentChatId(newChatId);
     setMessages([{
-      id: '1',
+      id: INTRO_MESSAGE_ID,
       type: 'ai',
-      content: 'Olá! 👋 Eu sou a Zavlo, sua assistente de compras inteligente!\n\nQue produto você está procurando?',
+      content: DEFAULT_INTRO_MESSAGE,
       timestamp: new Date(),
     }]);
     setUploadedImage(null);
@@ -364,6 +605,8 @@ export default function ChatPage() {
     setDetectedProductName('');
     setAwaitingImageConfirmation(false);
     setAwaitingImageSort(false);
+    setInputReadyCue(false);
+    bestPriceRef.current = null;
     isProcessingRef.current = false;
     setSearchSession({
       query: '',
@@ -374,6 +617,7 @@ export default function ChatPage() {
       expansionSources: [],
       primarySource: '',
       sortBy: 'BEST_MATCH',
+      scraperPlanAnnounced: false,
     });
     contextManager.clear();
     
@@ -505,10 +749,10 @@ export default function ChatPage() {
       }
 
       if (response.ok) {
-        const data = await response.json();
+        const data: SearchImageResponse = await response.json();
         
         if (typeof data.remainingCredits === 'number') {
-          updateCredits(data.remainingCredits, userData);
+          updateCredits(data.remainingCredits, userData as UserSession);
         }
 
         const creditsUsed = data.creditsUsed || 1;
@@ -539,9 +783,9 @@ export default function ChatPage() {
         setImageFile(null);
         setLoading(false);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Image search error:', error);
-      const msg = error?.name === 'AbortError'
+      const msg = isAbortError(error)
         ? '⏱️ A análise da imagem demorou demais. Tente novamente.'
         : 'Erro ao processar imagem. Tente novamente.';
       addMessage('ai', msg);
@@ -561,7 +805,7 @@ export default function ChatPage() {
       content: 'Como deseja ordenar os resultados?',
       timestamp: new Date(),
       isImageSort: true,
-    } as any;
+    };
     setMessages(prev => [...prev, sortMessage]);
     setAwaitingImageConfirmation(false);
     setAwaitingImageSort(true);
@@ -610,11 +854,11 @@ export default function ChatPage() {
       setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
 
       if (response.ok) {
-        const data = await response.json();
+        const data: SearchPricesResponse = await response.json();
         const products = data.results || [];
 
         if (typeof data.remainingCredits === 'number') {
-          updateCredits(data.remainingCredits, userData);
+          updateCredits(data.remainingCredits, userData as UserSession);
         }
 
         const creditsUsed = data.creditsUsed || 1;
@@ -629,7 +873,32 @@ export default function ChatPage() {
           timestamp: new Date(),
           creditCost: creditsUsed,
         };
-        setMessages(prev => [...prev, productsMessage]);
+        setMessages(prev => {
+          const nextMessages = [...prev, productsMessage];
+          const allProducts = collectProductsFromMessages(nextMessages);
+          const bestProduct = getBestPricedProduct(allProducts);
+
+          if (!bestProduct) return nextMessages;
+
+          const isNewBest = bestPriceRef.current === null || bestProduct.price < bestPriceRef.current;
+          if (!isNewBest) return nextMessages;
+
+          bestPriceRef.current = bestProduct.price;
+          const bestSummary: Message = {
+            id: crypto.randomUUID(),
+            type: 'ai',
+            content: '🏆 O melhor preço que conseguimos para o seu produto foi esse:',
+            timestamp: new Date(),
+          };
+          const bestProductMessage: Message = {
+            id: crypto.randomUUID(),
+            type: 'products',
+            content: 'Melhor oferta até agora',
+            products: [bestProduct],
+            timestamp: new Date(),
+          };
+          return [...nextMessages, bestSummary, bestProductMessage];
+        });
         setAwaitingImageSort(false);
         setDetectedProductName('');
         setLoading(false);
@@ -642,7 +911,7 @@ export default function ChatPage() {
       console.error('Image price search error:', error);
       clearTimeout(timeout);
       setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
-      const msg = (error as any)?.name === 'AbortError'
+      const msg = isAbortError(error)
         ? '⏱️ A busca de preços demorou demais. Tente novamente.'
         : 'Erro ao buscar preços. Tente novamente.';
       addMessage('ai', msg);
@@ -693,25 +962,52 @@ export default function ChatPage() {
     await executeTextSearch(query, sortBy, enrichedClassification, true, searchingMsgId);
   };
 
-  const dismissQuestionBubble = () => {
-    setMessages(prev => prev.filter(m => m.type !== 'question'));
+  const freezeCurrentQuestionBubble = (answerLabel?: string) => {
+    setMessages(prev => {
+      const idx = [...prev].reverse().findIndex(m => m.type === 'question');
+      if (idx === -1) return prev;
+      const realIdx = prev.length - 1 - idx;
+      const updated = [...prev];
+      const q = updated[realIdx];
+      updated[realIdx] = {
+        ...q,
+        questionAnswered: true,
+        questionAnswerLabel: answerLabel || 'Respondido',
+      };
+      return updated;
+    });
   };
 
-  const handleHybridAnswer = async (answer: string, fromTyping = false) => {
-    dismissQuestionBubble();
-    if (!fromTyping && answer) {
-      const displayText = (() => {
-        try {
-          const parsed = JSON.parse(answer);
-          if (parsed?.value && typeof parsed.value === 'object') {
-            const { min, max } = parsed.value as { min?: number; max?: number };
-            if (typeof min === 'number' && typeof max === 'number') return `entre ${min/1000}mil e ${max/1000}mil`;
-            if (typeof max === 'number') return `até ${max/1000}mil`;
-            if (typeof min === 'number') return `acima de ${min/1000}mil`;
-          }
-        } catch {}
-        return answer;
-      })();
+  const maybeAnnounceVehicleScraperPlan = (classification?: ClassificationData | null, nextField?: string) => {
+    const isVehicle = classification?.category === 'car' || classification?.category === 'motorcycle';
+    if (!isVehicle || !isScraperSpecificField(nextField)) return;
+    if (searchSessionRef.current.scraperPlanAnnounced) return;
+
+    const primaryScraper = getVehiclePrimaryScraperByCondition(classification);
+    const primaryLabel = primaryScraper === 'mercadolivre' ? 'Mercado Livre' : 'OLX';
+    const expansionLabels = primaryScraper === 'mercadolivre'
+      ? 'OLX e Webmotors'
+      : 'Mercado Livre e Webmotors';
+    addMessage('ai', `📍 Estratégia desta busca: primeiro vou buscar no **${primaryLabel}**. Depois você poderá expandir para outros marketplaces, como ${expansionLabels}.`);
+    setSearchSession(s => ({ ...s, scraperPlanAnnounced: true }));
+  };
+
+  const handleHybridAnswer = async (answer: string, _fromTyping = false) => {
+    const displayText = (() => {
+      try {
+        const parsed = JSON.parse(answer);
+        if (parsed?.value && typeof parsed.value === 'object') {
+          const { min, max } = parsed.value as { min?: number; max?: number };
+          if (typeof min === 'number' && typeof max === 'number') return `entre ${min/1000}mil e ${max/1000}mil`;
+          if (typeof max === 'number') return `até ${max/1000}mil`;
+          if (typeof min === 'number') return `acima de ${min/1000}mil`;
+        }
+      } catch {}
+      return answer;
+    })();
+
+    freezeCurrentQuestionBubble(displayText || 'Continuar sem esse filtro');
+    if (answer) {
       if (displayText) addMessage('user', displayText);
     }
     // #2: usar ref para evitar stale closure
@@ -721,20 +1017,29 @@ export default function ChatPage() {
     
     // Normalizar respostas especiais
     const normalizedAnswer = (() => {
-      if (currentField === 'condition' && answer === 'ambos') return '';
-      if (currentField === 'year' && answer === 'qualquer ano') return '';
-      if (currentField === 'location' && answer === 'todo o brasil') return '';
-      if (['transmission', 'fuel', 'body_type', 'brand'].includes(currentField) && answer === 'qualquer') return '';
+      const lower = answer.toLowerCase().trim();
+      if (currentField === 'condition' && lower === 'ambos') return '';
+      if (currentField === 'year' && lower === 'qualquer ano') return '';
+      if (currentField === 'location' && lower === 'todo o brasil') return 'todo o brasil';
+      if (['transmission', 'fuel', 'body_type', 'brand'].includes(currentField) && lower === 'qualquer') return '';
       return answer;
     })();
     
     const updatedAnswers = { ...answers, [currentField]: normalizedAnswer };
-    const remainingFields = missingFields.slice(1);
 
     // Enriquecer classificação com a resposta do usuário
     const updatedClassification = { ...classification };
     if (currentField === 'condition' && normalizedAnswer) {
       updatedClassification.condition = normalizedAnswer === 'novo' ? 'new' : 'used';
+      if (updatedClassification.category === 'car' || updatedClassification.category === 'motorcycle') {
+        const prioritizedScrapers = normalizedAnswer === 'novo'
+          ? ['mercadolivre', 'olx', 'webmotors']
+          : ['olx', 'mercadolivre', 'webmotors'];
+        (updatedClassification as any).scrapers = prioritizedScrapers.map((name, index) => ({
+          name,
+          score: Math.max(0.7, 1 - (index * 0.1)),
+        }));
+      }
     } else if (currentField === 'price_range' && normalizedAnswer) {
       try {
         const parsed = JSON.parse(normalizedAnswer);
@@ -745,8 +1050,18 @@ export default function ChatPage() {
       } catch {}
     } else if (currentField === 'year' && normalizedAnswer) {
       updatedClassification.detected_year = parseInt(normalizedAnswer) || null;
+    } else if (currentField === 'location' && normalizedAnswer === 'todo o brasil') {
+      updatedClassification.user_location = null;
     } else if (currentField === 'location' && normalizedAnswer) {
-      updatedClassification.user_location = { city: normalizedAnswer };
+      const parsedLocation = parseCityStateFromInput(normalizedAnswer);
+      if (parsedLocation.city || parsedLocation.state) {
+        updatedClassification.user_location = {
+          city: parsedLocation.city,
+          state: parsedLocation.state,
+        };
+      } else {
+        updatedClassification.user_location = { city: normalizedAnswer };
+      }
     } else if (currentField === 'gender' && normalizedAnswer) {
       updatedClassification.detected_gender = normalizedAnswer;
     } else if (currentField === 'size' && normalizedAnswer) {
@@ -763,11 +1078,47 @@ export default function ChatPage() {
       updatedClassification.detected_brand = normalizedAnswer;
     } else if (currentField === 'shoe_type' && normalizedAnswer) {
       updatedClassification.detected_shoe_type = normalizedAnswer;
+    } else if (currentField === 'prefer_price_drop' && normalizedAnswer) {
+      const key = normalizedAnswer.toLowerCase().trim();
+      updatedClassification.prefer_price_drop =
+        ['sim', 'yes', 's', 'ok', 'queda', 'caindo', 'oferta'].some(w => key.includes(w));
+    } else if (currentField === 'ml_scrape_ofertas' && normalizedAnswer) {
+      const key = normalizedAnswer.toLowerCase().trim();
+      (updatedClassification as any).ml_scrape_ofertas = ['sim', 'yes', 's', 'ok', 'ofertas', 'oferta'].some(w => key.includes(w));
+    } else if (currentField === 'ml_promoted' && normalizedAnswer) {
+      const key = normalizedAnswer.toLowerCase().trim();
+      (updatedClassification as any).ml_promoted = ['sim', 'yes', 's', 'ok', 'patrocin', 'anúncio', 'anuncio'].some(w => key.includes(w));
+    } else if (currentField === 'olx_max_pages' && normalizedAnswer) {
+      const parsed = Number(normalizedAnswer);
+      if (Number.isFinite(parsed)) {
+        (updatedClassification as any).olx_max_pages = Math.min(Math.max(parsed, 1), 3);
+      }
+    } else if (currentField === 'webmotors_seller_data_addon' && normalizedAnswer) {
+      const key = normalizedAnswer.toLowerCase().trim();
+      (updatedClassification as any).webmotors_seller_data_addon = ['sim', 'yes', 's', 'ok', 'vendedor', 'cnpj', 'telefone'].some(w => key.includes(w));
+    } else if (currentField === 'webmotors_max_requests' && normalizedAnswer) {
+      const parsed = Number(normalizedAnswer);
+      if (Number.isFinite(parsed)) {
+        (updatedClassification as any).webmotors_max_requests = Math.min(Math.max(parsed, 1), 30);
+      }
+    } else if (currentField === 'google_country' && normalizedAnswer) {
+      (updatedClassification as any).google_country = normalizedAnswer.toLowerCase().trim();
+    } else if (currentField === 'google_language' && normalizedAnswer) {
+      (updatedClassification as any).google_language = normalizedAnswer.toLowerCase().trim();
+    } else if (currentField === 'google_limit' && normalizedAnswer) {
+      const parsed = Number(normalizedAnswer);
+      if (Number.isFinite(parsed)) {
+        (updatedClassification as any).google_limit = Math.min(Math.max(parsed, 20), 100);
+      }
     }
 
     // Enriquecer query textual para exibição
     let displayAnswer = answer;
-    if (!normalizedAnswer) {
+    if (
+      !normalizedAnswer
+      || (currentField === 'location' && normalizedAnswer === 'todo o brasil')
+      || ['ml_scrape_ofertas', 'ml_promoted', 'olx_max_pages', 'webmotors_seller_data_addon', 'webmotors_max_requests', 'google_country', 'google_language', 'google_limit'].includes(currentField)
+    ) {
       displayAnswer = '';
     } else {
       try {
@@ -790,54 +1141,37 @@ export default function ChatPage() {
     // Manter search_query sincronizado com enrichedQuery para que o scraper receba a query acumulada
     updatedClassification.search_query = enrichedQuery;
 
-    if (remainingFields.length > 0) {
-      const nextField = remainingFields[0];
-      const nextQ = getNextQuestion(nextField, updatedClassification);
-      const nextText = typeof nextQ === 'object' ? nextQ.question : nextQ;
-      const nextSuggestions = typeof nextQ === 'object' ? nextQ.suggestions : undefined;
-      setSearchSession(s => ({
-        ...s,
-        query: enrichedQuery,
-        classification: updatedClassification,
-        missingFields: remainingFields,
-        answers: updatedAnswers,
-      }));
-      const qMsg: Message = {
-        id: crypto.randomUUID(),
-        type: 'question',
-        content: nextText,
-        timestamp: new Date(),
-        questionType: nextField,
-        questionSuggestions: nextSuggestions,
-        // user_location pode vir da classification inicial (Firestore) ou de resposta anterior
-        userLocation: updatedClassification?.user_location ?? classification?.user_location,
-      };
-      setMessages(prev => [...prev, qMsg]);
-    } else {
-      setSearchSession(s => ({ ...s, query: enrichedQuery, classification: updatedClassification, answers: updatedAnswers, step: 'idle' }));
-      await classifyWithAnswers(enrichedQuery, updatedAnswers, updatedClassification);
-    }
+    setSearchSession(s => ({
+      ...s,
+      query: enrichedQuery,
+      classification: updatedClassification,
+      answers: updatedAnswers,
+      step: 'asking',
+    }));
+
+    await classifyWithAnswers(enrichedQuery, updatedAnswers, updatedClassification);
   };
 
-  const handleHybridSkip = () => {
+  const handleHybridSkip = async () => {
     const session = searchSessionRef.current;
     if (session.step !== 'asking' || loading) return;
-    dismissQuestionBubble();
-    const { query, classification } = session;
-    setSearchSession(s => ({ ...s, step: 'sort', missingFields: [] }));
-    askSortThenSearch(query, classification);
+    await handleHybridAnswer('', true);
   };
 
   // Reenvia ao backend com as respostas para enriquecer a classification lá
   // Recebe sortBy como parâmetro para evitar stale closure
-  const classifyWithAnswers = async (query: string, answers: Record<string, string>, prevClassification: any) => {
+  const classifyWithAnswers = async (
+    query: string,
+    answers: Record<string, string>,
+    prevClassification: ClassificationData,
+  ) => {
     const controller = new AbortController();
     // #8: 20s > 15s do backend para dar margem ao fallback interno do backend
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
       const user = localStorage.getItem('zavlo_user');
       if (!user) { router.push('/auth'); return; }
-      const userData = JSON.parse(user);
+      const userData: UserSession = JSON.parse(user);
 
       let response: Response;
       try {
@@ -855,20 +1189,29 @@ export default function ChatPage() {
       }
 
       if (!response.ok) throw new Error(`classify failed: ${response.status}`);
-      const data = await response.json();
-      // Mesclar enrichedClassification com prevClassification para preservar filtros acumulados
-      // Mesclar: data.classification é a base (Python enriqueceu), prevClassification sobrepõe
-      // para preservar respostas do usuário que o Python não deve sobrescrever
-      const enrichedClassification = data.classification
-        ? { ...data.classification, ...prevClassification }
+      const rawData: unknown = await response.json();
+      const data = parseClassifyQueryResponse(rawData);
+      if (!data) throw new Error('invalid classify response');
+      const enrichedClassification: ClassificationData = data.classification
+        ? { ...prevClassification, ...data.classification }
         : prevClassification;
 
       // Se o backend ainda quer fazer perguntas sobre campos não respondidos, continuar perguntando
-      if (data.needsQuestion && data.question && data.missingFields?.length > 0) {
-        const newMissingFields: string[] = (data.missingFields as string[]).filter(f => !(f in answers));
+      if (data.needsQuestion && data.missingFields?.length > 0) {
+        const compatibleFields = filterMissingFieldsByScraper(data.missingFields as string[], enrichedClassification);
+        const mlExtraFields = getMercadoLivreQuestionFields(enrichedClassification, answers);
+        const olxExtraFields = getOlxQuestionFields(enrichedClassification, answers);
+        const webmotorsExtraFields = getWebmotorsQuestionFields(enrichedClassification, answers);
+        const googleExtraFields = getGoogleShoppingQuestionFields(enrichedClassification, answers);
+        const mergedFields = orderQuestionFields(
+          [...new Set([...compatibleFields, ...mlExtraFields, ...olxExtraFields, ...webmotorsExtraFields, ...googleExtraFields])],
+          enrichedClassification,
+        );
+        const newMissingFields: string[] = mergedFields.filter(f => !(f in answers));
         if (newMissingFields.length > 0) {
           const nextField = newMissingFields[0];
-          const nextQ = getNextQuestion(nextField, enrichedClassification);
+          maybeAnnounceVehicleScraperPlan(enrichedClassification, nextField);
+          const nextQ = resolveQuestionForField(nextField, data.question, enrichedClassification);
           const nextText = typeof nextQ === 'object' ? nextQ.question : nextQ;
           const nextSuggestions = typeof nextQ === 'object' ? nextQ.suggestions : undefined;
           setSearchSession(s => ({
@@ -893,28 +1236,160 @@ export default function ChatPage() {
         }
       }
 
-      setSearchSession(s => ({ ...s, classification: enrichedClassification, step: 'idle' }));
+      const mlPendingFields = orderQuestionFields(
+        getMercadoLivreQuestionFields(enrichedClassification, answers)
+          .filter(f => !(f in answers)),
+        enrichedClassification,
+      );
+      if (mlPendingFields.length > 0) {
+        const nextField = mlPendingFields[0];
+        maybeAnnounceVehicleScraperPlan(enrichedClassification, nextField);
+        const nextQ = getNextQuestion(nextField, enrichedClassification);
+        const nextText = typeof nextQ === 'object' ? nextQ.question : nextQ;
+        const nextSuggestions = typeof nextQ === 'object' ? nextQ.suggestions : undefined;
+        setSearchSession(s => ({
+          ...s,
+          query,
+          classification: enrichedClassification,
+          missingFields: mlPendingFields,
+          answers,
+          step: 'asking',
+        }));
+        const qMsg: Message = {
+          id: crypto.randomUUID(),
+          type: 'question',
+          content: nextText,
+          timestamp: new Date(),
+          questionType: nextField,
+          questionSuggestions: nextSuggestions,
+          userLocation: enrichedClassification?.user_location,
+        };
+        setMessages(prev => [...prev, qMsg]);
+        return;
+      }
+
+      const olxPendingFields = orderQuestionFields(
+        getOlxQuestionFields(enrichedClassification, answers)
+          .filter(f => !(f in answers)),
+        enrichedClassification,
+      );
+      if (olxPendingFields.length > 0) {
+        const nextField = olxPendingFields[0];
+        maybeAnnounceVehicleScraperPlan(enrichedClassification, nextField);
+        const nextQ = getNextQuestion(nextField, enrichedClassification);
+        const nextText = typeof nextQ === 'object' ? nextQ.question : nextQ;
+        const nextSuggestions = typeof nextQ === 'object' ? nextQ.suggestions : undefined;
+        setSearchSession(s => ({
+          ...s,
+          query,
+          classification: enrichedClassification,
+          missingFields: olxPendingFields,
+          answers,
+          step: 'asking',
+        }));
+        const qMsg: Message = {
+          id: crypto.randomUUID(),
+          type: 'question',
+          content: nextText,
+          timestamp: new Date(),
+          questionType: nextField,
+          questionSuggestions: nextSuggestions,
+          userLocation: enrichedClassification?.user_location,
+        };
+        setMessages(prev => [...prev, qMsg]);
+        return;
+      }
+
+      const webmotorsPendingFields = orderQuestionFields(
+        getWebmotorsQuestionFields(enrichedClassification, answers)
+          .filter(f => !(f in answers)),
+        enrichedClassification,
+      );
+      if (webmotorsPendingFields.length > 0) {
+        const nextField = webmotorsPendingFields[0];
+        maybeAnnounceVehicleScraperPlan(enrichedClassification, nextField);
+        const nextQ = getNextQuestion(nextField, enrichedClassification);
+        const nextText = typeof nextQ === 'object' ? nextQ.question : nextQ;
+        const nextSuggestions = typeof nextQ === 'object' ? nextQ.suggestions : undefined;
+        setSearchSession(s => ({
+          ...s,
+          query,
+          classification: enrichedClassification,
+          missingFields: webmotorsPendingFields,
+          answers,
+          step: 'asking',
+        }));
+        const qMsg: Message = {
+          id: crypto.randomUUID(),
+          type: 'question',
+          content: nextText,
+          timestamp: new Date(),
+          questionType: nextField,
+          questionSuggestions: nextSuggestions,
+          userLocation: enrichedClassification?.user_location,
+        };
+        setMessages(prev => [...prev, qMsg]);
+        return;
+      }
+
+      const googlePendingFields = orderQuestionFields(
+        getGoogleShoppingQuestionFields(enrichedClassification, answers)
+          .filter(f => !(f in answers)),
+        enrichedClassification,
+      );
+      if (googlePendingFields.length > 0) {
+        const nextField = googlePendingFields[0];
+        maybeAnnounceVehicleScraperPlan(enrichedClassification, nextField);
+        const nextQ = getNextQuestion(nextField, enrichedClassification);
+        const nextText = typeof nextQ === 'object' ? nextQ.question : nextQ;
+        const nextSuggestions = typeof nextQ === 'object' ? nextQ.suggestions : undefined;
+        setSearchSession(s => ({
+          ...s,
+          query,
+          classification: enrichedClassification,
+          missingFields: googlePendingFields,
+          answers,
+          step: 'asking',
+        }));
+        const qMsg: Message = {
+          id: crypto.randomUUID(),
+          type: 'question',
+          content: nextText,
+          timestamp: new Date(),
+          questionType: nextField,
+          questionSuggestions: nextSuggestions,
+          userLocation: enrichedClassification?.user_location,
+        };
+        setMessages(prev => [...prev, qMsg]);
+        return;
+      }
+
+      setSearchSession(s => ({ ...s, classification: enrichedClassification, step: 'idle', scraperPlanAnnounced: false }));
       askSortThenSearch(query, enrichedClassification);
     } catch {
-      const fallbackClassification = { ...prevClassification, search_query: query };
+      const fallbackClassification: ClassificationData = { ...prevClassification, search_query: query };
       // #5: garantir step='idle' antes de askSortThenSearch
-      setSearchSession(s => ({ ...s, step: 'idle' }));
+      setSearchSession(s => ({ ...s, step: 'idle', scraperPlanAnnounced: false }));
       askSortThenSearch(query, fallbackClassification);
     }
   };
 
   const handleSend = async (messageText?: string) => {
-    const currentInput = (messageText ?? input).trim();
+    const rawInput = String(messageText ?? input).replace(/[\x00-\x1F\x7F]/g, ' ').trim();
+    const currentInput = rawInput.slice(0, 500);
     if (!currentInput || loading) return;
+    if (rawInput.length > 500) {
+      addMessage('ai', '✂️ Sua mensagem estava muito longa e foi resumida para processar melhor.');
+    }
     setInput('');
 
     // Handle image confirmation
     if (awaitingImageConfirmation) {
       const lowerInput = currentInput.toLowerCase().trim();
-      if (['sim', 'sim!', 'yes', 'y', 's'].includes(lowerInput)) {
+      if (['sim', 'sim!', 'yes', 'y', 's', 'buscar', 'buscar preços', 'pode buscar', 'ok'].includes(lowerInput)) {
         handleImagePriceSearch();
         return;
-      } else if (['não', 'nao', 'no', 'n'].includes(lowerInput)) {
+      } else if (['não', 'nao', 'no', 'n', 'cancelar', 'não quero', 'nao quero'].includes(lowerInput)) {
         handleImageSearchReject();
         return;
       } else {
@@ -925,7 +1400,6 @@ export default function ChatPage() {
 
     // Handle hybrid question — user typed instead of clicking a button
     if (searchSession.step === 'asking') {
-      dismissQuestionBubble();
       await handleHybridAnswer(currentInput, true);
       return;
     }
@@ -937,10 +1411,32 @@ export default function ChatPage() {
       return;
     }
 
-    // Guard: sort_question ou query_confirm de texto pendente
+    // Guard inteligente: sort_question/query_confirm aceitando comando textual
     const sessionSnap = searchSessionRef.current;
-    if (sessionSnap.step === 'sort' || sessionSnap.step === 'confirm') {
-      addMessage('ai', '⏳ Confirme a busca acima antes de continuar.');
+    if (sessionSnap.step === 'sort') {
+      const sortBy = parseSortByFromText(currentInput);
+      if (sortBy) {
+        if (awaitingImageSort) await executeImageSearch(sortBy);
+        else executeTextSort(sortBy);
+        return;
+      }
+      addMessage('ai', '⏳ Escolha a ordenação acima ou digite: "menor preço", "maior preço", "mais avaliados" ou "mais relevante".');
+      setLoading(false);
+      return;
+    }
+
+    if (sessionSnap.step === 'confirm') {
+      const lower = currentInput.toLowerCase();
+      const wantsConfirm = /(buscar|confirm|ok|pode\s*ir|seguir|manda|vai)/.test(lower);
+      if (wantsConfirm) {
+        const lastConfirm = [...messagesRef.current].reverse().find(m => m.type === 'query_confirm');
+        if (lastConfirm) {
+          const sortBy = lastConfirm.queryConfirmSortBy || sessionSnap.sortBy || 'BEST_MATCH';
+          await handleQueryConfirm(lastConfirm.content, sortBy);
+          return;
+        }
+      }
+      addMessage('ai', '⏳ Confirme a busca acima ou edite o texto da consulta e clique em "Buscar agora".');
       setLoading(false);
       return;
     }
@@ -954,12 +1450,6 @@ export default function ChatPage() {
 
     setMessages(prev => [...prev, userMessage]);
     setLoading(true);
-
-    if (userCreditsRef.current < 1) {
-      addMessage('ai', '💳 Créditos insuficientes! Você precisa de pelo menos 1 crédito para fazer buscas.');
-      setLoading(false);
-      return;
-    }
 
     // ✅ Bug Medium #1: verificar expansionSources ANTES do detectIntent
     // Evita que "OLX", "Mercado Livre" etc. caiam no fallback classifyQuery e consumam crédito
@@ -982,6 +1472,9 @@ export default function ChatPage() {
       }
       const notSatisfied = ['não', 'nao', 'no', 'n', 'nope', 'negativo', 'nada', 'ruim', 'péssimo', 'pessimo', 'insatisfeito'].some(w => lower.includes(w));
       if (notSatisfied) {
+        setSearchSession(s => ({ ...s, expansionSources: [] }));
+        setMessages(prev => prev.filter(m => m.type !== 'expansion'));
+        addMessage('ai', 'Perfeito! Encerramos por aqui ✅. Se quiser, posso iniciar uma nova busca agora mesmo.');
         setLoading(false);
         return;
       }
@@ -999,6 +1492,12 @@ export default function ChatPage() {
       return;
     }
 
+    if (isLikelyInvalidInput(currentInput)) {
+      addMessage('ai', '🤔 Não consegui entender essa mensagem.\n\nTente algo como:\n• "quero um honda civic 2020"\n• "iphone 15 pro até 5 mil"\n• "notebook gamer"');
+      setLoading(false);
+      return;
+    }
+
     const intent = detectIntent(currentInput);
 
       // Handle special commands
@@ -1010,13 +1509,41 @@ export default function ChatPage() {
       }
 
       if (intent.type === 'greeting') {
-        addMessage('ai', 'Olá! 👋 Que produto você está procurando?');
+        addMessage('ai', 'Olá! 👋\n\nMe diga o produto + detalhes (modelo, ano, faixa de preço) que eu inicio a busca agora.');
         setLoading(false);
         return;
       }
 
       if (intent.type === 'despedida') {
-        addMessage('ai', 'Até logo! 👋 Volte sempre que precisar encontrar o melhor preço. 😊');
+        const topOffers = getTopPricedProducts(collectProductsFromMessages(messagesRef.current), 3);
+        if (topOffers.length === 0) {
+          addMessage('ai', 'Até logo! 👋 Volte sempre que precisar encontrar o melhor preço. 😊');
+          setLoading(false);
+          return;
+        }
+
+        bestPriceRef.current = topOffers[0].price;
+        const summaryLines = topOffers.map((offer, index) => {
+          const title = String(offer.title ?? 'Produto');
+          return `${index + 1}. ${title} — **${formatBRL(offer.price)}**`;
+        });
+
+        setMessages(prev => ([
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            type: 'ai',
+            content: `Até logo! 👋\n\nResumo da sessão: aqui está seu **Top ${topOffers.length} menores preços** encontrados:\n${summaryLines.join('\n')}`,
+            timestamp: new Date(),
+          },
+          {
+            id: crypto.randomUUID(),
+            type: 'products',
+            content: `Top ${topOffers.length} melhores ofertas da sessão`,
+            products: topOffers,
+            timestamp: new Date(),
+          },
+        ]));
         setLoading(false);
         return;
       }
@@ -1115,10 +1642,13 @@ export default function ChatPage() {
         return;
       }
 
-      const userData = JSON.parse(user);
+      const userData: UserSession = JSON.parse(user);
       
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 20000); // #8: 20s > 15s do backend
+      let response: Response;
+      try {
+        response = await fetch(apiUrl('/search/classify'), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${userData.token}`,
@@ -1138,7 +1668,13 @@ export default function ChatPage() {
       }
 
       if (response.ok) {
-        const data = await response.json();
+        const rawData: unknown = await response.json();
+        const data = parseClassifyQueryResponse(rawData);
+        if (!data) {
+          addMessage('ai', 'Não consegui entender a resposta da classificação. Tente novamente.');
+          setLoading(false);
+          return;
+        }
         
         // Check if it's a question about the system
         if (data.classification?.is_question) {
@@ -1213,10 +1749,24 @@ export default function ChatPage() {
         setSearchSession(s => ({ ...s, classification: data.classification }));
         
         // HYBRID MODE: Check if needs question
-        if (data.needsQuestion && data.question) {
-          const missingFields: string[] = data.missingFields || [];
+        if (data.needsQuestion && (data.question || (data.missingFields?.length ?? 0) > 0)) {
+          const backendFields: string[] = filterMissingFieldsByScraper(data.missingFields || [], data.classification);
+          const mlExtraFields = getMercadoLivreQuestionFields(data.classification, {});
+          const olxExtraFields = getOlxQuestionFields(data.classification, {});
+          const webmotorsExtraFields = getWebmotorsQuestionFields(data.classification, {});
+          const googleExtraFields = getGoogleShoppingQuestionFields(data.classification, {});
+          const missingFields: string[] = orderQuestionFields(
+            [...new Set([...backendFields, ...mlExtraFields, ...olxExtraFields, ...webmotorsExtraFields, ...googleExtraFields])],
+            data.classification,
+          );
           const firstField = missingFields[0];
-          const q = data.question;
+          if (!firstField) {
+            setSearchSession(s => ({ ...s, query, classification: data.classification, step: 'idle' }));
+            setLoading(false);
+            askSortThenSearch(query, data.classification);
+            return;
+          }
+          const q = resolveQuestionForField(firstField, data.question, data.classification);
           const questionText = typeof q === 'object' ? q.question : q;
           const suggestions = typeof q === 'object' ? q.suggestions : undefined;
           setSearchSession(s => ({
@@ -1226,8 +1776,130 @@ export default function ChatPage() {
             missingFields,
             answers: {},
             step: 'asking',
+            scraperPlanAnnounced: false,
           }));
           setLoading(false);
+          maybeAnnounceVehicleScraperPlan(data.classification, firstField);
+          const qMsg: Message = {
+            id: crypto.randomUUID(),
+            type: 'question',
+            content: questionText,
+            timestamp: new Date(),
+            questionType: firstField,
+            questionSuggestions: suggestions,
+            userLocation: data.classification?.user_location,
+          };
+          setMessages(prev => [...prev, qMsg]);
+          return;
+        }
+
+        const mlPendingFields = orderQuestionFields(getMercadoLivreQuestionFields(data.classification, {}), data.classification);
+        if (mlPendingFields.length > 0) {
+          const firstField = mlPendingFields[0];
+          const q = getNextQuestion(firstField, data.classification);
+          const questionText = typeof q === 'object' ? q.question : q;
+          const suggestions = typeof q === 'object' ? q.suggestions : undefined;
+          setSearchSession(s => ({
+            ...s,
+            query,
+            classification: data.classification,
+            missingFields: mlPendingFields,
+            answers: {},
+            step: 'asking',
+            scraperPlanAnnounced: false,
+          }));
+          setLoading(false);
+          maybeAnnounceVehicleScraperPlan(data.classification, firstField);
+          const qMsg: Message = {
+            id: crypto.randomUUID(),
+            type: 'question',
+            content: questionText,
+            timestamp: new Date(),
+            questionType: firstField,
+            questionSuggestions: suggestions,
+            userLocation: data.classification?.user_location,
+          };
+          setMessages(prev => [...prev, qMsg]);
+          return;
+        }
+
+        const olxPendingFields = orderQuestionFields(getOlxQuestionFields(data.classification, {}), data.classification);
+        if (olxPendingFields.length > 0) {
+          const firstField = olxPendingFields[0];
+          const q = getNextQuestion(firstField, data.classification);
+          const questionText = typeof q === 'object' ? q.question : q;
+          const suggestions = typeof q === 'object' ? q.suggestions : undefined;
+          setSearchSession(s => ({
+            ...s,
+            query,
+            classification: data.classification,
+            missingFields: olxPendingFields,
+            answers: {},
+            step: 'asking',
+            scraperPlanAnnounced: false,
+          }));
+          setLoading(false);
+          maybeAnnounceVehicleScraperPlan(data.classification, firstField);
+          const qMsg: Message = {
+            id: crypto.randomUUID(),
+            type: 'question',
+            content: questionText,
+            timestamp: new Date(),
+            questionType: firstField,
+            questionSuggestions: suggestions,
+            userLocation: data.classification?.user_location,
+          };
+          setMessages(prev => [...prev, qMsg]);
+          return;
+        }
+
+        const webmotorsPendingFields = orderQuestionFields(getWebmotorsQuestionFields(data.classification, {}), data.classification);
+        if (webmotorsPendingFields.length > 0) {
+          const firstField = webmotorsPendingFields[0];
+          const q = getNextQuestion(firstField, data.classification);
+          const questionText = typeof q === 'object' ? q.question : q;
+          const suggestions = typeof q === 'object' ? q.suggestions : undefined;
+          setSearchSession(s => ({
+            ...s,
+            query,
+            classification: data.classification,
+            missingFields: webmotorsPendingFields,
+            answers: {},
+            step: 'asking',
+            scraperPlanAnnounced: false,
+          }));
+          setLoading(false);
+          maybeAnnounceVehicleScraperPlan(data.classification, firstField);
+          const qMsg: Message = {
+            id: crypto.randomUUID(),
+            type: 'question',
+            content: questionText,
+            timestamp: new Date(),
+            questionType: firstField,
+            questionSuggestions: suggestions,
+            userLocation: data.classification?.user_location,
+          };
+          setMessages(prev => [...prev, qMsg]);
+          return;
+        }
+
+        const googlePendingFields = orderQuestionFields(getGoogleShoppingQuestionFields(data.classification, {}), data.classification);
+        if (googlePendingFields.length > 0) {
+          const firstField = googlePendingFields[0];
+          const q = getNextQuestion(firstField, data.classification);
+          const questionText = typeof q === 'object' ? q.question : q;
+          const suggestions = typeof q === 'object' ? q.suggestions : undefined;
+          setSearchSession(s => ({
+            ...s,
+            query,
+            classification: data.classification,
+            missingFields: googlePendingFields,
+            answers: {},
+            step: 'asking',
+            scraperPlanAnnounced: false,
+          }));
+          setLoading(false);
+          maybeAnnounceVehicleScraperPlan(data.classification, firstField);
           const qMsg: Message = {
             id: crypto.randomUUID(),
             type: 'question',
@@ -1276,6 +1948,27 @@ export default function ChatPage() {
     if (cl?.condition === 'used' && !base.includes('usado')) parts.push('usado');
     if (cl?.user_location?.city && !base.includes(cl.user_location.city.toLowerCase())) parts.push(`em ${cl.user_location.city}`);
     const finalQueryText = parts.join(' ').trim();
+    const extraNotes: string[] = [];
+    const classificationAny = cl as any;
+    if (classificationAny?.google_limit && Number(classificationAny.google_limit) > 20) {
+      extraNotes.push(`Google Shopping com ${classificationAny.google_limit} resultados pode consumir mais créditos.`);
+    }
+    if (classificationAny?.olx_max_pages && Number(classificationAny.olx_max_pages) > 1) {
+      extraNotes.push(`OLX com ${classificationAny.olx_max_pages} páginas vai consumir créditos extras.`);
+    }
+    if (classificationAny?.webmotors_seller_data_addon) {
+      extraNotes.push('Webmotors vai tentar coletar CNPJ e telefone do vendedor, o que pode consumir créditos extras.');
+    }
+    if (classificationAny?.webmotors_max_requests && Number(classificationAny.webmotors_max_requests) > 10) {
+      extraNotes.push(`Webmotors com ${classificationAny.webmotors_max_requests} requests terá cobertura maior e pode consumir mais créditos.`);
+    }
+    if (classificationAny?.ml_scrape_ofertas) {
+      extraNotes.push('Mercado Livre será executado em modo ofertas do dia.');
+    }
+    const estimatedCredits = estimateCreditsForConfirmation(cl);
+    if (estimatedCredits) {
+      extraNotes.unshift(`Esta busca deve consumir cerca de ${estimatedCredits} crédito${estimatedCredits > 1 ? 's' : ''}.`);
+    }
     setSearchSession(s => ({ ...s, step: 'confirm', sortBy }));
     const confirmMsg: Message = {
       id: crypto.randomUUID(),
@@ -1283,7 +1976,9 @@ export default function ChatPage() {
       content: finalQueryText,
       timestamp: new Date(),
       queryConfirmSortBy: sortBy,
-    } as any;
+      queryConfirmCreditEstimate: estimatedCredits,
+      queryConfirmNotes: extraNotes,
+    };
     setMessages(prev => [...prev, confirmMsg]);
   };
 
@@ -1302,7 +1997,7 @@ export default function ChatPage() {
     isProcessingRef.current = false;
   };
 
-  const askSortThenSearch = (query: string, classification: any) => {
+  const askSortThenSearch = (query: string, classification: ClassificationData) => {
     // #1: resetar awaitingImageSort ao entrar no fluxo de texto
     setAwaitingImageSort(false);
     const sortMsg: Message = {
@@ -1315,7 +2010,13 @@ export default function ChatPage() {
     setSearchSession(s => ({ ...s, query, classification, step: 'sort' }));
   };
 
-  const executeTextSearch = async (query: string, sortBy: string = 'BEST_MATCH', classification?: any, isExpansion = false, replaceMsgId?: string) => {
+  const executeTextSearch = async (
+    query: string,
+    sortBy: string = 'BEST_MATCH',
+    classification?: ClassificationData,
+    isExpansion = false,
+    replaceMsgId?: string,
+  ) => {
     // Não aplicar contextManager quando a classification já tem search_query enriquecida
     // (hybrid mode já acumulou query + respostas — contextManager pode corromper)
     const effectiveQuery = classification?.search_query || query;
@@ -1351,7 +2052,7 @@ export default function ChatPage() {
       }
 
       if (response.status === 403) {
-        const errData = await response.json().catch(() => ({}));
+        const errData: ApiErrorResponse = await response.json().catch(() => ({} as ApiErrorResponse));
         const isFreeLimit = errData?.error === 'FREE_LIMIT_EXCEEDED' || errData?.message?.includes('gratuita');
         addMessage('ai', isFreeLimit
           ? '🔒 Você já usou sua busca gratuita. Faça login ou assine um plano para continuar buscando!'
@@ -1360,8 +2061,23 @@ export default function ChatPage() {
         return;
       }
 
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({} as ApiErrorResponse & { currentCredits?: number; requiredCredits?: number }));
+        if (errData?.error === 'INSUFFICIENT_CREDITS') {
+          addMessage(
+            'ai',
+            `💳 Créditos insuficientes! Você tem ${errData.currentCredits ?? 0} e precisa de ${errData.requiredCredits ?? 1} para esta busca.`
+          );
+          setLoading(false);
+          return;
+        }
+        addMessage('ai', errData?.message || 'Erro na busca. Tente novamente.');
+        setLoading(false);
+        return;
+      }
+
       if (response.ok) {
-        const data = await response.json();
+        const data: SearchTextResponse = await response.json();
         const products = data.results || [];
 
         setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
@@ -1378,7 +2094,7 @@ export default function ChatPage() {
           updateCredits(data.remainingCredits, userData);
         }
         
-        const creditsUsed = data.creditsUsed || 1;
+        const creditsUsed = data.creditsUsed ?? 0;
         const remainingCredits = data.remainingCredits ?? userCredits - 1;
 
         await delay(1000);
@@ -1436,6 +2152,19 @@ export default function ChatPage() {
           contextParts.push(`⚠️ ${relaxMsgs.join(' e ')} — mostrando os mais próximos disponíveis`);
         }
 
+        if (cl?.prefer_price_drop === true) {
+          const downtrendCount = products.filter((product: any) => {
+            const trend = product?.priceTrend;
+            return trend?.status === 'down' && Number(trend?.dropPercent || 0) >= 10;
+          }).length;
+
+          if (downtrendCount > 0) {
+            contextParts.push(`📉 Priorizando ofertas em queda nos últimos 30 dias (${downtrendCount} com tendência de baixa)`);
+          } else {
+            contextParts.push('📉 Priorização por queda está ativa, mas não houve histórico suficiente para destacar ofertas nesta busca');
+          }
+        }
+
         if (contextParts.length > 0) {
           addMessage('ai', contextParts.join('\n') + '.');
         }
@@ -1443,14 +2172,39 @@ export default function ChatPage() {
         const productsMessage: Message = {
             id: crypto.randomUUID(),
             type: 'products',
-            content: `✅ Encontrei ${products.length} ${products.length === 1 ? 'resultado' : 'resultados'}!\n\n💳 Créditos: -${creditsUsed} | Restantes: ${remainingCredits}`,
+            content: `✅ Encontrei ${products.length} ${products.length === 1 ? 'resultado' : 'resultados'}!\n\n💳 Créditos: ${creditsUsed > 0 ? `-${creditsUsed}` : '0 (cache)'} | Restantes: ${remainingCredits}`,
             products: products,
             timestamp: new Date(),
             priceRangeApplied: data.priceRangeApplied,
           };
-          setMessages(prev => [...prev, productsMessage]);
+          setMessages(prev => {
+            const nextMessages = [...prev, productsMessage];
+            const allProducts = collectProductsFromMessages(nextMessages);
+            const bestProduct = getBestPricedProduct(allProducts);
+
+            if (!bestProduct) return nextMessages;
+
+            const isNewBest = bestPriceRef.current === null || bestProduct.price < bestPriceRef.current;
+            if (!isNewBest) return nextMessages;
+
+            bestPriceRef.current = bestProduct.price;
+            const bestSummary: Message = {
+              id: crypto.randomUUID(),
+              type: 'ai',
+              content: '🏆 O melhor preço que conseguimos para o seu produto foi esse:',
+              timestamp: new Date(),
+            };
+            const bestProductMessage: Message = {
+              id: crypto.randomUUID(),
+              type: 'products',
+              content: 'Melhor oferta até agora',
+              products: [bestProduct],
+              timestamp: new Date(),
+            };
+            return [...nextMessages, bestSummary, bestProductMessage];
+          });
           // #5: atualizar contexto com effectiveQuery (enriquecida) não query original
-          contextManager.update({ lastResults: products, lastProduct: effectiveQuery });
+          contextManager.update({ lastResults: toContextResults(products), lastProduct: effectiveQuery });
 
           // Perguntar se os resultados satisfizeram (apenas na busca primária, não em expansões)
           if (!isExpansion && data.canExpandSearch && data.expansionSources?.length > 0) {
@@ -1485,16 +2239,13 @@ export default function ChatPage() {
           }
 
           setLoading(false);
-      } else {
-        addMessage('ai', 'Erro na busca. Tente novamente.');
-        setLoading(false);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       clearTimeout(timeout);
       setMessages(prev => prev.filter(m => m.id !== searchingMsgId));
       // #8: limpar expansionSources em caso de erro
       setSearchSession(s => ({ ...s, step: 'idle', expansionSources: [] }));
-      const msg = error?.name === 'AbortError'
+      const msg = isAbortError(error)
         ? '⏱️ A busca demorou demais. Tente novamente.'
         : 'Erro ao processar busca. Tente novamente.';
       addMessage('ai', msg);
@@ -1512,7 +2263,19 @@ export default function ChatPage() {
     setMessages(prev => [...prev, message]);
   };
 
-  const setCredits = (n: number, userData?: any) => {
+  const handleQuickSuggestion = (text: string) => {
+    if (text === '__quick_start__') {
+      addMessage('ai', 'Perfeito! ✨\n\nDigite o produto que você deseja encontrar (ex: iPhone 15 Pro, Honda Civic 2020, tênis Nike Air).\n\nAssim que você enviar, eu inicio o classificador para refinar sua busca.');
+      setInputReadyCue(true);
+      setTimeout(() => inputRef.current?.focus(), 0);
+      return;
+    }
+
+    setInput(text);
+    setTimeout(() => handleSend(text), 0);
+  };
+
+  const setCredits = (n: number, userData?: UserSession) => {
     setUserCredits(n);
     userCreditsRef.current = n;
     if (userData) {
@@ -1522,10 +2285,11 @@ export default function ChatPage() {
     }
   };
 
-  const updateCredits = (newCredits: number, userData: any) => setCredits(newCredits, userData);
+  const updateCredits = (newCredits: number, userData: UserSession) => setCredits(newCredits, userData);
+  const showQuickSuggestions = messages.length === 1 && messages[0]?.id === INTRO_MESSAGE_ID && !loading;
 
   return (
-    <div className="h-screen bg-[#0A0A12] flex overflow-hidden">
+    <div className="flex h-[100dvh] overflow-hidden bg-[#0A0A12]" style={{ background: 'radial-gradient(ellipse at top, rgba(139,92,246,0.08) 0%, transparent 55%), #0A0A12' }}>
       <ChatSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -1550,7 +2314,7 @@ export default function ChatPage() {
         }}
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden md:m-3 md:rounded-2xl md:border md:border-white/[0.06] md:bg-[#0D0D14]/70 md:shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
         <ChatHeader
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
@@ -1558,12 +2322,9 @@ export default function ChatPage() {
           onClearChat={createNewChat}
         />
 
-        {messages.length === 1 && messages[0].type === 'ai' ? (
+        {showQuickSuggestions ? (
           <QuickSuggestions
-            onSuggestionClick={(text) => {
-              setInput(text);
-              setTimeout(() => handleSend(text), 0);
-            }}
+            onSuggestionClick={handleQuickSuggestion}
             onImageSearchClick={() => fileInputRef.current?.click()}
             showMoreSuggestions={false}
             onToggleMore={() => {}}
@@ -1600,8 +2361,14 @@ export default function ChatPage() {
 
         <ChatInput
           input={input}
-          onInputChange={setInput}
-          onSend={() => handleSend()}
+          onInputChange={(value) => {
+            setInput(value);
+            if (value.trim().length > 0 && inputReadyCue) setInputReadyCue(false);
+          }}
+          onSend={() => {
+            setInputReadyCue(false);
+            handleSend();
+          }}
           onImageUpload={handleImageUpload}
           onImageSearch={handleImageSearch}
           uploadedImage={uploadedImage}
@@ -1612,6 +2379,7 @@ export default function ChatPage() {
           loading={loading}
           inputRef={inputRef}
           fileInputRef={fileInputRef}
+          inputReadyCue={inputReadyCue}
         />
       </div>
 

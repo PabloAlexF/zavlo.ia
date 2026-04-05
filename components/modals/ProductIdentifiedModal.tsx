@@ -25,7 +25,7 @@ export default function ProductIdentifiedModal({
 
   if (!isOpen) return null;
 
-  const hasCredits = userCredits >= 2;
+  const hasCredits = userCredits >= 1;
   const isLongText = productName.length > 80;
 
   const handleEdit = (value: string) => {
@@ -106,7 +106,7 @@ export default function ProductIdentifiedModal({
                   <p className="text-yellow-400 font-semibold mb-1 text-sm sm:text-base">Créditos:</p>
                   <p className="text-xs sm:text-sm text-gray-300">1 usado (identificação)</p>
                   <p className="text-xs sm:text-sm text-gray-300">Para buscar menor preço: +1 crédito</p>
-                  <p className="text-xs sm:text-sm text-white font-semibold mt-1 sm:mt-2">Total: 2 créditos</p>
+                  <p className="text-xs sm:text-sm text-white font-semibold mt-1 sm:mt-2">Saldo necessário agora: 1 crédito</p>
                 </div>
               </div>
             </div>
@@ -143,7 +143,7 @@ export default function ProductIdentifiedModal({
                 <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-400 flex-shrink-0" />
                 <div>
                   <p className="text-red-400 text-xs sm:text-sm mb-1 sm:mb-2">
-                    Você precisa de pelo menos 2 créditos para buscar por imagem.
+                    Você precisa de pelo menos 1 crédito adicional para buscar preços.
                   </p>
                   <p className="text-gray-400 text-xs">
                     Saldo atual: {userCredits} créditos

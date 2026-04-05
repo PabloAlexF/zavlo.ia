@@ -10,8 +10,18 @@ import { MercadoLivreService } from '../scraping/mercadolivre.service';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { ClassificationService } from '../classification/classification.service';
+import { ComparisonsService } from '../comparisons/comparisons.service';
+import { PLAN_LIMITS, PLAN_PRICING, CREDIT_PACKAGES, PlanType } from '@shared/plans.constants';
 import * as crypto from 'crypto';
 import pLimit from 'p-limit';
+
+type SearchBillingEvent = {
+  source: string;
+  resultsCount: number;
+  pagesRequested?: number;
+  requestedResults?: number;
+  sellerDataAddonRequested?: boolean;
+};
 
 @Injectable()
 export class SearchService {
@@ -28,6 +38,26 @@ export class SearchService {
   // 🚀 CONCURRENCY LIMITER - Máximo 3 scrapers simultâneos
   private readonly scraperLimit = pLimit(3);
 
+  // 💰 MODELO DE CUSTO POR FONTE (Apify)
+  // Mercado Livre: $2.00 / 1.000 resultados
+  // OLX: $10.00 / 1.000 resultados
+  // Google Shopping: $20.00 / 1.000 resultados
+  private readonly SOURCE_COST_USD_PER_1000_RESULTS: Record<string, number> = {
+    mercadolivre: 2,
+    olx: 10,
+    google_shopping: 20,
+  };
+
+  // Webmotors é pay-per-event (estimativa conservadora para proteger margem)
+  private readonly WEBMOTORS_EVENT_COST_USD = 0.30;
+  private readonly WEBMOTORS_DEFAULT_MAX_REQUESTS = 10;
+  private readonly WEBMOTORS_SELLER_ADDON_MULTIPLIER = 1.5;
+
+  // Conversão e margem de negócio
+  private readonly USD_TO_BRL = 5;
+  private readonly TARGET_GROSS_MARGIN = 0.65;
+  private readonly MIN_CREDITS_PER_EXTERNAL_CALL = 1;
+
   constructor(
     private firebaseService: FirebaseService,
     private redisService: RedisService,
@@ -39,6 +69,7 @@ export class SearchService {
     private usersService: UsersService,
     private analyticsService: AnalyticsService,
     private classificationService: ClassificationService,
+    private comparisonsService: ComparisonsService,
   ) {}
 
   /* ============================================
@@ -98,6 +129,96 @@ export class SearchService {
     }
   }
 
+  private calculateEstimatedUsdCost(event: SearchBillingEvent): number {
+    if (event.source === 'webmotors') {
+      const maxRequests = Number.isFinite(event.pagesRequested)
+        ? Math.max(1, Number(event.pagesRequested))
+        : this.WEBMOTORS_DEFAULT_MAX_REQUESTS;
+      const requestMultiplier = Math.max(1, maxRequests / this.WEBMOTORS_DEFAULT_MAX_REQUESTS);
+      const sellerAddonMultiplier = event.sellerDataAddonRequested
+        ? this.WEBMOTORS_SELLER_ADDON_MULTIPLIER
+        : 1;
+      return this.WEBMOTORS_EVENT_COST_USD * requestMultiplier * sellerAddonMultiplier;
+    }
+
+    const sourceCost = this.SOURCE_COST_USD_PER_1000_RESULTS[event.source];
+    if (sourceCost) {
+      const billableResults = event.source === 'google_shopping'
+        ? Math.max(event.resultsCount, event.requestedResults || 0, 1)
+        : Math.max(event.resultsCount, 1);
+      return (sourceCost * billableResults) / 1000;
+    }
+
+    return this.maxCostPerCreditUsd();
+  }
+
+  private minRevenuePerCreditBrl(): number {
+    const paidPlans = [PlanType.BASIC, PlanType.PRO, PlanType.BUSINESS];
+
+    const planRevenues = paidPlans
+      .map((plan) => {
+        const price = PLAN_PRICING[plan].monthly;
+        const credits = PLAN_LIMITS[plan].textSearchesPerMonth || 1;
+        return price / credits;
+      })
+      .filter((v) => Number.isFinite(v) && v > 0);
+
+    const packageRevenues = CREDIT_PACKAGES
+      .map((pkg) => {
+        const totalCredits = pkg.credits + (pkg.bonus || 0);
+        return totalCredits > 0 ? pkg.price / totalCredits : Number.POSITIVE_INFINITY;
+      })
+      .filter((v) => Number.isFinite(v) && v > 0);
+
+    const all = [...planRevenues, ...packageRevenues];
+    return all.length > 0 ? Math.min(...all) : 2.5;
+  }
+
+  private maxCostPerCreditBrl(): number {
+    const minRevenue = this.minRevenuePerCreditBrl();
+    return minRevenue * (1 - this.TARGET_GROSS_MARGIN);
+  }
+
+  private maxCostPerCreditUsd(): number {
+    return this.maxCostPerCreditBrl() / this.USD_TO_BRL;
+  }
+
+  private calculateCreditsFromBillingEvents(events: SearchBillingEvent[]): number {
+    if (events.length === 0) return 0;
+
+    let totalCredits = 0;
+    const maxCostUsdPerCredit = this.maxCostPerCreditUsd();
+    const minRevenuePerCredit = this.minRevenuePerCreditBrl();
+    const maxCostPerCreditBrl = this.maxCostPerCreditBrl();
+
+    this.logger.log(
+      `💼 [CREDITS MODEL] minRevenuePerCreditBRL=${minRevenuePerCredit.toFixed(2)} targetMargin=${(this.TARGET_GROSS_MARGIN * 100).toFixed(0)}% maxCostPerCreditBRL=${maxCostPerCreditBrl.toFixed(2)} maxCostPerCreditUSD=${maxCostUsdPerCredit.toFixed(4)}`,
+    );
+
+    for (const event of events) {
+      const estimatedUsd = this.calculateEstimatedUsdCost(event);
+      let creditsForEvent = Math.max(
+        this.MIN_CREDITS_PER_EXTERNAL_CALL,
+        Math.ceil(estimatedUsd / maxCostUsdPerCredit),
+      );
+
+      if (event.source === 'olx') {
+        const pages = Number.isFinite(event.pagesRequested)
+          ? Math.max(1, Number(event.pagesRequested))
+          : 1;
+        const extraCredits = Math.max(0, pages - 1);
+        creditsForEvent += extraCredits;
+      }
+
+      totalCredits += creditsForEvent;
+      this.logger.log(
+        `💳 [CREDITS COST] source=${event.source} results=${event.resultsCount} requestedResults=${event.requestedResults || event.resultsCount} pages=${event.pagesRequested || 1} estimatedUsd=${estimatedUsd.toFixed(4)} credits=${creditsForEvent}`,
+      );
+    }
+
+    return totalCredits;
+  }
+
   /* ============================================
      CACHE POR SCRAPER (OTIMIZAÇÃO GIGANTE)
   ============================================ */
@@ -154,6 +275,13 @@ export class SearchService {
       filters?.providedClassification?.condition || 'unknown',
       filters?.providedClassification?.detected_year || '0',
       filters?.providedClassification?.user_location?.city || 'all',
+      filters?.providedClassification?.ml_scrape_ofertas === true ? 'mlOffers:1' : 'mlOffers:0',
+      filters?.providedClassification?.ml_promoted === true ? 'mlPromoted:1' : 'mlPromoted:0',
+      filters?.providedClassification?.olx_max_pages ? `olxPages:${filters.providedClassification.olx_max_pages}` : 'olxPages:auto',
+      filters?.providedClassification?.olx_max_requests ? `olxReq:${filters.providedClassification.olx_max_requests}` : 'olxReq:100',
+      filters?.providedClassification?.google_country ? `gCountry:${filters.providedClassification.google_country}` : 'gCountry:br',
+      filters?.providedClassification?.google_language ? `gLang:${filters.providedClassification.google_language}` : 'gLang:pt',
+      filters?.providedClassification?.google_limit ? `gLimit:${filters.providedClassification.google_limit}` : 'gLimit:auto',
     ].join(':');
     
     const cacheData = `${query}:${filterStr}:${location || 'all'}`;
@@ -407,25 +535,13 @@ export class SearchService {
         filteredResults = this.applyPriceFilter(cachedResult.results, filters.minPrice, filters.maxPrice);
       }
 
-      // Deduzir crédito apenas se o cache hit retornou resultados
-      if (userId && filteredResults.length > 0) {
-        try {
-          await this.usersService.useCreditAndIncrementUsage(userId, 'text', 1);
-          creditsUsed = 1;
-          const user = await this.usersService.findById(userId);
-          remainingCredits = user?.credits || 0;
-        } catch (creditError: any) {
-          if (creditError.response?.error === 'INSUFFICIENT_CREDITS') {
-            throw new BadRequestException({
-              error: 'INSUFFICIENT_CREDITS',
-              message: 'Créditos insuficientes',
-              currentCredits: creditError.response.currentCredits || 0,
-              action: 'buy_credits',
-            });
-          }
-          this.logger.warn(`[CACHE] Falha ao deduzir crédito no cache hit: ${creditError.message}`);
-        }
-      } else if (userId) {
+      // 🌟 Aplicar filtros de qualidade (ratings, frete grátis)
+      filteredResults = this.filterByQualityAndShipping(filteredResults, classification);
+      filteredResults = await this.applyPriceDropPreference(filteredResults, classification);
+
+      // Cache hit puro: sem nova chamada a marketplace, então não cobra crédito
+      creditsUsed = 0;
+      if (userId) {
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
       }
@@ -450,16 +566,24 @@ export class SearchService {
     let products: Product[] = [];
     const fixedLimit = 20;
     const usedSources: string[] = [];
+    const billingEvents: SearchBillingEvent[] = [];
     let availableExpansionSources: string[] = [];
     let primarySource = '';
 
     // 🚀 EXECUTAR SCRAPERS BASEADO NA CLASSIFICAÇÃO
     const category = classification?.category;
+    const isVehicleCategory = category === 'car' || category === 'motorcycle';
+    const normalizedCondition = String(classification?.condition || '').toLowerCase();
+    const vehicleDefaultScrapers = normalizedCondition === 'new'
+      ? ['mercadolivre', 'olx', 'webmotors']
+      : ['olx', 'mercadolivre', 'webmotors'];
     const scrapers = (classification?.scrapers as { name: string; score: number }[] | undefined)
       ?.map(s => s.name)
-      ?? (category === 'car' || category === 'motorcycle' ? ['mercadolivre', 'webmotors', 'olx'] : ['google_shopping', 'mercadolivre', 'olx']);
+      ?? (isVehicleCategory ? vehicleDefaultScrapers : ['google_shopping', 'mercadolivre', 'olx']);
     const SATISFACTORY_THRESHOLD = 20;
-    const resultLimit = 20;
+    const resultLimit = Number.isFinite(classification?.result_limit)
+      ? Math.min(Math.max(Number(classification.result_limit), 10), 50)
+      : 20;
     let searchedNationally = false;
     const rawCity = classification?.user_location?.city || undefined;
     const originalCity = rawCity
@@ -515,19 +639,23 @@ export class SearchService {
       // Veículos (webmotors) sempre executam sem threshold.
       const isVehicle = category === 'car' || category === 'motorcycle';
 
-      // Para veículos: buscar SOMENTE Mercado Livre primeiro.
-      // Webmotors e OLX ficam disponíveis como expansão (usuário decide).
-      // Garantir expansão independente do que o Python retornar nos scrapers.
+      // Para veículos: definir marketplace primário pela condição.
+      // - novo  -> Mercado Livre primeiro
+      // - usado -> OLX primeiro
+      // O segundo/terceiro ficam para expansão opcional do usuário.
       // Se classification já vem com scraper único (expansão do frontend), respeitar.
       const isExpansionRequest = scrapers.length === 1;
-      const vehiclePrimaryScrapers = (isVehicle && !isExpansionRequest) ? ['mercadolivre'] : scrapers;
+      const vehiclePrimarySource = normalizedCondition === 'new' ? 'mercadolivre' : 'olx';
+      const vehiclePrimaryScrapers = (isVehicle && !isExpansionRequest) ? [vehiclePrimarySource] : scrapers;
       const vehicleExpansionPool = (isVehicle && !isExpansionRequest)
-        ? ['webmotors', 'olx'].filter(s => this.isScraperAvailable(s))
+        ? ['olx', 'mercadolivre', 'webmotors']
+            .filter(s => s !== vehiclePrimarySource)
+            .filter(s => this.isScraperAvailable(s))
         : [];
 
       const activeScrapers = (isVehicle && !isExpansionRequest) ? vehiclePrimaryScrapers : scrapers;
       this.logger.log(`🚗 [VEHICLE] isVehicle=${isVehicle} | isExpansionRequest=${isExpansionRequest}`);
-      this.logger.log(`🚗 [VEHICLE] activeScrapers=[${activeScrapers.join(', ')}] | expansionPool=[${vehicleExpansionPool.join(', ')}]`);
+      this.logger.log(`🚗 [VEHICLE] condition=${normalizedCondition || 'unknown'} | activeScrapers=[${activeScrapers.join(', ')}] | expansionPool=[${vehicleExpansionPool.join(', ')}]`);
       this.logger.log(`🔴 [CIRCUIT BREAKER] olx available: ${this.isScraperAvailable('olx')} | webmotors: ${this.isScraperAvailable('webmotors')}`);
       this.logger.log(`🔴 [CIRCUIT BREAKER] failures map: ${JSON.stringify(Object.fromEntries(this.scraperFailures))}`);
 
@@ -542,7 +670,7 @@ export class SearchService {
         let cached = false;
 
         // Verificar cache — usar search_query como chave para evitar colisão entre filtros diferentes
-        const scraperCacheKey = `${scraper}:${normalizedQuery}:${resultLimit}:${classification?.condition || 'any'}:${classification?.detected_year || '0'}:${classification?.user_location?.city || 'all'}`;
+        const scraperCacheKey = `${scraper}:${normalizedQuery}:${resultLimit}:${classification?.condition || 'any'}:${classification?.detected_year || '0'}:${classification?.user_location?.city || 'all'}:${classification?.ml_scrape_ofertas ? 'offers1' : 'offers0'}:${classification?.ml_promoted ? 'promoted1' : 'promoted0'}:${classification?.olx_max_pages ? `olxPages${classification.olx_max_pages}` : 'olxPagesAuto'}:${classification?.olx_max_requests ? `olxReq${classification.olx_max_requests}` : 'olxReq100'}:${classification?.webmotors_seller_data_addon ? 'wmSeller1' : 'wmSeller0'}:${classification?.webmotors_max_requests ? `wmReq${classification.webmotors_max_requests}` : 'wmReq10'}:${classification?.google_country ? `gCountry${classification.google_country}` : 'gCountryBr'}:${classification?.google_language ? `gLang${classification.google_language}` : 'gLangPt'}:${classification?.google_limit ? `gLimit${classification.google_limit}` : 'gLimitAuto'}`;
         const cachedData = await this.getCachedScraperResult(scraper, scraperCacheKey);
         if (cachedData) {
           scraperResults = cachedData;
@@ -552,7 +680,7 @@ export class SearchService {
           try {
             if (scraper === 'mercadolivre') {
               const { results } = await this.withTimeout(
-                this.mercadoLivreService.search(normalizedQuery, resultLimit, classification),
+                this.mercadoLivreService.search(normalizedQuery, resultLimit, sortBy as any, classification),
                 60000, 'MercadoLivre'
               );
               scraperResults = results;
@@ -574,6 +702,21 @@ export class SearchService {
                 45000, 'GoogleShopping'
               );
             }
+            billingEvents.push({
+              source: scraper,
+              resultsCount: scraperResults.length,
+              pagesRequested: scraper === 'olx'
+                ? Number(classification?.olx_max_pages || 1)
+                : scraper === 'webmotors'
+                  ? Number(classification?.webmotors_max_requests || this.WEBMOTORS_DEFAULT_MAX_REQUESTS)
+                  : 1,
+              requestedResults: scraper === 'google_shopping'
+                ? Number(classification?.google_limit || resultLimit)
+                : resultLimit,
+              sellerDataAddonRequested: scraper === 'webmotors'
+                ? Boolean(classification?.webmotors_seller_data_addon)
+                : false,
+            });
             await this.setCachedScraperResult(scraper, scraperCacheKey, scraperResults);
             this.resetScraperFailures(scraper);
           } catch (error) {
@@ -588,10 +731,10 @@ export class SearchService {
 
         if (primarySource === '') primarySource = scraper;
 
-        // Para veículos: sempre parar após Mercado Livre e oferecer expansão
+        // Para veículos: sempre parar após o scraper primário e oferecer expansão
         if (isVehicle && !isExpansionRequest) {
           availableExpansionSources = vehicleExpansionPool;
-          this.logger.log(`🚗 [VEHICLE STRATEGY] Mercado Livre concluído (${products.length} resultados). Expansão disponível: ${availableExpansionSources.join(', ') || 'nenhuma'}`);
+          this.logger.log(`🚗 [VEHICLE STRATEGY] ${scraper.toUpperCase()} concluído (${products.length} resultados). Expansão disponível: ${availableExpansionSources.join(', ') || 'nenhuma'}`);
           break;
         }
 
@@ -611,6 +754,11 @@ export class SearchService {
       // ✅ Deduplicar produtos (evitar repetições entre marketplaces)
       products = this.deduplicateProducts(products);
       this.logger.log(`🧹 [DEDUP] ${products.length} produtos após deduplicar`);
+
+      // 🌟 Aplicar filtros de qualidade (ratings, frete grátis)
+      products = this.filterByQualityAndShipping(products, classification);
+      products = await this.applyPriceDropPreference(products, classification);
+      this.logger.log(`🏆 [QUALITY FILTERS] ${products.length} produtos após filtros de qualidade`);
       
       // Ordenar produtos consolidados se necessário
       // Google Shopping e OLX já retornam ordenados
@@ -638,25 +786,9 @@ export class SearchService {
         1800,
       );
 
-      // Cobrar crédito se Firebase retornou resultados
-      if (userId && fallback.results.length > 0) {
-        try {
-          await this.usersService.useCredit(userId, 1);
-          creditsUsed = 1;
-          await this.usersService.incrementUsage(userId, 'text');
-          const user = await this.usersService.findById(userId);
-          remainingCredits = user?.credits || 0;
-        } catch (creditError: any) {
-          if (creditError.response?.error === 'INSUFFICIENT_CREDITS') {
-            throw new BadRequestException({
-              error: 'INSUFFICIENT_CREDITS',
-              message: 'Créditos insuficientes',
-              currentCredits: creditError.response.currentCredits || 0,
-              action: 'buy_credits',
-            });
-          }
-        }
-      } else if (userId) {
+      // Fallback Firebase: sem chamada a marketplace externo, então sem cobrança
+      creditsUsed = 0;
+      if (userId) {
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
       }
@@ -666,49 +798,6 @@ export class SearchService {
         creditsUsed,
         remainingCredits: userId ? (await this.usersService.findById(userId))?.credits : undefined
       };
-    }
-
-    // ✅ PROBLEMA 2 CORRIGIDO: Deduzir créditos APENAS após sucesso
-    if (userId && products.length > 0) {
-      try {
-        await this.usersService.useCreditAndIncrementUsage(userId, 'text', 1);
-        creditsUsed = 1;
-        const user = await this.usersService.findById(userId);
-        remainingCredits = user?.credits || 0;
-        this.logger.log(`✅ [CREDITS] Deducted 1 credit after successful search. Remaining: ${remainingCredits}`);
-      } catch (creditError: any) {
-        this.logger.error(`❌ [CREDITS] Failed to deduct credit: ${creditError.message}`);
-      }
-
-      // 🧠 SALVAR PREFERÊNCIAS DO USUÁRIO (memória entre sessões)
-      try {
-        const lastFilters = classification?.last_filters || {};
-        // Usar objeto aninhado real (não dot notation) para compatibilidade com Firestore
-        const prefsUpdate: Record<string, any> = { preferences: {} };
-        const lf: Record<string, any> = {};
-        if (lastFilters.condition)    lf.condition    = lastFilters.condition;
-        if (lastFilters.location)     lf.location     = lastFilters.location;
-        if (lastFilters.price_range)  lf.price_range  = lastFilters.price_range;
-        if (lastFilters.brand)        lf.brand        = lastFilters.brand;
-        if (lastFilters.gender)       lf.gender       = lastFilters.gender;
-        if (lastFilters.size)         lf.size         = lastFilters.size;
-        if (lastFilters.storage)      lf.storage      = lastFilters.storage;
-        if (lastFilters.transmission) lf.transmission = lastFilters.transmission;
-        if (lastFilters.fuel)         lf.fuel         = lastFilters.fuel;
-        if (lastFilters.body_type)    lf.body_type    = lastFilters.body_type;
-        if (lastFilters.shoe_type)    lf.shoe_type    = lastFilters.shoe_type;
-
-        if (Object.keys(lf).length > 0 || classification?.category) {
-          const firestore = this.firebaseService.getFirestore();
-          const updateData: Record<string, any> = {};
-          if (Object.keys(lf).length > 0) updateData['preferences.last_filters'] = lf;
-          if (classification?.category)   updateData['preferences.last_category'] = classification.category;
-          await firestore.collection('users').doc(userId).update(updateData);
-          this.logger.log(`🧠 [PREFS] Preferências salvas para user ${userId}`);
-        }
-      } catch (prefsError: any) {
-        this.logger.warn(`⚠️ [PREFS] Falha ao salvar preferências: ${prefsError.message}`);
-      }
     }
 
     // ✅ PROBLEMA 2 CORRIGIDO: Aplicar filtros ANTES de cachear (sem mutação)
@@ -747,6 +836,8 @@ export class SearchService {
         relaxedFilters.push('price');
       }
     }
+
+    finalResults = this.applyVehicleIdentityFilter(finalResults, classification);
 
     // 🏠 FILTRO DE LOCALIZAÇÃO (pós-scraping — só aplica se seller não for null)
     let cityFilterApplied = false;
@@ -788,12 +879,20 @@ export class SearchService {
     // Aceita fabrication_year OU model_year com tolerância de ±1 (padrão BR: carro 2011/2012)
     if (classification?.detected_year && finalResults.length > 0) {
       const yr = classification.detected_year;
+      const isVehicle = classification?.category === 'car' || classification?.category === 'motorcycle';
       const byYear = finalResults.filter(p => {
         const fabYear  = (p as any).year;
         const modYear  = (p as any).modelYear;
-        if (!fabYear && !modYear) return true; // sem dado de ano: manter
-        return (fabYear  && Math.abs(fabYear  - yr) <= 1)
-            || (modYear  && Math.abs(modYear  - yr) <= 1);
+        const titleYear = this.extractYearFromText(String((p as any).title || ''));
+        const yearCandidates = [fabYear, modYear, titleYear]
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value) && value >= 1950 && value <= new Date().getFullYear() + 1);
+
+        if (yearCandidates.length === 0) {
+          return !isVehicle;
+        }
+
+        return yearCandidates.some((candidate) => Math.abs(candidate - yr) <= 1);
       });
       if (byYear.length > 0) {
         this.logger.log(`📅 [YEAR FILTER] ${finalResults.length} → ${byYear.length} (ano: ${yr} ±1)`);
@@ -801,6 +900,68 @@ export class SearchService {
       } else {
         this.logger.warn(`📅 [YEAR FILTER] Nenhum resultado para ano=${yr} ±1 — exibindo todos sem filtro de ano`);
         relaxedFilters.push('year');
+      }
+    }
+
+    // ✅ Cobrança ponderada por custo estimado de fonte/resultado
+    // Regra: só cobrar quando há resultados finais entregues ao usuário
+    if (userId && !filters?.freeMode) {
+      if (finalResults.length > 0 && products.length > 0) {
+        creditsUsed = this.calculateCreditsFromBillingEvents(billingEvents);
+        try {
+          if (creditsUsed > 0) {
+            await this.usersService.useCreditAndIncrementUsage(userId, 'text', creditsUsed);
+          }
+          const user = await this.usersService.findById(userId);
+          remainingCredits = user?.credits || 0;
+          this.logger.log(`✅ [CREDITS] Deducted ${creditsUsed} credit(s) after successful search. Remaining: ${remainingCredits}`);
+        } catch (creditError: any) {
+          if (creditError.response?.error === 'INSUFFICIENT_CREDITS') {
+            throw new BadRequestException({
+              error: 'INSUFFICIENT_CREDITS',
+              message: 'Créditos insuficientes',
+              currentCredits: creditError.response.currentCredits || 0,
+              requiredCredits: creditsUsed,
+              action: 'buy_credits',
+            });
+          }
+          throw creditError;
+        }
+      } else {
+        creditsUsed = 0;
+        const user = await this.usersService.findById(userId);
+        remainingCredits = user?.credits || 0;
+        this.logger.log('💳 [CREDITS] No final results after filtering — no credits deducted');
+      }
+
+      // 🧠 SALVAR PREFERÊNCIAS DO USUÁRIO (memória entre sessões)
+      try {
+        const lastFilters = classification?.last_filters || {};
+        // Usar objeto aninhado real (não dot notation) para compatibilidade com Firestore
+        const prefsUpdate: Record<string, any> = { preferences: {} };
+        const lf: Record<string, any> = {};
+        if (lastFilters.condition)    lf.condition    = lastFilters.condition;
+        if (lastFilters.location)     lf.location     = lastFilters.location;
+        if (lastFilters.price_range)  lf.price_range  = lastFilters.price_range;
+        if (lastFilters.brand)        lf.brand        = lastFilters.brand;
+        if (lastFilters.gender)       lf.gender       = lastFilters.gender;
+        if (lastFilters.size)         lf.size         = lastFilters.size;
+        if (lastFilters.storage)      lf.storage      = lastFilters.storage;
+        if (lastFilters.transmission) lf.transmission = lastFilters.transmission;
+        if (lastFilters.fuel)         lf.fuel         = lastFilters.fuel;
+        if (lastFilters.body_type)    lf.body_type    = lastFilters.body_type;
+        if (lastFilters.shoe_type)    lf.shoe_type    = lastFilters.shoe_type;
+
+        if (Object.keys(lf).length > 0 || classification?.category) {
+          const firestore = this.firebaseService.getFirestore();
+          const updateData: Record<string, any> = {};
+          if (Object.keys(lf).length > 0) updateData['preferences.last_filters'] = lf;
+          if (classification?.category)   updateData['preferences.last_category'] = classification.category;
+          await firestore.collection('users').doc(userId).update(updateData);
+          this.logger.log(`🧠 [PREFS] Preferências salvas para user ${userId}`);
+        }
+      } catch (prefsError: any) {
+        this.logger.warn(`⚠️ [PREFS] Falha ao salvar preferências: ${prefsError.message}`);
       }
     }
 
@@ -818,6 +979,10 @@ export class SearchService {
       expansionSources: availableExpansionSources.length > 0 ? availableExpansionSources : undefined,
       primarySource: primarySource || undefined,
     };
+
+    void this.trackPriceSnapshots(finalResults).catch((error) => {
+      this.logger.warn(`⚠️ [PRICE HISTORY] Falha ao rastrear snapshots: ${error.message}`);
+    });
 
     // Cache results for 1 hour (com filtros já aplicados)
     await this.redisService.set(
@@ -1041,6 +1206,7 @@ export class SearchService {
   }> {
     const startTime = Date.now();
     let creditsUsed = 0;
+    let apiCalls = 0;
     let remainingCredits: number | undefined;
 
     // Rotear para o scraper correto baseado na classificação do Python
@@ -1050,35 +1216,42 @@ export class SearchService {
     let results: Product[];
     try {
       if (primaryScraper === 'mercadolivre') {
-        const { results: r } = await this.withTimeout(this.mercadoLivreService.search(productName, 20, classification), 60000, 'MercadoLivre');
+        apiCalls += 1;
+        const { results: r } = await this.withTimeout(this.mercadoLivreService.search(productName, 20, sortBy as any, classification), 60000, 'MercadoLivre');
         results = r;
       } else if (primaryScraper === 'webmotors') {
+        apiCalls += 1;
         const { results: r } = await this.withTimeout(this.webmotorsService.search(productName, 20, classification), 90000, 'Webmotors');
         results = r;
       } else if (primaryScraper === 'olx') {
+        apiCalls += 1;
         results = await this.withTimeout(this.olxService.search(productName, 20, sortBy, classification), 120000, 'OLX');
       } else {
+        apiCalls += 1;
         results = await this.googleShoppingService.search(productName, 20, sortBy as any);
       }
     } catch (scraperError) {
       this.logger.warn(`[PRICES] ${primaryScraper} falhou, fallback Google Shopping: ${scraperError.message}`);
+      apiCalls += 1;
       results = await this.googleShoppingService.search(productName, 20, sortBy as any);
     }
 
     if (userId) {
       try {
-        await this.usersService.useCreditAndIncrementUsage(userId, 'image', 1);
-        creditsUsed = 1;
+        creditsUsed = apiCalls;
+        if (creditsUsed > 0) {
+          await this.usersService.useCreditAndIncrementUsage(userId, 'image', creditsUsed);
+        }
         const user = await this.usersService.findById(userId);
         remainingCredits = user?.credits || 0;
-        this.logger.log(`[CREDITS] Deducted 1 credit for price search. Remaining: ${remainingCredits}`);
+        this.logger.log(`[CREDITS] Deducted ${creditsUsed} credit(s) for price search. Remaining: ${remainingCredits}`);
       } catch (creditError: any) {
         if (creditError.response?.error === 'INSUFFICIENT_CREDITS') {
           throw new BadRequestException({
             error: 'INSUFFICIENT_CREDITS',
-            message: 'You do not have enough credits for price search (requires 1 credit)',
+            message: 'You do not have enough credits for price search',
             currentCredits: creditError.response.currentCredits || 0,
-            requiredCredits: 1,
+            requiredCredits: creditsUsed,
             action: 'buy_credits'
           });
         }
@@ -1341,6 +1514,284 @@ export class SearchService {
     return scoredProducts.map(item => item.product);
   }
 
+  private filterByQualityAndShipping(products: Product[], classification?: any): Product[] {
+    let filtered = [...products];
+
+    // 🌟 Filtrar por ratings se preferência informada
+    if (classification?.minimum_rating && typeof classification.minimum_rating === 'number') {
+      const minRating = classification.minimum_rating;
+      filtered = filtered.filter(p => {
+        const rating = (p.rating || 0);
+        return rating >= minRating;
+      });
+      this.logger.log(`⭐ [QUALITY FILTER] Aplicado: rating >= ${minRating}. Resultados: ${filtered.length}/${products.length}`);
+    }
+
+    // 🚚 Filtrar por frete grátis se preferência informada
+    if (classification?.require_free_shipping === true) {
+      filtered = filtered.filter(p => {
+        const shipping = String(p.shipping || '').toLowerCase();
+        const isFree = shipping.includes('grátis') || shipping.includes('gratuito') || shipping.includes('free');
+        return isFree;
+      });
+      this.logger.log(`🚚 [SHIPPING FILTER] Aplicado: frete grátis. Resultados: ${filtered.length}/${products.length}`);
+    }
+
+    // 💳 Boost para Mercadolivre com parcelamento sem juros
+    if (classification?.prefer_installments === true) {
+      filtered.sort((a, b) => {
+        const aIsMercado = (a.source || '').toLowerCase().includes('mercado');
+        const bIsMercado = (b.source || '').toLowerCase().includes('mercado');
+        if (aIsMercado && !bIsMercado) return -1;
+        if (!aIsMercado && bIsMercado) return 1;
+        return 0;
+      });
+      this.logger.log(`💳 [INSTALLMENT BOOST] Mercadolivre com parcelamento prioritário`);
+    }
+
+    // 🎉 Ordenar por promoções se preferência informada
+    if (classification?.priority_discounted === true) {
+      filtered.sort((a, b) => {
+        const aDiscount = this.extractDiscountPercent(a);
+        const bDiscount = this.extractDiscountPercent(b);
+        return bDiscount - aDiscount; // Maior desconto primeiro
+      });
+      this.logger.log(`🎉 [PROMOTION BOOST] Ordenado por desconto. Resultados: ${filtered.length}/${products.length}`);
+    }
+
+    // 📍 Ordenar por proximidade se preferência informada (OLX)
+    if (classification?.prefer_proximity_olx === 'nearby' && classification?.user_location?.city) {
+      const userCoords = this.getLocationFromCity(classification.user_location.city);
+      if (userCoords) {
+        filtered.sort((a, b) => {
+          // Extrair coordenadas dos produtos (OLX fornece location)
+          const aLocation = (a as any).location;
+          const bLocation = (b as any).location;
+          
+          // Se tem coordenadas exatas, usar; senão estimado pela cidade
+          const aCity = aLocation?.city || '';
+          const bCity = bLocation?.city || '';
+          const aCoords = this.getLocationFromCity(aCity) || userCoords;
+          const bCoords = this.getLocationFromCity(bCity) || userCoords;
+          
+          const aDist = this.calculateDistance(userCoords.lat, userCoords.lon, aCoords.lat, aCoords.lon);
+          const bDist = this.calculateDistance(userCoords.lat, userCoords.lon, bCoords.lat, bCoords.lon);
+          
+          return aDist - bDist; // Menor distância primeiro
+        });
+        this.logger.log(`📍 [PROXIMITY BOOST] Ordenado por proximidade a ${classification.user_location.city}`);
+      }
+    }
+
+    // 👤 Filtrar por tipo de vendedor (OLX)
+    if (classification?.seller_type_preference && classification.seller_type_preference !== 'any') {
+      filtered = filtered.filter(p => {
+        const isBusiness = (p as any).isBusiness || false;
+        if (classification.seller_type_preference === 'business') {
+          return isBusiness === true;
+        } else if (classification.seller_type_preference === 'individual') {
+          return isBusiness === false;
+        }
+        return true;
+      });
+      this.logger.log(`👤 [SELLER FILTER] Filtrado por tipo: ${classification.seller_type_preference}. Resultados: ${filtered.length}/${products.length}`);
+    }
+
+    // 📦 Filtrar por disponibilidade
+    if (classification?.availability_preference === 'in_stock') {
+      filtered = filtered.filter(p => {
+        const inStock = (p as any).inStock !== false && (p as any).productCondition !== 'out_of_stock';
+        return inStock;
+      });
+      this.logger.log(`📦 [AVAILABILITY FILTER] Filtrado em estoque. Resultados: ${filtered.length}/${products.length}`);
+    }
+
+    return filtered.length > 0 ? filtered : products;
+  }
+
+  private async applyPriceDropPreference(products: Product[], classification?: any): Promise<Product[]> {
+    if (classification?.prefer_price_drop !== true || products.length === 0) {
+      return products;
+    }
+
+    const withIndex = products.map((product, index) => ({ product, index }));
+    const ranked = await Promise.all(withIndex.map(async ({ product, index }) => {
+      const productId = this.buildPriceHistoryId(product);
+      if (!productId) return { product, index, priority: 2, dropPercent: 0 };
+
+      try {
+        const history = await this.comparisonsService.getPriceHistory(productId, 30);
+        const trend = this.computePriceTrend(history);
+        if (!trend) return { product, index, priority: 2, dropPercent: 0 };
+
+        (product as any).priceTrend = trend;
+
+        if (trend.status === 'down' && trend.dropPercent >= 10) {
+          return { product, index, priority: 0, dropPercent: trend.dropPercent };
+        }
+        if (trend.status === 'stable') {
+          return { product, index, priority: 1, dropPercent: trend.dropPercent };
+        }
+        return { product, index, priority: 2, dropPercent: trend.dropPercent };
+      } catch {
+        return { product, index, priority: 2, dropPercent: 0 };
+      }
+    }));
+
+    if (!ranked.some(item => item.priority === 0)) {
+      this.logger.log('📉 [PRICE DROP] Sem itens elegíveis com queda >= 10% (30d), mantendo ordenação atual');
+      return products;
+    }
+
+    ranked.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      if (a.dropPercent !== b.dropPercent) return b.dropPercent - a.dropPercent;
+      return a.index - b.index;
+    });
+
+    this.logger.log('📉 [PRICE DROP] Priorização aplicada por tendência de queda (30d)');
+    return ranked.map(item => item.product);
+  }
+
+  private async trackPriceSnapshots(products: Product[]): Promise<void> {
+    const sample = products.slice(0, 30);
+
+    await Promise.all(sample.map(async (product) => {
+      const productId = this.buildPriceHistoryId(product);
+      const price = this.extractPrice(String(product.price));
+
+      if (!productId || !price || price <= 0) return;
+
+      await this.comparisonsService.trackPriceHistory(productId, price, product.source || 'unknown');
+    }));
+  }
+
+  private buildPriceHistoryId(product: Product): string | null {
+    const source = String(product.source || 'unknown').toLowerCase();
+    const rawId = product.id
+      ? String(product.id)
+      : this.generateStableId(String(product.sourceUrl || product.title || `${source}:${product.price || 0}`));
+
+    if (!rawId) return null;
+    return `${source}:${rawId}`;
+  }
+
+  private computePriceTrend(history: any[]): {
+    status: 'down' | 'stable' | 'up';
+    dropPercent: number;
+    windowDays: number;
+    latestPrice: number;
+    oldestPrice: number;
+  } | null {
+    if (!Array.isArray(history) || history.length < 2) return null;
+
+    const points = history
+      .map((item) => {
+        const price = this.extractPrice(String(item?.price ?? ''));
+        const timestamp = this.extractHistoryTimestamp(item);
+        if (!price || !timestamp) return null;
+        return { price, timestamp };
+      })
+      .filter((point): point is { price: number; timestamp: number } => point !== null)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    if (points.length < 2) return null;
+
+    const oldestPrice = points[0].price;
+    const latestPrice = points[points.length - 1].price;
+
+    if (!oldestPrice || oldestPrice <= 0) return null;
+
+    const dropPercent = Math.round(((oldestPrice - latestPrice) / oldestPrice) * 100);
+    const status: 'down' | 'stable' | 'up' = dropPercent >= 10
+      ? 'down'
+      : dropPercent <= -5
+      ? 'up'
+      : 'stable';
+
+    return {
+      status,
+      dropPercent,
+      windowDays: 30,
+      latestPrice,
+      oldestPrice,
+    };
+  }
+
+  private extractHistoryTimestamp(item: any): number | null {
+    const raw = item?.timestamp ?? item?.date ?? item?.createdAt;
+    if (!raw) return null;
+
+    if (typeof raw?.toDate === 'function') {
+      const date = raw.toDate();
+      return date instanceof Date ? date.getTime() : null;
+    }
+
+    if (raw instanceof Date) return raw.getTime();
+    if (typeof raw === 'number') return raw;
+
+    const parsed = Date.parse(String(raw));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private extractDiscountPercent(product: Product): number {
+    // Tentar extrair percentual de desconto do título ou campos específicos
+    const title = String(product.title || '').toLowerCase();
+    const offMatch = title.match(/(\d+)%\s*(?:off|desconto|promocao|promocão)/);
+    if (offMatch) return parseInt(offMatch[1]);
+
+    // Se tem preço original > preço atual = tem desconto
+    const originalPrice = product.originalPrice ? this.extractPrice(String(product.originalPrice)) : null;
+    const currentPrice = product.price ? this.extractPrice(String(product.price)) : null;
+    if (originalPrice && currentPrice && originalPrice > currentPrice) {
+      return Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
+    }
+
+    return 0;
+  }
+
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    // Haversine formula simplificado para km
+    const R = 6371; // Raio da Terra em km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  private getLocationFromCity(city?: string): { lat: number; lon: number } | null {
+    // Coordenadas aproximadas de cidades brasileiras principais
+    const cityCoords: Record<string, { lat: number; lon: number }> = {
+      'sao paulo': { lat: -23.5505, lon: -46.6333 },
+      'sp': { lat: -23.5505, lon: -46.6333 },
+      'são paulo': { lat: -23.5505, lon: -46.6333 },
+      'rio de janeiro': { lat: -22.9068, lon: -43.1729 },
+      'rj': { lat: -22.9068, lon: -43.1729 },
+      'belo horizonte': { lat: -19.9167, lon: -43.9345 },
+      'bh': { lat: -19.9167, lon: -43.9345 },
+      'brasilia': { lat: -15.7975, lon: -47.8919 },
+      'df': { lat: -15.7975, lon: -47.8919 },
+      'salvador': { lat: -12.9714, lon: -38.5014 },
+      'ba': { lat: -12.9714, lon: -38.5014 },
+      'fortaleza': { lat: -3.7319, lon: -38.5267 },
+      'ce': { lat: -3.7319, lon: -38.5267 },
+      'curitiba': { lat: -25.4284, lon: -49.2733 },
+      'pr': { lat: -25.4284, lon: -49.2733 },
+      'recife': { lat: -8.0476, lon: -34.8770 },
+      'pe': { lat: -8.0476, lon: -34.8770 },
+      'manaus': { lat: -3.1190, lon: -60.0217 },
+      'am': { lat: -3.1190, lon: -60.0217 },
+      'porto alegre': { lat: -30.0346, lon: -51.2177 },
+      'rs': { lat: -30.0346, lon: -51.2177 },
+    };
+
+    const normalized = (city || '').toLowerCase().trim();
+    return cityCoords[normalized] || null;
+  }
+
   private getMarketplaceScore(source?: string): number {
     // Preferência de marketplaces (ajustar conforme qualidade)
     const scores: Record<string, number> = {
@@ -1351,6 +1802,67 @@ export class SearchService {
     };
     
     return scores[source || ''] || 0.5;
+  }
+
+  private extractYearFromText(text: string): number | null {
+    const normalized = this.normalizeQuery(String(text || ''));
+    const matches = normalized.match(/\b(19\d{2}|20\d{2})\b/g);
+    if (!matches || matches.length === 0) return null;
+    const year = Number(matches[0]);
+    if (!Number.isFinite(year)) return null;
+    return year;
+  }
+
+  private applyVehicleIdentityFilter(products: Product[], classification?: any): Product[] {
+    if (!Array.isArray(products) || products.length === 0) return products;
+
+    const isVehicle = classification?.category === 'car' || classification?.category === 'motorcycle';
+    if (!isVehicle) return products;
+
+    const brand = this.normalizeQuery(String(classification?.detected_brand || '')).trim();
+    const model = this.normalizeQuery(String(classification?.detected_model || '')).trim();
+    if (!brand && !model) return products;
+
+    const withNormalizedTitle = products.map((product) => ({
+      product,
+      title: this.normalizeQuery(String(product.title || '')),
+    }));
+
+    const strictMatches = withNormalizedTitle
+      .filter(({ title }) => {
+        const brandOk = !brand || title.includes(brand);
+        const modelOk = !model || title.includes(model);
+        return brandOk && modelOk;
+      })
+      .map(({ product }) => product);
+
+    if (strictMatches.length > 0) {
+      this.logger.log(`🚗 [IDENTITY FILTER] strict match brand/model: ${products.length} → ${strictMatches.length}`);
+      return strictMatches;
+    }
+
+    if (model) {
+      const modelOnlyMatches = withNormalizedTitle
+        .filter(({ title }) => title.includes(model))
+        .map(({ product }) => product);
+      if (modelOnlyMatches.length > 0) {
+        this.logger.log(`🚗 [IDENTITY FILTER] model-only fallback: ${products.length} → ${modelOnlyMatches.length}`);
+        return modelOnlyMatches;
+      }
+    }
+
+    if (brand) {
+      const brandOnlyMatches = withNormalizedTitle
+        .filter(({ title }) => title.includes(brand))
+        .map(({ product }) => product);
+      if (brandOnlyMatches.length > 0) {
+        this.logger.log(`🚗 [IDENTITY FILTER] brand-only fallback: ${products.length} → ${brandOnlyMatches.length}`);
+        return brandOnlyMatches;
+      }
+    }
+
+    this.logger.warn('🚗 [IDENTITY FILTER] no brand/model match found, returning 0 results to avoid unrelated vehicles');
+    return [];
   }
 
   /* ============================================
